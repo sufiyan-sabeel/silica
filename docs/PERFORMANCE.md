@@ -1,12 +1,12 @@
 # Silica Performance — measured, not claimed
 
-Silica's v0.2.1 engine is written in Python (the VM is unchanged since 0.1.0, which is what the numbers below measure). Every Silica instruction costs one
+Silica's v0.3.0 engine is written in Python (the VM is unchanged since 0.1.0, which is what the numbers below measure). Every Silica instruction costs one
 Python-level dispatch step, so the honest headline is: **this implementation is
 slower than CPython, by roughly 25×–85× on the workloads below.**
 
 That is expected, and it is measured rather than assumed. The numbers exist to
 be a baseline for the Rust port (Milestone E/F), not a marketing claim. Silica
-is **not** faster than Python, C, or Rust in v0.2.1, and no such claim is made
+is **not** faster than Python, C, or Rust in v0.3.0, and no such claim is made
 anywhere in this repository.
 
 ## How to reproduce

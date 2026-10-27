@@ -5,6 +5,58 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## [0.3.0] — 2026-10-27
+
+Global installation and distribution. Silica can now be installed with one
+command on Linux and Termux, and the release artifacts are checksum-verified
+before anything is written. No language, bytecode or VM change.
+
+### Added — installation
+- **`install.sh`** at the repository root: a POSIX `sh` installer that detects
+  Termux vs desktop Linux and the CPU architecture, checks for Python 3.9+ and
+  the `venv` module, downloads the release wheel **and** `SHA256SUMS.txt`, refuses
+  to install on a checksum mismatch, installs into an isolated virtual
+  environment, writes a `silica` launcher, and reports exactly what to add to
+  `PATH` if needed. Idempotent: a second run is an upgrade. Never uses `sudo`
+  unless `SILICA_SYSTEM=1` is set by a root user.
+- **`uninstall.sh`**: removes only the paths recorded in the install manifest,
+  refuses to delete a launcher it did not create, and refuses to delete a virtual
+  environment outside the Silica home directory.
+- **`docs/INSTALL.md`**: Ubuntu/Linux and Termux installation, upgrade, uninstall,
+  PATH troubleshooting, the trust model, and the supported-platform matrix.
+- **`docs/RELEASING.md`**: pre-release checks, version bumping, tagging, artifact
+  verification and rollback.
+- **`.github/workflows/release.yml`**: on a `v*` tag, runs the tests, checks the
+  tag against the package version and the installer default, builds the wheel and
+  sdist, generates the checksums and publishes the release.
+
+### Added — command line
+- **`silica file.sc`** runs a source file directly; `silica file.sbc` runs
+  bytecode. Same code path as `silica run`, so capability flags behave
+  identically.
+- **`silica` with no arguments starts the interactive interpreter**, printing
+  `Silica Interpreter v0.3.0` once and using `¢ ` as its prompt. `help`,
+  `exit` and `globals` are its commands; `:help`, `:quit` and `:q` also work.
+
+### Fixed
+- A missing file in the direct form reports `error: no such file: x.sc` and exits
+  1 — never a Python traceback.
+- Invalid syntax reports `file:line:col` in the direct form too.
+- Only `.sc` and `.sbc` arguments are treated as files, so a mistyped command is
+  still reported as an unknown command.
+- The interpreter prompt goes through a helper that switches an ASCII-only stdout
+  to UTF-8, so a C locale cannot crash the session on the Cent sign.
+- The installer neutralises an exported `PIP_USER=1` and a stray `PYTHONPATH`
+  before calling pip, because both break installing into a virtual environment.
+
+### Tests
+- `tests/test_install.py`: 22 tests that run the real `install.sh` and
+  `uninstall.sh` against throwaway homes and a wheel built from this checkout —
+  install, run from outside the repository, interpreter start, idempotent rerun,
+  Termux branch, verified download, tampered artifact refusal, and uninstall
+  safety. Network-free: the release URL is overridden with a local `file://`
+  directory, exercising the same download-and-verify path.
+
 ## [0.2.1] — 2026-10-27
 
 Brand integration: the Silica logo is in the repository, and `.sc` files have a
