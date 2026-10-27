@@ -335,7 +335,16 @@ def load_toml(raw, path="<config>"):
     try:
         import tomllib
     except ModuleNotFoundError:  # pragma: no cover - exercised on 3.9/3.10
-        return parse_toml_subset(raw.decode("utf-8"), path)
+        try:
+            return parse_toml_subset(raw.decode("utf-8"), path)
+        except CapabilityError as exc:
+            # one message for both readers, so behaviour does not depend on the
+            # Python version
+            raise CapabilityError(
+                "%s is not valid TOML: %s" % (path, exc.message),
+                hint="[capabilities] must be a table of capability grants")
+        except UnicodeDecodeError:
+            raise CapabilityError("%s is not valid UTF-8" % path)
     try:
         return tomllib.loads(raw.decode("utf-8"))
     except tomllib.TOMLDecodeError as exc:

@@ -223,13 +223,14 @@ list = ["data"]
         self.assertEqual(document["capabilities"]["deny"], ["fs.write"])
 
     def test_both_readers_agree(self):
-        import sys
         from silica.capabilities import load_toml
         ours = load_toml(self.TEXT.encode("utf-8"), "caps.toml")
-        if sys.version_info >= (3, 11):
+        try:
             import tomllib
-            theirs = tomllib.loads(self.TEXT)
-            self.assertEqual(ours, theirs)
+        except ModuleNotFoundError:
+            self.skipTest("tomllib unavailable; only one reader exists")
+        theirs = tomllib.loads(self.TEXT)
+        self.assertEqual(ours, theirs)
 
     def test_subset_reader_handles_comments_inside_arrays(self):
         from silica.capabilities import parse_toml_subset
