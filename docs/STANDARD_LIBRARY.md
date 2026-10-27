@@ -1,4 +1,4 @@
-# Silica Standard Library — v0.1.1
+# Silica Standard Library — v0.3.0
 
 `core` is always in scope. Every other module must be imported with `use`.
 Each entry lists its signature, what it returns, and when it raises a runtime

@@ -1,6 +1,6 @@
 """The `silica` command-line interface.
 
-Commands implemented in v0.2.1:
+Commands implemented in v0.3.0:
 
     silica run <file.sc|file.sbc>   compile (if needed), verify, execute
     silica check <file.sc>          parse + type-check only
@@ -27,11 +27,13 @@ from .engine import (check_source, compile_ast, compile_file, compile_source,
 from .errors import CapabilityError, ParseError, SilicaError
 from .natives import format_value, get_native
 
-VERSION = "0.2.1"
+VERSION = "0.3.0"
 
 USAGE = """silica %s — the Silica language toolchain
 
 usage:
+  silica <file.sc|file.sbc>       run a source file or bytecode directly
+  silica                          start the interactive interpreter
   silica run <file.sc|file.sbc>   compile if needed, then execute
   silica check <file.sc>          parse and type-check only
   silica compile <file.sc> [-o out.sbc]
@@ -51,7 +53,7 @@ Capabilities (nothing is granted by default):
                          remove a capability a config file granted
   --capabilities FILE    read grants from a TOML [capabilities] table
 
-Not implemented in 0.2.1: new, add, remove, install, build (Milestone E).
+Not implemented in 0.3.0: new, add, remove, install, build (Milestone E).
 """ % VERSION
 
 
@@ -396,7 +398,8 @@ def cmd_repl(args):
     stdout = sys.stdout
     stderr = sys.stderr
     repl = Repl(stdin, stdout, stderr, capabilities=caps)
-    stdout.write("Silica %s REPL — :help for commands, :quit to exit\n" % VERSION)
+    stdout.write("Silica Interpreter v%s\n" % VERSION)
+    stdout.write("Type 'help' for commands, 'exit' to quit.\n\n")
     buffer = []
     while True:
         prompt = "silica> " if not buffer else "   ...> "
@@ -408,12 +411,14 @@ def cmd_repl(args):
             return 0
         stripped = line.strip()
         if not buffer and stripped in (":quit", ":q", "exit", "quit"):
+            stdout.write("\n")
             return 0
-        if not buffer and stripped == ":help":
-            stdout.write("  :help    this text\n  :quit    leave the REPL\n"
-                         "  :globals list current globals\n")
+        if not buffer and stripped in (":help", "help", "?"):
+            stdout.write("  help      this text (:help also works)\n"
+                         "  exit      leave the interpreter (:quit also works)\n"
+                         "  globals   list current globals (:globals also works)\n")
             continue
-        if not buffer and stripped == ":globals":
+        if not buffer and stripped in (":globals", "globals"):
             if not repl.globals:
                 stdout.write("(no globals)\n")
             for i, (name, type_name) in enumerate(repl.globals):
@@ -458,11 +463,24 @@ PLANNED = {
 }
 
 
+SOURCE_SUFFIXES = (".sc", ".sbc")
+
+
+def is_source_path(text):
+    """True when an argument names a Silica source or bytecode file.
+
+    Only the two Silica extensions are treated as files, so a mistyped command
+    still reports as an unknown command rather than a missing file.
+    """
+    lowered = text.lower()
+    return any(lowered.endswith(suffix) for suffix in SOURCE_SUFFIXES)
+
+
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv:
-        sys.stdout.write(USAGE)
-        return 0
+        # no arguments: start the interactive interpreter
+        return cmd_repl([])
     first = argv[0]
     if first in ("-h", "--help", "help"):
         sys.stdout.write(USAGE)
@@ -470,8 +488,12 @@ def main(argv=None):
     if first in ("-V", "--version", "version"):
         sys.stdout.write("silica %s\n" % VERSION)
         return 0
+    if is_source_path(first):
+        # `silica file.sc` is the same as `silica run file.sc`, capability flags
+        # and all, so there is one implementation of "run a file".
+        return cmd_run(argv)
     if first in PLANNED:
-        return _fail("error: 'silica %s' is not implemented in 0.2.1 (%s)"
+        return _fail("error: 'silica %s' is not implemented in 0.3.0 (%s)"
                      % (first, PLANNED[first]))
     handler = COMMANDS.get(first)
     if handler is None:

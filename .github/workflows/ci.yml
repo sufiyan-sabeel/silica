@@ -1,7 +1,7 @@
 name: CI
 
 # This workflow runs exactly the checks the README documents locally:
-#   python3 -m unittest discover -s tests -t .   (441 tests)
+#   python3 -m unittest discover -s tests -t .   (462 tests)
 #   python3 -m silica test tests
 #   python3 -m silica fmt --check <every .sc file>
 on:

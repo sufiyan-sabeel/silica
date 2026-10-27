@@ -1,6 +1,6 @@
 #!/bin/sh
 # Launcher for running Silica straight from a checkout, without installing.
-# Usage: bin/silica run examples/hello.sc
+# Usage: bin/silica examples/hello.sc   (or: bin/silica for the interpreter)
 set -e
 DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 PYTHONPATH="$DIR${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m silica "$@"

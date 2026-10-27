@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/logo/silica-logo.png" alt="Silica" width="441"></p>
+<p align="center"><img src="assets/logo/silica-logo.png" alt="Silica" width="462"></p>
 
 # Silica
 
@@ -22,8 +22,8 @@ $ silica run examples/square.sc
 144
 ```
 
-**Status: v0.2.1 — a working reference implementation, not a finished language.**
-Everything documented here works and is covered by 441 automated tests. What is
+**Status: v0.3.0 — a working reference implementation, not a finished language.**
+Everything documented here works and is covered by 462 automated tests. What is
 planned but absent is listed in [Limitations](#limitations-and-what-is-not-done)
 and in `docs/ROADMAP.md`. Nothing in this repository claims to be faster than
 Python, C or Rust — see `docs/PERFORMANCE.md` for the measured truth.
@@ -37,22 +37,51 @@ Requires Python 3.9+ (the reference engine is written in Python; see
 git clone https://github.com/sufiyan-sabeel/silica.git silica
 cd silica
 
-# run straight from the checkout
-python3 -m silica run examples/hello.sc
-python3 -m silica --version
+# run a file directly — no `run` needed
+python3 -m silica examples/hello.sc
+
+# or start the interactive interpreter
+python3 -m silica
 
 # or install the `silica` command
 pip install .
-silica run examples/hello.sc
+silica examples/hello.sc
+silica                       # interactive interpreter
 
 # or use the launcher without installing
-sh bin/silica run examples/hello.sc
+sh bin/silica examples/hello.sc
 ```
+
+### The interpreter
+
+```console
+$ silica
+Silica Interpreter v0.3.0
+Type 'help' for commands, 'exit' to quit.
+
+silica> let n: Int = 21
+n: Int = 21
+silica> n * 2
+42
+silica> sfn twice(x: Int) -> Int {
+   ...>     ret x * 2
+   ...> }
+defined twice
+silica> twice(5)
+10
+silica> exit
+```
+
+Globals and functions persist for the session; errors are reported and the
+session continues. `help`, `exit` and `globals` are the three commands.
 
 ## Commands
 
 | Command | What it does |
 |---|---|
+| `silica <file.sc>` | Run a source file directly. Same as `silica run`. |
+| `silica <file.sbc>` | Verify and execute compiled bytecode directly. |
+| `silica` | Start the interactive interpreter. |
 | `silica run <file.sc>` | Compile, verify and execute a source file. |
 | `silica run <file.sbc>` | Verify and execute compiled bytecode. |
 | `silica check <file.sc>` | Parse and type-check only; silent on success. |
@@ -274,7 +303,7 @@ Format details: `docs/BYTECODE.md`.
 ## Testing
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 441 tests
+python3 -m unittest discover -s tests -t .   # 462 tests
 python3 -m silica test tests                 # Silica-level tests
 python3 benchmarks/bench.py --runs 3         # benchmarks + correctness check
 ```

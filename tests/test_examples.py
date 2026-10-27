@@ -120,6 +120,48 @@ class ExampleTests(unittest.TestCase):
                 self.assertEqual(code, 0)
                 self.assertEqual(out.getvalue(), expected)
 
+    def test_calculator_subtraction_via_the_run_subcommand(self):
+        """The brief's case: 4 - 2 -> 2.0."""
+        path = os.path.join(EXAMPLES, "calculator.sc")
+        out = io.StringIO()
+        with mock.patch("sys.stdin", io.StringIO("4\n-\n2\n")), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            code = cli.main(["run", path])
+        self.assertEqual(code, 0)
+        self.assertEqual(out.getvalue(),
+                         "first number: operator (+ - * /): second number: 2.0\n")
+
+    def test_calculator_via_the_direct_form(self):
+        """`silica calculator.sc` must behave exactly like `silica run ...`."""
+        path = os.path.join(EXAMPLES, "calculator.sc")
+        direct_out, sub_out = io.StringIO(), io.StringIO()
+        with mock.patch("sys.stdin", io.StringIO("4\n-\n2\n")), \
+                contextlib.redirect_stdout(direct_out), \
+                contextlib.redirect_stderr(io.StringIO()):
+            direct_code = cli.main([path])
+        with mock.patch("sys.stdin", io.StringIO("4\n-\n2\n")), \
+                contextlib.redirect_stdout(sub_out), \
+                contextlib.redirect_stderr(io.StringIO()):
+            sub_code = cli.main(["run", path])
+        self.assertEqual(direct_code, 0)
+        self.assertEqual(sub_code, 0)
+        self.assertEqual(direct_out.getvalue(), sub_out.getvalue())
+        self.assertIn("2.0", direct_out.getvalue())
+
+    def test_calculator_division_and_divide_by_zero(self):
+        path = os.path.join(EXAMPLES, "calculator.sc")
+        out = io.StringIO()
+        with mock.patch("sys.stdin", io.StringIO("9\n/\n2\n")), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            cli.main([path])
+        self.assertIn("4.5", out.getvalue())
+
+        out = io.StringIO()
+        with mock.patch("sys.stdin", io.StringIO("1\n/\n0\n")), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            cli.main([path])
+        self.assertIn("cannot divide by zero", out.getvalue())
+
     def test_ui_examples_render(self):
         import shutil
         build = os.path.join(ROOT, "build")

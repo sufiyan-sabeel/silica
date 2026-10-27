@@ -11,6 +11,9 @@ from unittest import mock
 from silica import cli
 from silica.bytecode import MAGIC
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+EXAMPLES = os.path.join(ROOT, "examples")
+
 SQUARE = """sfn square(n: Int) -> Int {
     ret n * n
 }
@@ -56,10 +59,13 @@ class VersionAndHelpTests(CliTestCase):
                         "capabilities"):
             self.assertIn(command, out)
 
-    def test_no_arguments_prints_usage(self):
-        code, out, _ = cli_run([])
+    def test_no_arguments_starts_the_interpreter(self):
+        code, out, _ = cli_run([], stdin="exit\n")
         self.assertEqual(code, 0)
-        self.assertIn("usage", out)
+        self.assertIn("Silica Interpreter v%s" % cli.VERSION, out)
+        self.assertIn("Type 'help' for commands, 'exit' to quit.", out)
+        self.assertIn("silica>", out)
+        self.assertNotIn("usage:", out)
 
     def test_unknown_command(self):
         code, _, err = cli_run(["frobnicate"])
@@ -222,7 +228,130 @@ class TestCommandTests(CliTestCase):
         self.assertIn("no *_test.sc files", err)
 
 
+class DirectFileTests(CliTestCase):
+    """`silica file.sc` — the form people actually type."""
+
+    def test_runs_a_source_file_directly(self):
+        path = self.write("square.sc", SQUARE)
+        code, out, err = cli_run([path])
+        self.assertEqual(code, 0, err)
+        self.assertEqual(out, "144\n")
+
+    def test_matches_the_run_subcommand(self):
+        path = self.write("square.sc", SQUARE)
+        direct = cli_run([path])
+        explicit = cli_run(["run", path])
+        self.assertEqual(direct, explicit)
+
+    def test_runs_bytecode_directly(self):
+        source = self.write("square.sc", SQUARE)
+        out_path = os.path.join(self.dir, "square.sbc")
+        self.assertEqual(cli_run(["compile", source, "-o", out_path])[0], 0)
+        code, out, err = cli_run([out_path])
+        self.assertEqual(code, 0, err)
+        self.assertEqual(out, "144\n")
+
+    def test_relative_path_works(self):
+        self.write("nested/hello.sc", 'sfn main() {\n    sprint("hi")\n}\n')
+        cwd = os.getcwd()
+        os.chdir(self.dir)
+        try:
+            code, out, _ = cli_run([os.path.join("nested", "hello.sc")])
+        finally:
+            os.chdir(cwd)
+        self.assertEqual(code, 0)
+        self.assertEqual(out, "hi\n")
+
+    def test_uppercase_extension_is_recognised(self):
+        path = self.write("LOUD.SC", 'sfn main() {\n    sprint("loud")\n}\n')
+        code, out, err = cli_run([path])
+        self.assertEqual(code, 0, err)
+        self.assertEqual(out, "loud\n")
+
+    def test_missing_file_is_an_error_not_a_traceback(self):
+        code, out, err = cli_run([os.path.join(self.dir, "nope.sc")])
+        self.assertEqual(code, 1)
+        self.assertIn("no such file", err)
+        self.assertNotIn("Traceback", err)
+        self.assertEqual(out, "")
+
+    def test_invalid_syntax_reports_file_and_line(self):
+        path = self.write("broken.sc", "sfn main() {\n    return 1\n}\n")
+        code, _out, err = cli_run([path])
+        self.assertEqual(code, 1)
+        self.assertIn("broken.sc:2", err)
+        self.assertIn("parse error", err)
+        self.assertNotIn("Traceback", err)
+
+    def test_unbalanced_parenthesis_still_reports_a_location(self):
+        path = self.write("unbalanced.sc", "sfn main() {\n    sprint(\n}\n")
+        code, _out, err = cli_run([path])
+        self.assertEqual(code, 1)
+        self.assertRegex(err, r"unbalanced\.sc:\d+:\d+")
+        self.assertIn("parse error", err)
+
+    def test_type_error_reports_file_and_line(self):
+        path = self.write("typed.sc", 'sfn main() {\n    let x: Int = "no"\n}\n')
+        code, _out, err = cli_run([path])
+        self.assertEqual(code, 1)
+        self.assertIn("typed.sc:2", err)
+        self.assertIn("type error", err)
+
+    def test_capability_flags_are_forwarded(self):
+        example = os.path.join(ROOT, "examples", "fs_demo.sc")
+        code, out, err = cli_run([example, "--allow-fs-read", EXAMPLES,
+                                  "--allow-fs-list", EXAMPLES])
+        self.assertEqual(code, 0, err)
+        self.assertIn("oui", out)
+
+    def test_capability_flags_are_enforced_in_the_direct_form(self):
+        example = os.path.join(ROOT, "examples", "fs_demo.sc")
+        code, _out, err = cli_run([example])
+        self.assertEqual(code, 1)
+        self.assertIn("capability error", err)
+
+    def test_a_non_silica_file_is_not_treated_as_source(self):
+        path = self.write("notes.txt", "hello")
+        code, _out, err = cli_run([path])
+        self.assertEqual(code, 2)
+        self.assertIn("unknown command", err)
+
+
 class ReplTests(CliTestCase):
+    def test_banner_names_the_interpreter_and_version(self):
+        code, out, _ = cli_run([], stdin="exit\n")
+        self.assertEqual(code, 0)
+        self.assertTrue(out.startswith("Silica Interpreter v%s\n" % cli.VERSION), out)
+
+    def test_help_command_lists_the_commands(self):
+        code, out, _ = cli_run([], stdin="help\nexit\n")
+        self.assertEqual(code, 0)
+        self.assertIn("this text", out)
+        self.assertIn("leave the interpreter", out)
+        self.assertIn("globals", out)
+
+    def test_exit_and_quit_both_leave(self):
+        for word in ("exit", "quit", ":quit", ":q"):
+            with self.subTest(word=word):
+                code, _out, _ = cli_run([], stdin="%s\n" % word)
+                self.assertEqual(code, 0)
+
+    def test_bare_expressions_are_evaluated(self):
+        code, out, _ = cli_run([], stdin="2 + 3 * 4\nexit\n")
+        self.assertEqual(code, 0)
+        self.assertIn("14", out)
+
+    def test_statements_persist(self):
+        code, out, _ = cli_run([], stdin="let n: Int = 7\nn * 6\nexit\n")
+        self.assertEqual(code, 0)
+        self.assertIn("n: Int = 7", out)
+        self.assertIn("42", out)
+
+    def test_errors_are_reported_and_the_session_continues(self):
+        code, out, err = cli_run([], stdin="1 +\n1 + 1\nexit\n")
+        self.assertEqual(code, 0)
+        self.assertIn("parse error", err)
+        self.assertIn("2", out)
     def test_repl_keeps_state_between_entries(self):
         script = "let x: Int = 21\nx * 2\nx = x + 1\nx\n:quit\n"
         code, out, _ = cli_run(["repl"], stdin=script)
