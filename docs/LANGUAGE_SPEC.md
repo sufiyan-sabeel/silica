@@ -1,0 +1,258 @@
+# Silica Language Specification — v0.1.0
+
+This document is normative for the v0.1.0 reference implementation. Anything
+described here is implemented and covered by tests in `tests/`; anything else is
+listed under [Not implemented yet](#not-implemented-yet).
+
+Silica is a small statically typed language. Source files use the `.sc`
+extension, compiled programs use `.sbc`, and the toolchain command is `silica`.
+
+---
+
+## 1. Source files
+
+A Silica file is UTF-8 text. It contains, in any order:
+
+* `use` declarations,
+* `sfn` function declarations,
+* `let` / `const` global declarations.
+
+No other statement may appear at the top level: executable code lives inside a
+function, and every program must declare `sfn main()`.
+
+```
+sfn square(n: Int) -> Int {
+    ret n * n
+}
+
+sfn main() {
+    sprint(square(12))
+}
+```
+
+Output:
+
+```
+144
+```
+
+Comments start with `#` or `//` and run to the end of the line.
+
+## 2. Keywords
+
+These words are reserved and may not be used as identifiers.
+
+| Purpose | Silica | Meaning in v0.1.0 |
+|---|---|---|
+| Print line | `sprint(x)` | Write `x` to stdout followed by `\n`. Returns `Unit`. |
+| Print inline | `dit(x)` | Write `x` to stdout with **no** trailing newline. Returns `Unit`. |
+| Input | `input(prompt)` | Write `prompt` (a `String`), read one line from stdin, return it without the line ending. |
+| If | `si cond { }` | Branch when `cond` is `oui`. `cond` must be `Bool`. |
+| Else | `sino { }` | Alternative branch; must directly follow an `si` block. |
+| Logical and | `und` | `Bool und Bool`, short-circuit: right side is not evaluated when the left is `nein`. |
+| Logical or | `ou` | `Bool ou Bool`, short-circuit: right side is not evaluated when the left is `oui`. |
+| Logical not | `non` | `non Bool -> Bool`. |
+| True | `oui` | Boolean literal `true`. |
+| False | `nein` | Boolean literal `false`. |
+| While | `tant cond { }` | Loop while `cond` is `oui`. |
+| For | `per name in expr { }` | Iterate a `List`, `Map` (keys) or `String` (characters). |
+| Function | `sfn name(params) -> T { }` | Declare a function. |
+| Return | `ret expr` / `ret` | Return a value from a function. |
+| Import | `use module` | Import a standard-library module. |
+| End of block | `fin` | Optional explicit block terminator, allowed immediately before `}`. |
+| Stop | `halt` / `halt(code)` | Terminate the program with exit code 0 or `code`. |
+| Binding | `let x = e` / `const x = e` | Mutable / immutable binding. |
+
+### 2.1 Why both `sprint` and `dit` exist
+
+`sprint` always terminates its output with a newline. `dit` never does. They are
+not redundant: `dit` is required for prompts, progress output and building a
+line from several values, which `sprint` cannot do.
+
+```
+dit("value: ")
+dit(42)
+sprint("")          # finish the line
+```
+
+### 2.2 What `fin` means (and does not mean)
+
+`fin` is a **block terminator only**. `{ ... }` and `{ ... fin }` are exactly
+equivalent; the parser accepts an optional `fin` as the last element of a block.
+It never ends a statement, never returns, never breaks a loop, and never
+terminates the program — that is `halt`'s job. Because braces already delimit
+blocks, `fin` is optional everywhere and exists for readability.
+
+### 2.3 What `halt` does
+
+`halt` stops the program immediately. `halt` exits with status 0; `halt(n)`
+exits with status `n` (an `Int`). Code after a `halt` in the same block is not
+executed. The operating system sees `n & 0xFF`.
+
+## 3. Values and types
+
+| Type | Meaning |
+|---|---|
+| `Int` | 64-bit signed integer. |
+| `Float` | IEEE-754 double. |
+| `Bool` | `oui` / `nein`. |
+| `String` | Immutable UTF-8 text. |
+| `Unit` | The result of statements and `Unit`-returning functions. |
+| `List` | Ordered, mutable sequence of values. |
+| `Map` | String-keyed dictionary of values. |
+| `Any` | Internal wildcard used by `List`/`Map` element types. |
+
+There is no `null`. A function that returns nothing returns `Unit`.
+
+`List` and `Map` are containers of *unknown* element type in v0.1.0: reading
+`xs[0]` yields a value of type `Any`, which is accepted anywhere. That is a
+documented limitation — generics arrive in a later milestone.
+
+### 3.1 Numeric rules
+
+* `Int` is 64-bit and **wraps** on overflow (two's complement). `9223372036854775807 + 1` is `-9223372036854775808`.
+* `Int / Int` truncates toward zero: `7 / 2 == 3`, `-7 / 2 == -3`.
+* `Int % Int` keeps the sign of the dividend: `-7 % 2 == -1`, `7 % -2 == 1`.
+* `Float` follows IEEE-754 for `+ - * /` except that **division or modulo by zero is a runtime error** for both `Int` and `Float` (no silent `inf`).
+* Mixing `Int` and `Float` in arithmetic promotes the `Int` to `Float`.
+* A `Float` never converts to `Int` implicitly; use `int(x)`. An `Int` may be used where a `Float` is expected.
+
+### 3.2 Equality and ordering
+
+* `==` / `!=` compare structurally for `List` and `Map`, by value for scalars.
+* Numeric equality crosses types: `1 == 1.0` is `oui`.
+* `Bool` never equals a number.
+* `< <= > >=` work on numbers and on `String` (lexicographic by code point).
+* Ordering two different non-numeric types is a compile error.
+
+### 3.3 Truthiness
+
+There is none. Every condition must be `Bool`, so `si x { }` with an `Int` is a
+compile error. Write the comparison you mean: `si x != 0 { }`.
+
+## 4. Operators and precedence
+
+From lowest to highest binding:
+
+| Level | Operators | Associativity |
+|---|---|---|
+| 1 | `ou` | left |
+| 2 | `und` | left |
+| 3 | `==` `!=` | left |
+| 4 | `<` `<=` `>` `>=` | left |
+| 5 | `+` `-` | left |
+| 6 | `*` `/` `%` | left |
+| 7 | unary `non`, unary `-` | right |
+| 8 | call `f(x)`, index `x[i]`, member `m.n` | left |
+
+`+` is defined for `Int`/`Float` (numeric addition), `String` + `String`
+(concatenation) and `List` + `List` (concatenation). `- * / %` are numeric only.
+
+## 5. Statements
+
+```
+let name: Type = expr      # mutable
+const name: Type = expr    # immutable
+name = expr                # assignment to a let-bound variable
+si cond { ... } sino { ... }
+tant cond { ... }
+per item in expr { ... }
+ret expr
+halt(code)
+expr                       # expression statement; value is discarded
+```
+
+The type annotation on `let`/`const` is optional when the initializer has a
+type; it is then inferred from the initializer (literals and call results).
+
+`per` binds its loop variable immutably for each iteration. Iterating a `Map`
+yields its keys as `String`; iterating a `String` yields one-character `String`s.
+
+## 6. Functions
+
+```
+sfn add(a: Int, b: Int) -> Int {
+    ret a + b
+}
+```
+
+* Parameter type annotations are optional; an unannotated parameter has type `Any`.
+* `-> T` gives the return type; without it the function returns `Unit`.
+* Functions are declared at the top level only (no closures, no nesting).
+* Functions are not first-class values in v0.1.0: they can be called, not passed.
+* A function with a non-`Unit` return type must return on **every** path, which
+  the checker verifies (`si`/`sino` where both branches return counts).
+* `main` takes no parameters. Recursion is supported; the call depth is limited
+  (4096 frames by default) and exceeding it is a runtime error.
+
+## 7. Modules
+
+Standard-library modules must be imported before use:
+
+```
+use math
+use string
+
+sfn main() {
+    sprint(math.sqrt(16.0))
+    sprint(string.upper("hi"))
+}
+```
+
+`core` (print, input, conversions, `len`, `range`, `push`, `keys`, `values`,
+`has`, `assert`, `type_of`) is always available without a `use`.
+
+Using a module that exists in the plan but is not implemented (for example
+`json`) is a compile error that says so.
+
+See `docs/STANDARD_LIBRARY.md` for every function, its signature and its errors.
+
+## 8. Output formatting
+
+`sprint` and `dit` render values as follows:
+
+| Value | Output |
+|---|---|
+| `Int` | decimal digits, e.g. `42` |
+| `Float` | shortest round-trip form with a decimal point, e.g. `1.5`, `2.0` |
+| `Bool` | `oui` / `nein` |
+| `String` | as-is, unquoted |
+| `List` | `[1, 2, 3]` — nested strings are quoted |
+| `Map` | `{"a": 1}` |
+| `Unit` | `unit` |
+
+## 9. Errors
+
+Every diagnostic carries `file:line:column` where available, a category
+(`lex error`, `parse error`, `type error`, `bytecode error`, `runtime error`)
+and, where useful, a hint.
+
+Runtime errors abort the program with exit status 1 and a message such as:
+
+```
+main.sc:7:12: runtime error: list index 5 out of range (length 2)
+```
+
+Runtime errors include: division/modulo by zero, out-of-range index, missing map
+key, calling a native with a wrong runtime type, `assert` failure, exhausted
+input, call-stack overflow.
+
+## 10. Not implemented yet
+
+These are **planned**, not present. Do not rely on them:
+
+* generics, enums, pattern matching, structs/records, tuples
+* first-class functions, closures, methods on user types
+* `async`/`await`, threads, exceptions (`ret`-based error handling only)
+* `fs`, `path`, `json`, `time`, `random`, `regex`, `http`, `net`, `process`,
+  `log`, `crypto`, `test`, `ai` modules
+* Silica UI (styling language, renderer)
+* package manager commands (`silica new/add/remove/install/build`)
+* self-hosting: the compiler is not written in Silica yet
+* native code generation (LLVM/JIT)
+
+## 11. Stability
+
+Bytecode format version is `1.0` and is documented in `docs/BYTECODE.md`. The
+language surface is `0.x`: breaking changes are allowed before `1.0.0`, and each
+one is recorded in `CHANGELOG.md`.

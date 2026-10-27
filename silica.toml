@@ -1,0 +1,18 @@
+# Example Silica project manifest.
+# The manifest format is documented and stable, but the package-manager
+# commands that would read it (silica new/add/install/build) are not
+# implemented yet — see docs/ROADMAP.md, Milestone E.
+
+[package]
+name = "hello"
+version = "0.1.0"
+authors = ["Umaiz Sufiyan"]
+license = "MIT"
+description = "Example Silica project manifest"
+entry = "src/main.sc"
+
+[dependencies]
+# name = "^0.1.0"
+
+[build]
+target = "bytecode"   # only the bytecode backend exists today

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "silica-lang"
+version = "0.1.0"
+description = "Silica — a small, statically typed, bytecode-compiled programming language"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Umaiz Sufiyan" }]
+keywords = ["language", "compiler", "bytecode", "vm", "interpreter"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Software Development :: Compilers",
+]
+
+[project.scripts]
+silica = "silica.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/umaizsufiyan/silica"
+
+[tool.setuptools]
+packages = ["silica"]
