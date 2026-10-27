@@ -27,7 +27,7 @@ Please do not open a public issue for:
 Include the file, the command, and the observed behaviour. You will get an
 acknowledgement, an assessment, and credit if you want it.
 
-## Threat model in v0.2.0
+## Threat model in v0.2.1
 
 A Silica program starts with **no capabilities**. It can compute, print and read
 stdin. It cannot open a file until the host grants `fs.read`, `fs.write` or

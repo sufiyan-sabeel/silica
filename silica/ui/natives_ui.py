@@ -238,9 +238,10 @@ def _render(ctx, args):
     options = dict(_need_map("ui.render", args[0]))
     for key in options:
         if key not in ("target", "out", "inline_css", "inline_runtime",
-                       "language"):
+                       "language", "favicon"):
             _fail("ui.render: unknown option '%s'" % key,
-                  hint="options: target, out, inline_css, inline_runtime, language")
+                  hint="options: target, out, inline_css, inline_runtime, "
+                       "language, favicon")
     if ctx.ui.stack:
         _fail("ui.render() was called with a builder block still open",
               hint="check that every widget that opens '{' has a matching '}'")

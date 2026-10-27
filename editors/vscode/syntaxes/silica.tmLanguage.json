@@ -1,0 +1,194 @@
+{
+  "name": "Silica",
+  "scopeName": "source.silica",
+  "fileTypes": [
+    "sc"
+  ],
+  "patterns": [
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#string"
+    },
+    {
+      "include": "#number"
+    },
+    {
+      "include": "#function-declaration"
+    },
+    {
+      "include": "#use-declaration"
+    },
+    {
+      "include": "#module-call"
+    },
+    {
+      "include": "#constant"
+    },
+    {
+      "include": "#operator-word"
+    },
+    {
+      "include": "#control"
+    },
+    {
+      "include": "#declaration"
+    },
+    {
+      "include": "#type"
+    },
+    {
+      "include": "#builtin-function"
+    },
+    {
+      "include": "#operator"
+    },
+    {
+      "include": "#punctuation"
+    }
+  ],
+  "repository": {
+    "comment": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.silica",
+          "match": "(#|//).*$"
+        }
+      ]
+    },
+    "string": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.silica",
+          "begin": "\\\"",
+          "end": "\\\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.silica",
+              "match": "\\\\[\\\\\\\"ntr]"
+            }
+          ]
+        }
+      ]
+    },
+    "number": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.silica",
+          "match": "\\b\\d+\\.\\d+([eE][-+]?\\d+)?\\b"
+        },
+        {
+          "name": "constant.numeric.integer.silica",
+          "match": "\\b\\d+\\b"
+        }
+      ]
+    },
+    "function-declaration": {
+      "patterns": [
+        {
+          "match": "\\b(sfn)(\\s+)([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "storage.type.function.silica"
+            },
+            "3": {
+              "name": "entity.name.function.silica"
+            }
+          }
+        }
+      ]
+    },
+    "use-declaration": {
+      "patterns": [
+        {
+          "match": "\\b(use)(\\s+)([A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*)",
+          "captures": {
+            "1": {
+              "name": "keyword.other.import.silica"
+            },
+            "3": {
+              "name": "support.namespace.silica"
+            }
+          }
+        }
+      ]
+    },
+    "module-call": {
+      "patterns": [
+        {
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)+)\\b",
+          "captures": {
+            "1": {
+              "name": "support.function.module.silica"
+            }
+          }
+        }
+      ]
+    },
+    "constant": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.silica",
+          "match": "\\b(oui|nein)\\b"
+        }
+      ]
+    },
+    "operator-word": {
+      "patterns": [
+        {
+          "name": "keyword.operator.word.silica",
+          "match": "\\b(und|ou|non)\\b"
+        }
+      ]
+    },
+    "control": {
+      "patterns": [
+        {
+          "name": "keyword.control.silica",
+          "match": "\\b(si|sino|tant|per|in|ret|halt|fin)\\b"
+        }
+      ]
+    },
+    "declaration": {
+      "patterns": [
+        {
+          "name": "storage.type.silica",
+          "match": "\\b(sfn|let|const)\\b"
+        }
+      ]
+    },
+    "type": {
+      "patterns": [
+        {
+          "name": "support.type.primitive.silica",
+          "match": "\\b(Int|Float|Bool|String|Unit|List|Map|Any)\\b"
+        }
+      ]
+    },
+    "builtin-function": {
+      "patterns": [
+        {
+          "name": "support.function.builtin.silica",
+          "match": "\\b(sprint|dit|input)\\b"
+        }
+      ]
+    },
+    "operator": {
+      "patterns": [
+        {
+          "name": "keyword.operator.silica",
+          "match": "==|!=|<=|>=|->|[-+*/%=<>]"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.silica",
+          "match": "[(){}\\[\\],:.;]"
+        }
+      ]
+    }
+  }
+}

@@ -78,7 +78,7 @@ virtualized lists, 3D transforms and shared-element transitions.
 Self-hosting: see `docs/BOOTSTRAP.md` for the staged plan. Silica does not
 compile itself today.
 
-## Known limitations in v0.2.0
+## Known limitations in v0.2.1
 
 * No generics: `List`/`Map` elements check as `Any`.
 * No first-class functions, closures, methods or user-defined types.

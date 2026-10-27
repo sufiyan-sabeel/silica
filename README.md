@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/logo/silica-logo.png" alt="Silica" width="440"></p>
+
 # Silica
 
 A small, statically typed programming language with its own bytecode engine:
@@ -20,8 +22,8 @@ $ silica run examples/square.sc
 144
 ```
 
-**Status: v0.2.0 — a working reference implementation, not a finished language.**
-Everything documented here works and is covered by 413 automated tests. What is
+**Status: v0.2.1 — a working reference implementation, not a finished language.**
+Everything documented here works and is covered by 438 automated tests. What is
 planned but absent is listed in [Limitations](#limitations-and-what-is-not-done)
 and in `docs/ROADMAP.md`. Nothing in this repository claims to be faster than
 Python, C or Rust — see `docs/PERFORMANCE.md` for the measured truth.
@@ -113,6 +115,33 @@ python3 -m silica run examples/ui_animate.sc --allow-fs-write build   # reduced 
 $ printf '12\n*\n4\n' | python3 -m silica run examples/calculator.sc
 first number: operator (+ - * /): second number: 48.0
 ```
+
+## Editor support and brand assets
+
+The logo lives in `assets/logo/` — the mark, the wordmark, a transparent symbol,
+a monochrome variant and a full icon set (16–512px plus `favicon.ico`), all
+cropped from the original brand sheet with the design and colours untouched. See
+`assets/logo/README.md` for what each file is and the exact colour values.
+
+`.sc` files get the Silica icon in VS Code via `editors/vscode/`, which registers
+the `silica` language for `.sc`, contributes a TextMate grammar and contributes a
+file icon theme mapping `sc` to the mark. Install it with `vsce package` +
+`code --install-extension`, then pick **Silica File Icons** in
+*Preferences: File Icon Theme*.
+
+Two things worth knowing:
+
+* **This repository has no editor of its own.** It is a CLI toolchain plus a web
+  renderer, so there is no in-project file tree, tab strip or icon theme to
+  integrate with. VS Code is where `.sc` files actually get opened, so the
+  extension is a new sub-project rather than a change to something existing.
+* **A file icon theme is all-or-nothing.** Enabling it replaces your current icon
+  theme for every file type, and unmapped files fall back to VS Code's built-in
+  icons. `editors/vscode/README.md` shows how to copy just the `.sc` entry into
+  your own theme instead.
+
+Rendered Silica UI pages can carry the mark too: `ui.render({..., favicon: oui})`
+embeds a 32px copy as a data URI, so the page stays self-contained.
 
 ## Capabilities and file access
 
@@ -245,7 +274,7 @@ Format details: `docs/BYTECODE.md`.
 ## Testing
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 413 tests
+python3 -m unittest discover -s tests -t .   # 438 tests
 python3 -m silica test tests                 # Silica-level tests
 python3 benchmarks/bench.py --runs 3         # benchmarks + correctness check
 ```
@@ -272,6 +301,8 @@ silica/            the engine package (lexer, parser, checker, compiler,
 silica/ui/         the UI core: node tree, theme, style model, web
                    renderer and the ui.* native functions
 examples/          fifteen runnable programs with documented output
+assets/logo/       the Silica mark, wordmark and icon set
+editors/vscode/    VS Code extension: .sc language + file icon
 tests/             Python test suite + Silica-level *_test.sc files
 benchmarks/        benchmark programs, Python equivalents and runner
 docs/              language spec, grammar, bytecode, stdlib, UI, performance,

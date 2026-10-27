@@ -5,6 +5,35 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## [0.2.1] — 2026-10-27
+
+Brand integration: the Silica logo is in the repository, and `.sc` files have a
+file icon in the one editor that can show one. No language, bytecode or VM change.
+
+### Added
+- `assets/logo/`: the mark, the wordmark, a transparent symbol, a monochrome
+  variant and a full icon set (16–512px plus a multi-size `favicon.ico`), cropped
+  from the supplied brand sheet. Design and colours are unchanged; nothing was
+  redrawn.
+- `editors/vscode/`: a VS Code extension that registers the `silica` language for
+  `.sc`, contributes a TextMate grammar covering the whole keyword vocabulary, and
+  contributes a file icon theme mapping `sc` to the Silica mark. This is a new
+  sub-project — the repository has no editor of its own to integrate with.
+- `ui.render({..., favicon: oui})`: embeds a 32px mark as a data URI so a
+  rendered page carries the Silica icon without an extra file. Off by default.
+- `tests/test_assets.py`: 25 tests (438 total) covering the asset files, the icon set, the
+  editor manifests, the grammar's keyword coverage and the `hello.sc` check.
+
+### Changed
+- `pyproject.toml` ships `silica/ui/assets/*.png` as package data and declares a
+  `dev` extra (`pytest`, `pillow`) so the image checks can run in CI.
+- Version 0.2.1.
+
+### Notes
+- A file icon theme is all-or-nothing in VS Code: enabling it replaces the user's
+  current theme for every file type. `editors/vscode/README.md` documents this and
+  shows how to copy only the `.sc` entry into an existing theme.
+
 ## [0.2.0] — 2026-10-27
 
 Silica UI 0.1: the UI DSL, the UI core and the web renderer. Three additive

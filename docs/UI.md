@@ -1,4 +1,4 @@
-# Silica UI — v0.2.0
+# Silica UI — v0.2.1
 
 Silica UI is a set of widgets, a theme model and one renderer, written in Silica
 and rendered to HTML/CSS by the web backend. This document states exactly what
@@ -8,7 +8,7 @@ Nothing in this document is aspirational. A target is "supported" only when an
 acceptance test renders it; a reserved name fails loudly instead of pretending.
 
 **Versioning.** The UI feature set is called "UI 0.1" and ships in **Silica
-0.2.0**. The two numbers are different on purpose: Silica's version tracks the
+0.2.1**. The two numbers are different on purpose: Silica's version tracks the
 language and toolchain, while UI 0.x tracks the rendering surface. The `.sbc`
 bytecode format is still 1.0.
 
@@ -267,7 +267,12 @@ Writes three files next to `out`:
 | `theme.css` | `:root` custom properties, plus the reduced-motion override |
 | `silica-ui-runtime.js` | the action interpreter |
 
-Options: `target`, `out`, `inline_css`, `inline_runtime`, `language`.
+Options: `target`, `out`, `inline_css`, `inline_runtime`, `language`, `favicon`.
+
+`favicon: oui` adds `<link rel="icon">` pointing at a 32px Silica mark embedded as
+a data URI, so the page keeps its icon without an extra file to copy around. It is
+off by default: a rendered page is otherwise byte-identical to what 0.2.0
+produced.
 
 Rendering is explicit. A program that builds a tree and exits writes nothing.
 A renderer that does not exist is rejected, never silently substituted.

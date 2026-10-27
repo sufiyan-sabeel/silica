@@ -1,0 +1,52 @@
+{
+  "name": "silica-language",
+  "displayName": "Silica",
+  "description": "Silica language support: syntax highlighting for .sc files and the Silica file icon.",
+  "version": "0.2.0",
+  "publisher": "sufiyan-sabeel",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "silica",
+    "sc"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sufiyan-sabeel/silica.git",
+    "directory": "editors/vscode"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "silica",
+        "aliases": [
+          "Silica",
+          "silica"
+        ],
+        "extensions": [
+          ".sc"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "silica",
+        "scopeName": "source.silica",
+        "path": "./syntaxes/silica.tmLanguage.json"
+      }
+    ],
+    "iconThemes": [
+      {
+        "id": "silica-file-icons",
+        "label": "Silica File Icons",
+        "path": "./icon-theme/silica-icon-theme.json"
+      }
+    ]
+  }
+}

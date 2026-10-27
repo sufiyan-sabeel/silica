@@ -1,0 +1,10 @@
+{
+  "iconDefinitions": {
+    "_silica": {
+      "iconPath": "../icons/silica-symbol.png"
+    }
+  },
+  "fileExtensions": {
+    "sc": "_silica"
+  }
+}

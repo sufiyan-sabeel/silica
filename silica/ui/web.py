@@ -11,6 +11,7 @@ Anything beyond that action table runs at build time, when the program executes,
 or not at all.
 """
 
+import base64
 import html
 import json
 import os
@@ -22,6 +23,23 @@ TARGETS = ("web",)
 
 RUNTIME_NAME = "silica-ui-runtime.js"
 THEME_NAME = "theme.css"
+FAVICON_ASSET = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "assets", "silica-32.png")
+
+_favicon_cache = None
+
+
+def favicon_data_uri():
+    """The Silica mark as a data URI, so a rendered page needs no extra file."""
+    global _favicon_cache
+    if _favicon_cache is None:
+        try:
+            with open(FAVICON_ASSET, "rb") as handle:
+                encoded = base64.b64encode(handle.read()).decode("ascii")
+        except OSError:  # pragma: no cover - only if the package data is missing
+            return None
+        _favicon_cache = "data:image/png;base64," + encoded
+    return _favicon_cache
 
 _VOID = {"image"}
 
@@ -53,6 +71,7 @@ def render(app, theme=None, options=None):
 
     inline_css = bool(options.get("inline_css", False))
     inline_runtime = bool(options.get("inline_runtime", False))
+    icon = favicon_data_uri() if options.get("favicon") else None
 
     files = {}
     files[os.path.basename(out)] = _document(
@@ -65,6 +84,7 @@ def render(app, theme=None, options=None):
         runtime_src=None if inline_runtime else RUNTIME_NAME,
         inline_runtime=RUNTIME_JS if inline_runtime else None,
         lang=options.get("language", "en"),
+        icon=icon,
     )
     if not inline_css:
         files[THEME_NAME] = css_variables(theme)
@@ -189,7 +209,7 @@ _ROLE = {
 
 
 def _document(title, body, styles, actions_json, theme_href, inline_css,
-              runtime_src, inline_runtime, lang):
+              runtime_src, inline_runtime, lang, icon=None):
     head = [
         "<!DOCTYPE html>",
         '<html lang="%s">' % html.escape(lang, quote=True),
@@ -197,8 +217,10 @@ def _document(title, body, styles, actions_json, theme_href, inline_css,
         '<meta charset="utf-8">',
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
         "<title>%s</title>" % html.escape(title, quote=False),
-        '<meta name="generator" content="Silica UI 0.2.0">',
+        '<meta name="generator" content="Silica UI 0.2.1">',
     ]
+    if icon:
+        head.append('<link rel="icon" type="image/png" href="%s">' % icon)
     if theme_href:
         head.append('<link rel="stylesheet" href="%s">' % theme_href)
     if inline_css:
