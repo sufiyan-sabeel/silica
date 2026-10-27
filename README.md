@@ -23,7 +23,7 @@ $ silica run examples/square.sc
 ```
 
 **Status: v0.2.1 — a working reference implementation, not a finished language.**
-Everything documented here works and is covered by 438 automated tests. What is
+Everything documented here works and is covered by 440 automated tests. What is
 planned but absent is listed in [Limitations](#limitations-and-what-is-not-done)
 and in `docs/ROADMAP.md`. Nothing in this repository claims to be faster than
 Python, C or Rust — see `docs/PERFORMANCE.md` for the measured truth.
@@ -274,7 +274,7 @@ Format details: `docs/BYTECODE.md`.
 ## Testing
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 438 tests
+python3 -m unittest discover -s tests -t .   # 440 tests
 python3 -m silica test tests                 # Silica-level tests
 python3 benchmarks/bench.py --runs 3         # benchmarks + correctness check
 ```

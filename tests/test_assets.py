@@ -192,6 +192,47 @@ class VSCodeExtensionTests(unittest.TestCase):
                          theme["iconDefinitions"][icon_id]["iconPath"]))
         self.assertTrue(os.path.exists(icon_path), icon_path)
 
+    def test_the_icon_theme_covers_both_light_and_dark_themes(self):
+        """A charcoal icon on a dark theme is invisible; both variants must ship."""
+        themes = self.contributes["iconThemes"]
+        theme_path = os.path.join(VSCODE, themes[0]["path"])
+        theme = read_json(theme_path)
+        self.assertIn("light", theme,
+                      "the theme needs a light override or the icon vanishes on "
+                      "light themes")
+        self.assertIn("sc", theme["light"]["fileExtensions"])
+        base = theme["iconDefinitions"][theme["fileExtensions"]["sc"]]["iconPath"]
+        light = theme["iconDefinitions"][
+            theme["light"]["fileExtensions"]["sc"]]["iconPath"]
+        self.assertNotEqual(base, light, "both themes point at the same icon")
+
+    @needs_pillow
+    def test_the_base_icon_is_light_and_the_light_override_is_dark(self):
+        themes = self.contributes["iconThemes"]
+        theme_path = os.path.join(VSCODE, themes[0]["path"])
+        theme = read_json(theme_path)
+
+        def mean_luma(relative):
+            path = os.path.normpath(os.path.join(os.path.dirname(theme_path),
+                                                 relative))
+            with Image.open(path) as image:
+                rgba = image.convert("RGBA")
+                raw = rgba.tobytes()
+                total = count = 0
+                for i in range(0, len(raw), 4):
+                    if raw[i + 3] > 128:          # only the opaque mark
+                        total += (raw[i] + raw[i + 1] + raw[i + 2]) / 3
+                        count += 1
+                return total / max(1, count)
+
+        base = theme["iconDefinitions"][theme["fileExtensions"]["sc"]]["iconPath"]
+        light = theme["iconDefinitions"][
+            theme["light"]["fileExtensions"]["sc"]]["iconPath"]
+        self.assertGreater(mean_luma(base), 180,
+                           "the base icon must be light to show on dark themes")
+        self.assertLess(mean_luma(light), 100,
+                        "the light-theme icon must be dark to show on light themes")
+
     def test_every_path_in_the_manifest_resolves(self):
         paths = []
         for language in self.contributes.get("languages", []):

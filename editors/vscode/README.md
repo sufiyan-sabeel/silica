@@ -26,6 +26,13 @@ The grammar covers the whole keyword vocabulary the lexer defines; a test in the
 main repository fails if a keyword or built-in type is added to `silica/tokens.py`
 and the grammar is not updated with it.
 
+The mark is near-black, which is invisible on a dark editor background, so the
+theme ships two monochrome silhouettes of the same shape: a light one used by
+default (dark themes) and a dark one wired into the theme's `light` section
+(light themes). Both are generated from the supplied mark — the geometry is
+unchanged, only the fill colour differs, which is what makes a file icon legible
+at 16px on either background.
+
 The file icon theme is contributed through `contributes.iconThemes` — the point
 VS Code documents for file icon themes. `fileIconThemes` does not exist, and using
 it fails silently: the manifest loads and the theme is simply never offered. There

@@ -1,10 +1,18 @@
 {
   "iconDefinitions": {
     "_silica": {
-      "iconPath": "../icons/silica-symbol.png"
+      "iconPath": "../icons/silica-symbol-light.png"
+    },
+    "_silica_on_light": {
+      "iconPath": "../icons/silica-symbol-dark.png"
     }
   },
   "fileExtensions": {
     "sc": "_silica"
+  },
+  "light": {
+    "fileExtensions": {
+      "sc": "_silica_on_light"
+    }
   }
 }
