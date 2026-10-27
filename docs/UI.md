@@ -1,4 +1,4 @@
-# Silica UI — v0.3.0
+# Silica UI — v0.2.1
 
 Silica UI is a set of widgets, a theme model and one renderer, written in Silica
 and rendered to HTML/CSS by the web backend. This document states exactly what
@@ -8,7 +8,7 @@ Nothing in this document is aspirational. A target is "supported" only when an
 acceptance test renders it; a reserved name fails loudly instead of pretending.
 
 **Versioning.** The UI feature set is called "UI 0.1" and ships in **Silica
-0.3.0**. The two numbers are different on purpose: Silica's version tracks the
+0.2.1**. The two numbers are different on purpose: Silica's version tracks the
 language and toolchain, while UI 0.x tracks the rendering surface. The `.sbc`
 bytecode format is still 1.0.
 

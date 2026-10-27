@@ -63,9 +63,23 @@ class VersionAndHelpTests(CliTestCase):
         code, out, _ = cli_run([], stdin="exit\n")
         self.assertEqual(code, 0)
         self.assertIn("Silica Interpreter v%s" % cli.VERSION, out)
-        self.assertIn("Type 'help' for commands, 'exit' to quit.", out)
-        self.assertIn("silica>", out)
+        self.assertIn(cli.PROMPT, out)
         self.assertNotIn("usage:", out)
+
+    def test_the_banner_is_one_line_and_comes_first(self):
+        code, out, _ = cli_run([], stdin="exit\n")
+        self.assertEqual(code, 0)
+        lines = out.splitlines()
+        self.assertEqual(lines[0], "Silica Interpreter v%s" % cli.VERSION)
+        self.assertEqual(lines[1], cli.PROMPT.rstrip() + " ", lines[1])
+        self.assertEqual(len(lines), 2, lines)
+
+    def test_the_prompt_is_the_cent_sign(self):
+        self.assertEqual(cli.PROMPT, "\u00a2 ")
+        code, out, _ = cli_run([], stdin="1 + 1\nexit\n")
+        self.assertEqual(code, 0)
+        self.assertIn("\u00a2 2", out)
+        self.assertNotIn("silica>", out)
 
     def test_unknown_command(self):
         code, _, err = cli_run(["frobnicate"])
@@ -322,6 +336,37 @@ class ReplTests(CliTestCase):
         code, out, _ = cli_run([], stdin="exit\n")
         self.assertEqual(code, 0)
         self.assertTrue(out.startswith("Silica Interpreter v%s\n" % cli.VERSION), out)
+
+    def test_ctrl_d_exits_cleanly(self):
+        """EOF is Ctrl+D on a terminal; it must end the session, not crash."""
+        code, out, err = cli_run([], stdin="1 + 1\n")
+        self.assertEqual(code, 0)
+        self.assertIn("2", out)
+        self.assertEqual(err, "")
+
+    def test_a_prompt_is_written_for_every_ready_line(self):
+        code, out, _ = cli_run([], stdin="1\n2\n3\n")
+        self.assertEqual(code, 0)
+        self.assertEqual(out.count(cli.PROMPT), 4)  # three lines plus the EOF prompt
+
+    def test_the_prompt_survives_an_ascii_only_stdout(self):
+        """A C locale must not crash the interpreter on a non-ASCII prompt."""
+        import sys as _sys
+        raw = io.BytesIO()
+        stream = io.TextIOWrapper(raw, encoding="ascii", errors="strict")
+        saved_out, saved_in = _sys.stdout, _sys.stdin
+        _sys.stdout = stream
+        _sys.stdin = io.StringIO("1 + 1\nexit\n")
+        try:
+            code = cli.cmd_repl([])
+        finally:
+            _sys.stdout = saved_out
+            _sys.stdin = saved_in
+            stream.flush()
+        self.assertEqual(code, 0)
+        written = raw.getvalue().decode("utf-8", "replace")
+        self.assertIn("2", written)
+        self.assertIn("\u00a2", written)
 
     def test_help_command_lists_the_commands(self):
         code, out, _ = cli_run([], stdin="help\nexit\n")

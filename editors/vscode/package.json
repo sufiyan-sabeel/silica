@@ -2,7 +2,7 @@
   "name": "silica-language",
   "displayName": "Silica",
   "description": "Silica language support: syntax highlighting for .sc files and the Silica file icon.",
-  "version": "0.3.0",
+  "version": "0.2.1",
   "publisher": "sufiyan-sabeel",
   "license": "MIT",
   "engines": {

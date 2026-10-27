@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/logo/silica-logo.png" alt="Silica" width="462"></p>
+<p align="center"><img src="assets/logo/silica-logo.png" alt="Silica" width="467"></p>
 
 # Silica
 
@@ -22,8 +22,8 @@ $ silica run examples/square.sc
 144
 ```
 
-**Status: v0.3.0 — a working reference implementation, not a finished language.**
-Everything documented here works and is covered by 462 automated tests. What is
+**Status: v0.2.1 — a working reference implementation, not a finished language.**
+Everything documented here works and is covered by 467 automated tests. What is
 planned but absent is listed in [Limitations](#limitations-and-what-is-not-done)
 and in `docs/ROADMAP.md`. Nothing in this repository claims to be faster than
 Python, C or Rust — see `docs/PERFORMANCE.md` for the measured truth.
@@ -54,26 +54,32 @@ sh bin/silica examples/hello.sc
 
 ### The interpreter
 
+`silica` with no arguments starts the interactive interpreter. It prints its
+version once, then uses `¢ ` as the prompt:
+
 ```console
 $ silica
-Silica Interpreter v0.3.0
-Type 'help' for commands, 'exit' to quit.
-
-silica> let n: Int = 21
+Silica Interpreter v0.2.1
+¢ let n: Int = 21
 n: Int = 21
-silica> n * 2
+¢ n * 2
 42
-silica> sfn twice(x: Int) -> Int {
-   ...>     ret x * 2
-   ...> }
+¢ sfn twice(x: Int) -> Int {
+¢     ret x * 2
+¢ }
 defined twice
-silica> twice(5)
+¢ twice(5)
 10
-silica> exit
+¢ exit
 ```
 
 Globals and functions persist for the session; errors are reported and the
-session continues. `help`, `exit` and `globals` are the three commands.
+session continues. `help`, `exit` and `globals` are the three commands
+(`:help`, `:quit` and `:q` also work), and Ctrl+D leaves the session.
+
+The prompt is the Cent sign, so the terminal needs a UTF-8 capable encoding. If
+stdout is ASCII-only — a C locale, say — the interpreter switches the stream to
+UTF-8 rather than crashing, and falls back to `> ` only if it cannot.
 
 ## Commands
 
@@ -303,7 +309,7 @@ Format details: `docs/BYTECODE.md`.
 ## Testing
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 462 tests
+python3 -m unittest discover -s tests -t .   # 467 tests
 python3 -m silica test tests                 # Silica-level tests
 python3 benchmarks/bench.py --runs 3         # benchmarks + correctness check
 ```

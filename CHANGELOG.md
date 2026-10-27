@@ -5,39 +5,6 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
-## [0.3.0] — 2026-10-27
-
-A friendlier command line. Two things people type constantly — a bare file name
-and a bare `silica` — now do the obvious thing. No language, bytecode or VM
-change.
-
-### Added
-- **`silica file.sc`** runs a source file directly; `silica file.sbc` runs
-  bytecode. Both are the same code path as `silica run`, so capability flags
-  (`--allow-fs-read` and friends) work identically.
-- **`silica` with no arguments starts the interactive interpreter**, with the
-  banner `Silica Interpreter v0.3.0` and `help` / `exit` / `globals` commands.
-  `:help`, `:quit` and `:q` still work.
-
-### Changed
-- `silica` with no arguments used to print the usage text. It now starts the
-  interpreter, which is the behaviour the CLI was missing; this is why the
-  version is 0.3.0 rather than a patch.
-- The interpreter leaves a clean line when you type `exit`.
-
-### Fixed
-- A missing file in the direct form reports `error: no such file: x.sc` and exits
-  1 — never a Python traceback.
-- Invalid syntax reports `file:line:col` for the direct form too.
-- Only `.sc` and `.sbc` arguments are treated as files, so a mistyped command is
-  still reported as an unknown command rather than a missing file.
-
-### Tests
-- 21 new tests (462 total): every command mode, the interpreter banner and
-  commands, missing files, syntax and type errors with locations, capability
-  flags in the direct form, and the calculator's `4 - 2 = 2.0` case in both
-  forms.
-
 ## [0.2.1] — 2026-10-27
 
 Brand integration: the Silica logo is in the repository, and `.sc` files have a
@@ -54,8 +21,26 @@ file icon in the one editor that can show one. No language, bytecode or VM chang
   sub-project — the repository has no editor of its own to integrate with.
 - `ui.render({..., favicon: oui})`: embeds a 32px mark as a data URI so a
   rendered page carries the Silica icon without an extra file. Off by default.
-- `tests/test_assets.py`: 28 tests (441 total) covering the asset files, the icon set, the
+- `tests/test_assets.py` covering the asset files, the icon set, the
   editor manifests, the grammar's keyword coverage and the `hello.sc` check.
+
+### Added — command line
+- **`silica file.sc`** runs a source file directly; `silica file.sbc` runs
+  bytecode. Both are the same code path as `silica run`, so capability flags
+  (`--allow-fs-read` and friends) work identically.
+- **`silica` with no arguments starts the interactive interpreter**, which prints
+  `Silica Interpreter v0.2.1` once and then uses `\u00a2 ` as its prompt. `help`,
+  `exit` and `globals` are its commands; `:help`, `:quit` and `:q` also work.
+  Ctrl+D leaves the session.
+
+### Fixed — command line
+- A missing file in the direct form reports `error: no such file: x.sc` and exits
+  1 — never a Python traceback.
+- Invalid syntax reports `file:line:col` for the direct form too.
+- Only `.sc` and `.sbc` arguments are treated as files, so a mistyped command is
+  still reported as an unknown command rather than a missing file.
+- The interpreter prompt is written through a helper that switches an ASCII-only
+  stdout to UTF-8, so a C locale cannot crash the session on the Cent sign.
 
 ### Changed
 - `pyproject.toml` ships `silica/ui/assets/*.png` as package data and declares a
