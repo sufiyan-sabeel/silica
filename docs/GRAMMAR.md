@@ -1,6 +1,6 @@
-# Silica Grammar — v0.2.1
+# Silica Grammar — v0.3.0
 
-EBNF for the grammar the v0.2.1 parser accepts. `NEWLINE` is a significant token
+EBNF for the grammar the v0.3.0 parser accepts. `NEWLINE` is a significant token
 that terminates statements and is ignored inside `(` … `)` and `[` … `]`.
 
 ```ebnf

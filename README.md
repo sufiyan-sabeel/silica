@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/logo/silica-logo.png" alt="Silica" width="467"></p>
+<p align="center"><img src="assets/logo/silica-logo.png" alt="Silica" width="440"></p>
 
 # Silica
 
@@ -22,11 +22,52 @@ $ silica run examples/square.sc
 144
 ```
 
-**Status: v0.2.1 — a working reference implementation, not a finished language.**
-Everything documented here works and is covered by 467 automated tests. What is
+**Status: v0.3.0 — a working reference implementation, not a finished language.**
+Everything documented here works and is covered by 489 automated tests. What is
 planned but absent is listed in [Limitations](#limitations-and-what-is-not-done)
 and in `docs/ROADMAP.md`. Nothing in this repository claims to be faster than
 Python, C or Rust — see `docs/PERFORMANCE.md` for the measured truth.
+
+## Install
+
+**Linux and Termux, one command:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sufiyan-sabeel/silica/main/install.sh | sh
+```
+
+It detects the platform, checks for Python 3.9+, downloads the release wheel,
+**verifies its SHA-256** against the published checksum, installs into an isolated
+virtual environment and puts `silica` on your `PATH`. No `sudo`, safe to re-run,
+and `uninstall.sh` removes exactly what it created.
+
+```bash
+silica                  # interactive interpreter
+silica hello.sc         # run a file
+silica --version
+```
+
+**Termux** (native, no proot, no sudo):
+
+```bash
+pkg update && pkg install python git curl
+curl -fsSL https://raw.githubusercontent.com/sufiyan-sabeel/silica/main/install.sh | sh
+```
+
+**From source**, if you would rather read what you install:
+
+```bash
+git clone https://github.com/sufiyan-sabeel/silica.git
+cd silica && python3 -m venv .venv && . .venv/bin/activate
+pip install .
+```
+
+Piping a script into a shell is not risk-free, and this project does not claim it
+is. `install.sh` is short, downloads only from this repository's releases over
+HTTPS, and refuses to install an artifact whose checksum does not match. Full
+detail, the trust model, Termux caveats and troubleshooting:
+**[docs/INSTALL.md](docs/INSTALL.md)**. Release and verification procedure:
+**[docs/RELEASING.md](docs/RELEASING.md)**.
 
 ## Quick start
 
@@ -59,7 +100,7 @@ version once, then uses `¢ ` as the prompt:
 
 ```console
 $ silica
-Silica Interpreter v0.2.1
+Silica Interpreter v0.3.0
 ¢ let n: Int = 21
 n: Int = 21
 ¢ n * 2
@@ -309,7 +350,7 @@ Format details: `docs/BYTECODE.md`.
 ## Testing
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 467 tests
+python3 -m unittest discover -s tests -t .   # 489 tests
 python3 -m silica test tests                 # Silica-level tests
 python3 benchmarks/bench.py --runs 3         # benchmarks + correctness check
 ```
@@ -338,10 +379,12 @@ silica/ui/         the UI core: node tree, theme, style model, web
 examples/          fifteen runnable programs with documented output
 assets/logo/       the Silica mark, wordmark and icon set
 editors/vscode/    VS Code extension: .sc language + file icon
+install.sh         Linux/Termux installer (checksum-verified)
+uninstall.sh       removes exactly what install.sh created
 tests/             Python test suite + Silica-level *_test.sc files
 benchmarks/        benchmark programs, Python equivalents and runner
-docs/              language spec, grammar, bytecode, stdlib, UI, performance,
-                   bootstrap, roadmap
+docs/              language spec, grammar, bytecode, stdlib, UI, install,
+                   releasing, performance, bootstrap, roadmap
 bin/silica         launcher for running from a checkout
 pyproject.toml     packaging; installs the `silica` command
 ```
