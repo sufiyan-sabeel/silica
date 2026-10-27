@@ -1,4 +1,4 @@
-# Silica Standard Library — v0.1.0
+# Silica Standard Library — v0.1.1
 
 `core` is always in scope. Every other module must be imported with `use`.
 Each entry lists its signature, what it returns, and when it raises a runtime
@@ -144,17 +144,104 @@ Sorting and reversing do not mutate the input.
 
 ---
 
+## fs — `use fs` (requires a capability)
+
+`fs` is the only module that touches the machine, and every function in it
+requires an explicit capability grant. **Nothing is granted by default**: a
+program run without flags gets a capability error, not a file.
+
+| Function | Signature | Capability | Notes |
+|---|---|---|---|
+| `fs.read_text` | `(String) -> String` | `fs.read` | Whole file as UTF-8 text. Errors on a missing file, a directory, or bytes that are not UTF-8. |
+| `fs.write_text` | `(String, String) -> Unit` | `fs.write` | Creates or overwrites. The parent directory must already exist; Silica does not create directories. |
+| `fs.exists` | `(String) -> Bool` | `fs.read` | `nein` for a missing path rather than an error. Requires `fs.read` because existence is itself information. |
+| `fs.list_dir` | `(String) -> List` | `fs.list` | Entry names, sorted. Not recursive. Errors on a file or a missing directory. |
+
+Paths are resolved against the working directory, symlinks are resolved before
+the check, and a path is only allowed when it lands inside a granted root. So
+`--allow-fs-read data` does not permit `data/../secret` and does not permit a
+symlink inside `data` that points outside it.
+
+```bash
+silica run examples/fs_demo.sc --allow-fs-read examples --allow-fs-list examples
+```
+
+Errors are ordinary located runtime errors:
+
+```
+examples/fs_demo.sc:5: capability error: capability 'fs.read' (read files) is not granted
+  hint: grant it with --allow-fs-read <dir>; Silica grants nothing by default
+```
+
+---
+
+## json — `use json`
+
+| Function | Signature | Notes |
+|---|---|---|
+| `json.parse` | `(String) -> Any` | Returns the value the document describes. Errors report line and column. |
+| `json.stringify` | `(Any) -> String` | Compact form: `{"a":1,"b":[1,2]}`. |
+| `json.stringify` | `(Any, Int) -> String` | Pretty form with that many spaces per level (0–8; 0 means compact). |
+
+Mapping between JSON and Silica values:
+
+| JSON | Silica |
+|---|---|
+| `null` | `Unit` |
+| `true` / `false` | `Bool` (`oui` / `nein`) |
+| whole number in 64-bit range | `Int` |
+| any other number | `Float` |
+| string | `String` (UTF-8, escapes decoded) |
+| array | `List` |
+| object | `Map` with `String` keys |
+
+Stated rules rather than guesses:
+
+* `NaN`, `Infinity` and `-Infinity` are rejected — they are not JSON.
+* An integer outside signed 64-bit range is an error, not a silent wrap.
+* A duplicate object key keeps the **last** value.
+* `json.stringify` refuses a `Map` whose keys are not `String`, and refuses
+  values with no JSON form (an `Iterator`), and never emits `NaN`.
+* `json.parse` reports `invalid JSON at line L column C: <reason>` with a hint
+  showing the offending line and a caret.
+
+```silica
+use json
+
+sfn main() {
+    let doc = json.parse("{\"name\": \"silica\", \"nums\": [1, 2.5]}")
+    sprint(json.stringify(doc))       # {"name":"silica","nums":[1,2.5]}
+    sprint(json.stringify(doc, 2))    # two-space indented
+}
+```
+
+---
+
 ## Planned modules (not implemented)
 
-`fs`, `path`, `json`, `time`, `random`, `regex`, `http`, `net`, `process`, `log`,
-`crypto`, `test`, `async`, `ai`.
+`path`, `time`, `random`, `regex`, `http`, `net`, `process`, `log`, `crypto`,
+`test`, `async`, `ai`.
 
 Using any of them is a compile error that names the implemented modules. They are
 deliberately not stubbed: a module either works or does not exist.
 
 ## Security model
 
-Silica v0.1.0 exposes no operating-system capability: no file access, no network,
-no process execution, no environment access. Programs can read stdin and write
-stdout/stderr only. When `fs`, `net` and `process` arrive, they will be explicit
-imports with a documented capability boundary rather than ambient authority.
+A Silica program starts with **no capabilities**. It can compute, print and read
+stdin; it cannot open a file. Privileged operations are named capabilities
+(`fs.read`, `fs.write`, `fs.list`) and each grant is scoped to a root path.
+
+* **Granting** happens outside the program, on the command line
+  (`--allow-fs-read DIR`) or in a TOML file (`--capabilities FILE`). A program
+  cannot grant itself anything: the set is built before the VM starts.
+* **Denying** (`--deny-fs-read`) removes a capability even when a root was
+  granted, so a caller can narrow a config file without editing it. Deny wins.
+* **Inheriting**: one set per run. Every function called inherits it; `derive()`
+  can only narrow, never widen, so a callee cannot exceed its caller.
+* **Enforcement** lives at the VM's `CALL_NATIVE` dispatch, not inside the
+  filesystem functions: each privileged native declares the capability it needs,
+  the VM authorises the call, and the native receives the path that was actually
+  authorised. There is no second resolution step to disagree with the check.
+
+There is no network, process, environment or arbitrary host-execution
+capability. `silica capabilities` prints the effective set.

@@ -44,14 +44,16 @@ class CliTestCase(unittest.TestCase):
 
 class VersionAndHelpTests(CliTestCase):
     def test_version(self):
+        from silica import __version__
         code, out, _ = cli_run(["--version"])
         self.assertEqual(code, 0)
-        self.assertEqual(out.strip(), "silica 0.1.0")
+        self.assertEqual(out.strip(), "silica %s" % __version__)
 
     def test_help_lists_commands(self):
         code, out, _ = cli_run(["--help"])
         self.assertEqual(code, 0)
-        for command in ("run", "check", "compile", "repl", "fmt", "test"):
+        for command in ("run", "check", "compile", "repl", "fmt", "test",
+                        "capabilities"):
             self.assertIn(command, out)
 
     def test_no_arguments_prints_usage(self):

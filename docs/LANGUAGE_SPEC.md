@@ -1,6 +1,6 @@
-# Silica Language Specification — v0.1.0
+# Silica Language Specification — v0.1.1
 
-This document is normative for the v0.1.0 reference implementation. Anything
+This document is normative for the v0.1.1 reference implementation. Anything
 described here is implemented and covered by tests in `tests/`; anything else is
 listed under [Not implemented yet](#not-implemented-yet).
 
@@ -202,8 +202,12 @@ sfn main() {
 `core` (print, input, conversions, `len`, `range`, `push`, `keys`, `values`,
 `has`, `assert`, `type_of`) is always available without a `use`.
 
-Using a module that exists in the plan but is not implemented (for example
-`json`) is a compile error that says so.
+Implemented modules: `math`, `string`, `collections`, `json`, and `fs`. Using a
+module that exists in the plan but is not implemented (for example `http`) is a
+compile error that says so.
+
+`fs` is the only module that reaches outside the engine, and it is guarded by the
+capability model described in section 11.
 
 See `docs/STANDARD_LIBRARY.md` for every function, its signature and its errors.
 
@@ -244,14 +248,45 @@ These are **planned**, not present. Do not rely on them:
 * generics, enums, pattern matching, structs/records, tuples
 * first-class functions, closures, methods on user types
 * `async`/`await`, threads, exceptions (`ret`-based error handling only)
-* `fs`, `path`, `json`, `time`, `random`, `regex`, `http`, `net`, `process`,
-  `log`, `crypto`, `test`, `ai` modules
+* `path`, `time`, `random`, `regex`, `http`, `net`, `process`, `log`, `crypto`,
+  `test`, `ai` modules
 * Silica UI (styling language, renderer)
 * package manager commands (`silica new/add/remove/install/build`)
 * self-hosting: the compiler is not written in Silica yet
 * native code generation (LLVM/JIT)
 
-## 11. Stability
+## 11. Capabilities
+
+A program starts with **no capabilities**. It can compute, print and read stdin.
+Anything that touches the machine is a named capability:
+
+| Capability | Covers |
+|---|---|
+| `fs.read` | reading a file's contents, and testing whether a path exists |
+| `fs.write` | creating or overwriting a file |
+| `fs.list` | listing a directory |
+
+A grant is a capability plus a **root path**. A requested path is resolved
+(symlinks and `..` collapsed) and must land inside a granted root for that
+capability; otherwise the call fails with a capability error.
+
+Capabilities are granted by the host, never by the program: on the command line
+(`--allow-fs-read DIR`) or in a `[capabilities]` table in a TOML file passed with
+`--capabilities`. `--deny-fs-*` removes a capability even when a root was
+granted, and deny always wins. A run has exactly one capability set; every
+function called inherits it, and no operation can widen it.
+
+A denial is a located error:
+
+```
+main.sc:4: capability error: capability 'fs.read' (read files) is not granted
+  hint: grant it with --allow-fs-read <dir>; Silica grants nothing by default
+```
+
+This is a language-level rule, not a library convention: the check is applied by
+the VM before a privileged function runs.
+
+## 12. Stability
 
 Bytecode format version is `1.0` and is documented in `docs/BYTECODE.md`. The
 language surface is `0.x`: breaking changes are allowed before `1.0.0`, and each

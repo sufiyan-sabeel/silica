@@ -1,6 +1,6 @@
 """The `silica` command-line interface.
 
-Commands implemented in v0.1.0:
+Commands implemented in v0.1.1:
 
     silica run <file.sc|file.sbc>   compile (if needed), verify, execute
     silica check <file.sc>          parse + type-check only
@@ -20,13 +20,14 @@ import sys
 
 from . import ast
 from .bytecode import serialize
+from .capabilities import FS_LIST, FS_READ, FS_WRITE, CapabilitySet
 from .engine import (check_source, compile_ast, compile_file, compile_source,
                      default_output_path, is_bytecode, load_bytecode, run_chunk,
                      run_chunk_vm)
-from .errors import ParseError, SilicaError
+from .errors import CapabilityError, ParseError, SilicaError
 from .natives import format_value, get_native
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 
 USAGE = """silica %s — the Silica language toolchain
 
@@ -38,11 +39,91 @@ usage:
   silica repl                     interactive session
   silica fmt <file.sc> [--check]  rewrite in canonical style
   silica test [dir]               run *_test.sc files under dir
+  silica capabilities [flags]     print the effective capability set
   silica --version                print the version
   silica --help                   print this message
 
-Not implemented in 0.1.0: new, add, remove, install, build (Milestone E).
+Capabilities (nothing is granted by default):
+  --allow-fs-read DIR    allow reading files under DIR
+  --allow-fs-write DIR   allow writing files under DIR
+  --allow-fs-list DIR    allow listing directories under DIR
+  --deny-fs-read|write|list
+                         remove a capability a config file granted
+  --capabilities FILE    read grants from a TOML [capabilities] table
+
+Not implemented in 0.1.1: new, add, remove, install, build (Milestone E).
 """ % VERSION
+
+
+# capability flags, parsed by every command that runs a program
+ALLOW_FLAGS = {
+    "--allow-fs-read": FS_READ,
+    "--allow-fs-write": FS_WRITE,
+    "--allow-fs-list": FS_LIST,
+}
+
+DENY_FLAGS = {
+    "--deny-fs-read": FS_READ,
+    "--deny-fs-write": FS_WRITE,
+    "--deny-fs-list": FS_LIST,
+}
+
+
+def _parse_capabilities(args, base=None):
+    """Split capability flags out of `args`.
+
+    Returns (capability_set, remaining_args). The config file is applied first
+    and the command-line flags on top, so a caller can narrow a config file
+    without editing it.
+    """
+    config_path = None
+    grants = []
+    denies = []
+    rest = []
+    index = 0
+    while index < len(args):
+        item = args[index]
+        if item == "--capabilities" or item.startswith("--capabilities="):
+            if item == "--capabilities":
+                if index + 1 >= len(args):
+                    raise CapabilityError("--capabilities needs a TOML file")
+                config_path = args[index + 1]
+                index += 2
+            else:
+                config_path = item.split("=", 1)[1]
+                index += 1
+            continue
+        kind = ALLOW_FLAGS.get(item)
+        if kind is not None:
+            if index + 1 >= len(args):
+                raise CapabilityError("%s needs a directory" % item)
+            grants.append((kind, args[index + 1]))
+            index += 2
+            continue
+        if item.startswith("--allow-fs-") and "=" in item:
+            flag, value = item.split("=", 1)
+            kind = ALLOW_FLAGS.get(flag)
+            if kind is not None:
+                grants.append((kind, value))
+                index += 1
+                continue
+        kind = DENY_FLAGS.get(item)
+        if kind is not None:
+            denies.append(kind)
+            index += 1
+            continue
+        rest.append(item)
+        index += 1
+
+    if config_path is not None:
+        caps = CapabilitySet.from_file(config_path, base=base)
+    else:
+        caps = CapabilitySet.empty(base)
+    for kind, root in grants:
+        caps = caps.grant(kind, root)
+    for kind in denies:
+        caps = caps.deny(kind)
+    return caps, rest
 
 
 def _fail(message, code=1):
@@ -62,22 +143,37 @@ def _read_source(path):
 
 # --- commands ----------------------------------------------------------------
 def cmd_run(args):
+    caps, args = _parse_capabilities(args)
     if not args:
-        return _fail("usage: silica run <file.sc|file.sbc>", 2)
+        return _fail("usage: silica run <file.sc|file.sbc> [capability flags]", 2)
     path = args[0]
     if not os.path.exists(path):
         return _fail("error: no such file: %s" % path)
     try:
         if is_bytecode(path):
             chunk = load_bytecode(path)
-            code = run_chunk(chunk, path)
+            code = run_chunk(chunk, path, capabilities=caps)
         else:
             result = compile_file(path)
-            code = run_chunk(result.chunk, path)
+            code = run_chunk(result.chunk, path, capabilities=caps)
     except SilicaError as err:
         err.with_file(path)
         return _fail(err.format())
     return code & 0xFF
+
+
+def cmd_capabilities(args):
+    caps, rest = _parse_capabilities(args)
+    if rest:
+        return _fail("error: unexpected argument '%s'" % rest[0], 2)
+    sys.stdout.write("Silica capability set — least privilege: nothing is granted "
+                     "unless named\n")
+    for line in caps.report():
+        sys.stdout.write("  %s\n" % line)
+    sys.stdout.write("  %-9s %-16s %s\n" % ("base", "paths", caps.base))
+    if caps.is_empty():
+        sys.stdout.write("  (empty: this program cannot touch the filesystem)\n")
+    return 0
 
 
 def cmd_check(args):
@@ -207,10 +303,12 @@ class Repl:
     is why earlier input is not re-executed.
     """
 
-    def __init__(self, stdin, stdout, stderr):
+    def __init__(self, stdin, stdout, stderr, capabilities=None):
         self.stdin = stdin
         self.stdout = stdout
         self.stderr = stderr
+        self.capabilities = (capabilities if capabilities is not None
+                             else CapabilitySet.empty())
         self.decls = []
         self.globals = []
         self.index = {}
@@ -274,7 +372,8 @@ class Repl:
                                entry_name="__repl_main")
         out = io.StringIO()
         _code, vm = run_chunk_vm(compiled.chunk, "<repl>", stdin=self.stdin,
-                                 stdout=out, initial_globals=self.values)
+                                 stdout=out, initial_globals=self.values,
+                                 capabilities=self.capabilities)
         self.stdout.write(out.getvalue())
 
         self.decls.extend(decls)
@@ -292,10 +391,11 @@ class Repl:
 
 
 def cmd_repl(args):
+    caps, _rest = _parse_capabilities(args)
     stdin = sys.stdin
     stdout = sys.stdout
     stderr = sys.stderr
-    repl = Repl(stdin, stdout, stderr)
+    repl = Repl(stdin, stdout, stderr, capabilities=caps)
     stdout.write("Silica %s REPL — :help for commands, :quit to exit\n" % VERSION)
     buffer = []
     while True:
@@ -346,6 +446,7 @@ COMMANDS = {
     "fmt": cmd_fmt,
     "test": cmd_test,
     "repl": cmd_repl,
+    "capabilities": cmd_capabilities,
 }
 
 PLANNED = {
@@ -370,7 +471,7 @@ def main(argv=None):
         sys.stdout.write("silica %s\n" % VERSION)
         return 0
     if first in PLANNED:
-        return _fail("error: 'silica %s' is not implemented in 0.1.0 (%s)"
+        return _fail("error: 'silica %s' is not implemented in 0.1.1 (%s)"
                      % (first, PLANNED[first]))
     handler = COMMANDS.get(first)
     if handler is None:

@@ -29,19 +29,22 @@ tested and documented in this repository — nothing here is aspirational.
   existence, stack discipline, resource limits.
 * REPL with persistent globals and functions.
 * Formatter with `--check` mode; refuses to strip comments.
-* 227 automated tests (`python3 -m unittest discover -s tests -t .`), 10 example
-  programs, 5 Silica-level test files.
+* 227 automated tests at 0.1.0 (`python3 -m unittest discover -s tests -t .`),
+  10 example programs, 5 Silica-level test files.
 * Documentation set: language spec, grammar, bytecode, stdlib, performance,
   bootstrap, roadmap.
 
-## Milestone D — standard library and I/O · **partly done**
+## Milestone D — standard library and I/O · **capability model, fs and json done**
 
-Done: `core`, `math`, `string`, `collections`, with the collections and string
-surface the plan called for, plus benchmarks.
+Done: `core`, `math`, `string`, `collections`; the capability model with
+`fs.read` / `fs.write` / `fs.list` granted per root path and enforced at the VM
+dispatch point; the `fs` module behind those capabilities; the `json` module
+with a documented value mapping, position-reporting errors and round trips;
+`silica capabilities`; 323 automated tests.
 
-Not done: `fs`, `path`, `json`, `time`, `random`, `regex`, `log`. These need a
-capability/security model before they can be exposed, and that design is the
-first task of this milestone.
+Not done: `path`, `time`, `random`, `regex`, `log`. Each needs its own capability
+story before it is exposed (`time` and `random` are the easy ones; `path` is
+mostly pure string work and could be added without a capability at all).
 
 ## Milestone E — packaging, CI, release · **not started**
 
@@ -60,7 +63,7 @@ first task of this milestone.
 * Self-hosting: see `docs/BOOTSTRAP.md` for the staged plan. Silica does not
   compile itself today.
 
-## Known limitations in v0.1.0
+## Known limitations in v0.1.1
 
 * No generics: `List`/`Map` elements check as `Any`.
 * No first-class functions, closures, methods or user-defined types.

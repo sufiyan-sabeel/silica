@@ -63,3 +63,7 @@ class VerifyError(SilicaError):
 
 class SilicaRuntimeError(SilicaError):
     kind = "runtime error"
+
+
+class CapabilityError(SilicaError):
+    kind = "capability error"

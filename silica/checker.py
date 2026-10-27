@@ -122,9 +122,11 @@ class Checker:
             return
         if mod in PLANNED_MODULES:
             self.error("module '%s' is planned but not implemented yet" % mod, stmt,
-                       hint="implemented modules: core (always available), math, string, collections")
+                       hint="implemented modules: core (always available), math, string, "
+                       "collections, fs, json")
         self.error("unknown module '%s'" % mod, stmt,
-                   hint="implemented modules: core (always available), math, string, collections")
+                   hint="implemented modules: core (always available), math, string, "
+                       "collections, fs, json")
 
     def declare_function(self, decl):
         if decl.name in self.functions:
@@ -421,7 +423,7 @@ class Checker:
     def member_type(self, expr):
         obj = expr.obj
         if not isinstance(obj, ast.Ident):
-            self.error("only standard-library modules have members in Silica v0.1.0", expr)
+            self.error("only standard-library modules have members in Silica v0.1.1", expr)
         module = obj.name
         if module not in self.modules:
             if module_exists(module) or module in PLANNED_MODULES:
@@ -452,7 +454,7 @@ class Checker:
             var = self.lookup(name)
             if var is not None:
                 self.error("'%s' is a value of type %s, not a function" % (name, var.type),
-                           callee, hint="Silica v0.1.0 has no first-class functions")
+                           callee, hint="Silica v0.1.1 has no first-class functions")
             if name in self.modules:
                 self.error("module '%s' needs a member, e.g. %s.%s"
                            % (name, name, native_names_hint(name)), callee)

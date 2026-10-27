@@ -19,8 +19,8 @@ $ silica run examples/square.sc
 144
 ```
 
-**Status: v0.1.0 — a working reference implementation, not a finished language.**
-Everything documented here works and is covered by 227 automated tests. What is
+**Status: v0.1.1 — a working reference implementation, not a finished language.**
+Everything documented here works and is covered by 323 automated tests. What is
 planned but absent is listed in [Limitations](#limitations-and-what-is-not-done)
 and in `docs/ROADMAP.md`. Nothing in this repository claims to be faster than
 Python, C or Rust — see `docs/PERFORMANCE.md` for the measured truth.
@@ -57,6 +57,7 @@ sh bin/silica run examples/hello.sc
 | `silica repl` | Interactive session with persistent globals and functions. |
 | `silica fmt <file.sc> [--check]` | Rewrite in canonical style, or check without writing. |
 | `silica test [dir]` | Run every `*_test.sc` under `dir` (default `tests`). |
+| `silica capabilities` | Print the effective capability set for a set of flags. |
 | `silica --version` / `--help` | Version and usage. |
 
 `silica new/add/remove/install/build` are **not implemented** (Milestone E) and
@@ -88,7 +89,7 @@ library in `docs/STANDARD_LIBRARY.md`.
 
 ## Examples
 
-Ten runnable programs live in `examples/`:
+Twelve runnable programs live in `examples/`:
 
 ```bash
 python3 -m silica run examples/conditionals.sc   # Pass
@@ -97,7 +98,9 @@ python3 -m silica run examples/fibonacci.sc      # 0 1 1 2 3 5 8 13 21 34 55
 python3 -m silica run examples/collections.sc    # lists, maps, sorting
 python3 -m silica run examples/strings.sc        # split/join/upper
 python3 -m silica run examples/math_demo.sc      # math module
+python3 -m silica run examples/json_demo.sc      # JSON parse/serialise
 python3 -m silica run examples/calculator.sc     # reads stdin
+python3 -m silica run examples/fs_demo.sc --allow-fs-read examples --allow-fs-list examples
 ```
 
 `examples/calculator.sc` in action:
@@ -106,6 +109,38 @@ python3 -m silica run examples/calculator.sc     # reads stdin
 $ printf '12\n*\n4\n' | python3 -m silica run examples/calculator.sc
 first number: operator (+ - * /): second number: 48.0
 ```
+
+## Capabilities and file access
+
+A Silica program has **no capabilities by default**. It can compute, print and
+read stdin; it cannot open a file. File access is a named capability, granted
+outside the program and scoped to a directory:
+
+```bash
+silica run app.sc --allow-fs-read data --allow-fs-write out
+silica run app.sc --capabilities caps.toml
+silica capabilities --allow-fs-read data      # show the effective set
+```
+
+```silica
+use fs
+
+sfn main() {
+    si fs.exists("data/notes.txt") {
+        sprint(fs.read_text("data/notes.txt"))
+    }
+}
+```
+
+Three capabilities exist: `fs.read`, `fs.write`, `fs.list`. A grant covers one
+root path and its subtree; symlinks are resolved before the check, so a link
+inside the root that points outside it is refused. `--deny-fs-read` removes a
+capability a config file granted, because deny always wins.
+
+The check is enforced at the VM's native dispatch point, not inside the
+filesystem functions: each privileged native declares the capability it needs,
+the VM authorises the call, and the native receives the path that was actually
+authorised. See `docs/STANDARD_LIBRARY.md` and `SECURITY.md`.
 
 ## Architecture
 
@@ -136,7 +171,7 @@ Format details: `docs/BYTECODE.md`.
 ## Testing
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 227 tests
+python3 -m unittest discover -s tests -t .   # 323 tests
 python3 -m silica test tests                 # Silica-level tests
 python3 benchmarks/bench.py --runs 3         # benchmarks + correctness check
 ```
@@ -158,8 +193,9 @@ consume the same files and be validated against this one. See
 
 ```
 silica/            the engine package (lexer, parser, checker, compiler,
-                   bytecode, vm, natives, fmt, cli, engine)
-examples/          ten runnable programs with documented output
+                   bytecode, vm, natives, capabilities, stdlib_fs,
+                   stdlib_json, fmt, cli, engine)
+examples/          twelve runnable programs with documented output
 tests/             Python test suite + Silica-level *_test.sc files
 benchmarks/        benchmark programs, Python equivalents and runner
 docs/              language spec, grammar, bytecode, stdlib, performance,
@@ -173,8 +209,10 @@ pyproject.toml     packaging; installs the `silica` command
 * No generics: `List`/`Map` elements check as `Any`.
 * No first-class functions, closures, user-defined types, enums or pattern
   matching.
-* No exceptions, threads, `async`, file I/O, JSON, networking or process access.
-* No package manager, no registry, no CI, no published releases yet.
+* No exceptions, threads, `async`, networking or process access.
+* File I/O exists but only behind an explicit capability grant; there is no
+  ambient authority and no network or environment access at all.
+* No package manager and no registry.
 * Silica UI (CSS-inspired styling) is a design goal, not code.
 * Not self-hosted; the compiler is Python (`docs/BOOTSTRAP.md`).
 * Slower than CPython on every measured workload (`docs/PERFORMANCE.md`).

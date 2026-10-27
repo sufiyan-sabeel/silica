@@ -16,7 +16,8 @@ Runtime semantics fixed by docs/LANGUAGE_SPEC.md:
 import math
 
 from .bytecode import (OPS, decode, verify_chunk)
-from .errors import SilicaRuntimeError
+from .capabilities import CapabilitySet
+from .errors import SilicaError, SilicaRuntimeError
 from .natives import (Iterator, MODULES, format_value, get_native, i64, type_name)
 
 
@@ -50,6 +51,11 @@ class Context:
             line = line[:-1]
         return line
 
+    @property
+    def capabilities(self):
+        """The capability set of the running VM (read-only in practice)."""
+        return self.vm.capabilities
+
 
 class Frame:
     __slots__ = ("fn", "index", "ip", "locals", "stack")
@@ -64,10 +70,13 @@ class Frame:
 
 class VM:
     def __init__(self, chunk, stdin=None, stdout=None, stderr=None,
-                 max_frames=4096, filename="<bytecode>", initial_globals=None):
+                 max_frames=4096, filename="<bytecode>", initial_globals=None,
+                 capabilities=None):
         import sys
         self.chunk = chunk
         self.filename = filename
+        # Least privilege: a VM with no explicit grants can touch nothing.
+        self.capabilities = capabilities if capabilities is not None else CapabilitySet.empty()
         self._global_slots = [None] * len(chunk.globals)
         if initial_globals:
             for i, value in enumerate(initial_globals[:len(self._global_slots)]):
@@ -247,8 +256,13 @@ class VM:
                     if argc:
                         del stack[-argc:]
                     try:
+                        # Single choke point: a privileged native is authorised
+                        # here, before its body runs. The native never re-checks
+                        # and never re-resolves the path it is handed.
+                        if native.requires is not None:
+                            args = self.capabilities.authorize_call(native, args)
                         result = native.fn(ctx, args)
-                    except SilicaRuntimeError as err:
+                    except SilicaError as err:
                         if not err.line:
                             err.line = fn.line_for(offset)
                             err.filename = self.filename

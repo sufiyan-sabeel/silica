@@ -8,6 +8,7 @@ import os
 
 from . import ast
 from .bytecode import Chunk, deserialize, serialize, verify_chunk
+from .capabilities import CapabilitySet
 from .checker import Checker
 from .compiler import Compiler
 from .errors import SilicaError
@@ -76,10 +77,10 @@ def _too_deep(filename):
 
 
 def run_source(source, filename="<source>", stdin=None, stdout=None, stderr=None,
-               max_frames=4096):
+               max_frames=4096, capabilities=None):
     result = compile_source(source, filename)
     vm = VM(result.chunk, stdin=stdin, stdout=stdout, stderr=stderr,
-            max_frames=max_frames, filename=filename)
+            max_frames=max_frames, filename=filename, capabilities=capabilities)
     return vm.run(verify=False)
 
 
@@ -98,17 +99,18 @@ def load_bytecode(path):
 
 
 def run_chunk(chunk, filename="<bytecode>", stdin=None, stdout=None, stderr=None,
-              max_frames=4096):
+              max_frames=4096, capabilities=None):
     vm = VM(chunk, stdin=stdin, stdout=stdout, stderr=stderr,
-            max_frames=max_frames, filename=filename)
+            max_frames=max_frames, filename=filename, capabilities=capabilities)
     return vm.run(verify=False)
 
 
 def run_chunk_vm(chunk, filename="<bytecode>", stdin=None, stdout=None, stderr=None,
-                 max_frames=4096, initial_globals=None):
+                 max_frames=4096, initial_globals=None, capabilities=None):
     """Run a chunk and hand back the VM, so callers can read final globals."""
     vm = VM(chunk, stdin=stdin, stdout=stdout, stderr=stderr,
-            max_frames=max_frames, filename=filename, initial_globals=initial_globals)
+            max_frames=max_frames, filename=filename, initial_globals=initial_globals,
+            capabilities=capabilities)
     code = vm.run(verify=False)
     return code, vm
 
@@ -129,5 +131,5 @@ __all__ = [
     "CompileResult", "check_source", "compile_ast", "compile_source",
     "compile_file", "load_bytecode", "run_source", "run_chunk", "run_chunk_vm",
     "default_output_path", "is_bytecode", "Chunk", "serialize", "ast",
-    "SilicaError",
+    "SilicaError", "CapabilitySet",
 ]

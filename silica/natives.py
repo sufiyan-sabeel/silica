@@ -105,9 +105,11 @@ class Iterator:
 
 
 class Native:
-    __slots__ = ("module", "name", "params", "ret", "fn", "min_args", "max_args")
+    __slots__ = ("module", "name", "params", "ret", "fn", "min_args", "max_args",
+                 "requires", "path_arg")
 
-    def __init__(self, module, name, params, ret, fn, min_args=None, max_args=None):
+    def __init__(self, module, name, params, ret, fn, min_args=None, max_args=None,
+                 requires=None, path_arg=None):
         self.module = module
         self.name = name
         self.params = params
@@ -115,6 +117,11 @@ class Native:
         self.fn = fn
         self.min_args = len(params) if min_args is None else min_args
         self.max_args = len(params) if max_args is None else max_args
+        # A privileged native names the capability the VM must authorise before
+        # the body runs, and which argument holds the path. `requires=None`
+        # means the native touches nothing outside the VM's own state.
+        self.requires = requires
+        self.path_arg = path_arg
 
     @property
     def qualified(self):
@@ -469,10 +476,13 @@ def _c_sum(ctx, args):
 
 # --- registry ----------------------------------------------------------------
 def _build():
-    mods = {"core": {}, "math": {}, "string": {}, "collections": {}}
+    mods = {"core": {}, "math": {}, "string": {}, "collections": {},
+            "fs": {}, "json": {}}
 
-    def add(module, name, params, ret, fn, min_args=None, max_args=None):
-        native = Native(module, name, params, ret, fn, min_args, max_args)
+    def add(module, name, params, ret, fn, min_args=None, max_args=None,
+            requires=None, path_arg=None):
+        native = Native(module, name, params, ret, fn, min_args, max_args,
+                        requires, path_arg)
         mods[module][name] = native
 
     add("core", "sprint", ["Any"], "Unit", _n_sprint)
@@ -514,6 +524,16 @@ def _build():
     add("collections", "index_of", ["List", "Any"], "Int", _c_index_of)
     add("collections", "sum", ["List"], "Any", _c_sum)
 
+    # fs and json live in their own modules; importing them here (inside the
+    # builder) avoids a circular import at module load time.
+    from .stdlib_fs import FUNCTIONS as _FS
+    from .stdlib_json import FUNCTIONS as _JSON
+
+    for module, table in (("fs", _FS), ("json", _JSON)):
+        for name, params, ret, fn, requires, path_arg, min_args in table:
+            add(module, name, params, ret, fn, min_args=min_args,
+                requires=requires, path_arg=path_arg)
+
     return mods
 
 
@@ -525,7 +545,7 @@ CONSTANTS = {
 }
 
 # modules that exist as documentation but are not implemented yet
-PLANNED_MODULES = {"fs", "path", "json", "time", "random", "regex", "http",
+PLANNED_MODULES = {"path", "time", "random", "regex", "http",
                    "net", "process", "log", "crypto", "test", "async", "ai"}
 
 

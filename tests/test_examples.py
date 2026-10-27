@@ -33,6 +33,22 @@ EXPECTED = {
                        'anita\nrahul\n["anita", "rahul"]\n["apple", "pear"]\n'),
     "math_demo.sc": "17\n3\n8\n9.0\n1024.0\n3\n4\n3\n3.141592653589793\n",
     "fibonacci.sc": "0 1 1 2 3 5 8 13 21 34 55 \n",
+    "json_demo.sc": (
+        "Map\n"
+        '{"project":"silica","version":1,"stable":false,'
+        '"tags":["compiler","bytecode"],"extra":null}\n'
+        '{\n  "project":"silica",\n  "version":1,\n  "stable":false,\n'
+        '  "tags":[\n    "compiler",\n    "bytecode"\n  ],\n  "extra":null\n}\n'
+        "oui\n"
+        '{"width":80,"ratio":1.5,"wrap":true,"tags":["a","b"]}\n'
+        "[1, 2, 3]\n"),
+}
+
+# examples that need capability flags to run; the grant is the narrowest that
+# works, which is the point of the example
+GATED = {
+    "fs_demo.sc": (["--allow-fs-read", EXAMPLES, "--allow-fs-list", EXAMPLES],
+                   "oui\nsfn main() {\noui\nnein\n"),
 }
 
 CALCULATOR_INPUT = "12\n*\n4\n"
@@ -68,6 +84,31 @@ class ExampleTests(unittest.TestCase):
                         contextlib.redirect_stdout(out), \
                         contextlib.redirect_stderr(io.StringIO()):
                     code = cli.main(["run", path])
+                self.assertEqual(code, 0)
+                self.assertEqual(out.getvalue(), expected)
+
+    def test_gated_examples_need_their_capabilities(self):
+        """Without the grant the program must fail, not quietly succeed."""
+        for name in GATED:
+            path = os.path.join(EXAMPLES, name)
+            with self.subTest(example=name):
+                err = io.StringIO()
+                with mock.patch("sys.stdin", io.StringIO("")), \
+                        contextlib.redirect_stdout(io.StringIO()), \
+                        contextlib.redirect_stderr(err):
+                    code = cli.main(["run", path])
+                self.assertEqual(code, 1)
+                self.assertIn("capability error", err.getvalue())
+
+    def test_gated_examples_with_capabilities(self):
+        for name, (flags, expected) in GATED.items():
+            path = os.path.join(EXAMPLES, name)
+            with self.subTest(example=name):
+                out = io.StringIO()
+                with mock.patch("sys.stdin", io.StringIO("")), \
+                        contextlib.redirect_stdout(out), \
+                        contextlib.redirect_stderr(io.StringIO()):
+                    code = cli.main(["run", path] + flags)
                 self.assertEqual(code, 0)
                 self.assertEqual(out.getvalue(), expected)
 

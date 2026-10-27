@@ -2,6 +2,8 @@
 
 import unittest
 
+from silica.engine import check_source
+
 from silica.checker import Checker
 from silica.errors import SilicaTypeError
 from silica.lexer import tokenize
@@ -197,7 +199,17 @@ class CheckerTests(unittest.TestCase):
         self.assertTypeError("use nope\nsfn main() {\n}\n", "unknown module")
 
     def test_planned_module(self):
-        self.assertTypeError("use json\nsfn main() {\n}\n", "not implemented yet")
+        self.assertTypeError("use http\nsfn main() {\n}\n", "not implemented yet")
+
+    def test_fs_and_json_are_implemented_modules(self):
+        for module in ("fs", "json"):
+            with self.subTest(module=module):
+                source = "use %s\nsfn main() {\n}\n" % module
+                check_source(source)  # must not raise
+
+    def test_fs_member_requires_import(self):
+        self.assertTypeError("sfn main() {\n sprint(fs.exists(\"x\"))\n}\n",
+                             "not imported")
 
     def test_module_member_requires_import(self):
         self.assertTypeError("sfn main() {\n sprint(math.abs(1))\n}\n", "not imported")
