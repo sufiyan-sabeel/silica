@@ -309,24 +309,148 @@ class CapabilitySet:
 
     @classmethod
     def from_file(cls, path, base=None):
-        import tomllib
-
         try:
             with open(path, "rb") as handle:
-                document = tomllib.load(handle)
+                raw = handle.read()
         except FileNotFoundError:
             raise CapabilityError("no such capability file: %s" % path)
         except OSError as exc:
             raise CapabilityError("cannot read %s: %s" % (path, exc))
-        except tomllib.TOMLDecodeError as exc:
-            raise CapabilityError(
-                "%s is not valid TOML: %s" % (path, exc),
-                hint="[capabilities] must be a table of capability grants")
+        document = load_toml(raw, path)
         if "capabilities" not in document:
             raise CapabilityError(
                 "%s has no [capabilities] table" % path,
                 hint="add [capabilities] with fs.read / fs.write / fs.list")
         return cls.from_mapping(document["capabilities"], base)
+
+
+# --- TOML ---------------------------------------------------------------------
+def load_toml(raw, path="<config>"):
+    """Parse a capability file.
+
+    Python 3.11+ has `tomllib`; Silica supports 3.9, so a small reader for the
+    shape a capability file needs is used when `tomllib` is absent. Both readers
+    are exercised by the test suite, so the fallback is not dead code.
+    """
+    try:
+        import tomllib
+    except ModuleNotFoundError:  # pragma: no cover - exercised on 3.9/3.10
+        return parse_toml_subset(raw.decode("utf-8"), path)
+    try:
+        return tomllib.loads(raw.decode("utf-8"))
+    except tomllib.TOMLDecodeError as exc:
+        raise CapabilityError(
+            "%s is not valid TOML: %s" % (path, exc),
+            hint="[capabilities] must be a table of capability grants")
+
+
+def parse_toml_subset(text, path="<config>"):
+    """A minimal TOML reader: tables, string/integer/bool values, and arrays.
+
+    Enough for `[capabilities]`, `[capabilities.fs]` and `deny = [...]`. Anything
+    more elaborate is reported as an error rather than half-parsed.
+    """
+    document = {}
+    table = document
+    for number, line in enumerate(text.splitlines(), 1):
+        stripped = _strip_comment(line).strip()
+        if not stripped:
+            continue
+        if stripped.startswith("[") and stripped.endswith("]"):
+            name = stripped[1:-1].strip()
+            if not name:
+                raise CapabilityError("%s:%d: empty table name" % (path, number))
+            table = document
+            for part in name.split("."):
+                part = part.strip()
+                if not part:
+                    raise CapabilityError("%s:%d: empty table name" % (path, number))
+                table = table.setdefault(part, {})
+                if not isinstance(table, dict):
+                    raise CapabilityError(
+                        "%s:%d: '%s' is a value, not a table" % (path, number, part))
+            continue
+        if "=" not in stripped:
+            raise CapabilityError(
+                "%s:%d: expected 'key = value'" % (path, number),
+                hint="this reader handles the [capabilities] shape only; "
+                     "use Python 3.11+ for full TOML")
+        key, _, value = stripped.partition("=")
+        key = key.strip().strip('"').strip("'")
+        if not key:
+            raise CapabilityError("%s:%d: missing key" % (path, number))
+        table[key] = _parse_toml_value(value.strip(), path, number)
+    return document
+
+
+def _strip_comment(line):
+    out = []
+    quote = None
+    for ch in line:
+        if quote:
+            if ch == quote:
+                quote = None
+            out.append(ch)
+            continue
+        if ch in ("'", '"'):
+            quote = ch
+            out.append(ch)
+            continue
+        if ch == "#":
+            break
+        out.append(ch)
+    return "".join(out)
+
+
+def _parse_toml_value(text, path, number):
+    if text.startswith("["):
+        if not text.endswith("]"):
+            raise CapabilityError("%s:%d: unterminated array" % (path, number))
+        inner = text[1:-1].strip()
+        if not inner:
+            return []
+        return [_parse_toml_value(part.strip(), path, number)
+                for part in _split_array(inner)]
+    if text.startswith('"') and text.endswith('"') and len(text) >= 2:
+        return text[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+    if text.startswith("'") and text.endswith("'") and len(text) >= 2:
+        return text[1:-1]
+    if text in ("true", "false"):
+        return text == "true"
+    try:
+        return int(text, 10)
+    except ValueError:
+        pass
+    try:
+        return float(text)
+    except ValueError:
+        raise CapabilityError("%s:%d: cannot read value %r" % (path, number, text),
+                              hint="strings need quotes; arrays need [ ]")
+
+
+def _split_array(text):
+    parts = []
+    current = []
+    quote = None
+    for ch in text:
+        if quote:
+            current.append(ch)
+            if ch == quote:
+                quote = None
+            continue
+        if ch in ("'", '"'):
+            quote = ch
+            current.append(ch)
+            continue
+        if ch == ",":
+            parts.append("".join(current))
+            current = []
+            continue
+        current.append(ch)
+    tail = "".join(current).strip()
+    if tail:
+        parts.append(tail)
+    return parts
 
 
 # --- helpers -----------------------------------------------------------------

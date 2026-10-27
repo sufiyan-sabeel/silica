@@ -202,6 +202,62 @@ class ConfigTests(unittest.TestCase):
             os.unlink(path)
 
 
+class TomlFallbackTests(unittest.TestCase):
+    """The Python 3.9 reader must agree with tomllib on the documented shape."""
+
+    TEXT = """
+# a capability file
+[capabilities]
+deny = ["fs.write"]
+
+[capabilities.fs]
+read = ["data", "notes"]
+write = ["out"]
+list = ["data"]
+"""
+
+    def test_subset_reader_parses_the_documented_shape(self):
+        from silica.capabilities import parse_toml_subset
+        document = parse_toml_subset(self.TEXT)
+        self.assertEqual(document["capabilities"]["fs"]["read"], ["data", "notes"])
+        self.assertEqual(document["capabilities"]["deny"], ["fs.write"])
+
+    def test_both_readers_agree(self):
+        import sys
+        from silica.capabilities import load_toml
+        ours = load_toml(self.TEXT.encode("utf-8"), "caps.toml")
+        if sys.version_info >= (3, 11):
+            import tomllib
+            theirs = tomllib.loads(self.TEXT)
+            self.assertEqual(ours, theirs)
+
+    def test_subset_reader_handles_comments_inside_arrays(self):
+        from silica.capabilities import parse_toml_subset
+        document = parse_toml_subset('[capabilities]\nread = ["a", "b"]  # trailing\n')
+        self.assertEqual(document["capabilities"]["read"], ["a", "b"])
+
+    def test_subset_reader_rejects_a_bad_line(self):
+        from silica.capabilities import parse_toml_subset
+        with self.assertRaises(CapabilityError):
+            parse_toml_subset("[capabilities]\nnonsense\n")
+
+    def test_subset_reader_rejects_a_bad_value(self):
+        from silica.capabilities import parse_toml_subset
+        with self.assertRaises(CapabilityError):
+            parse_toml_subset("[capabilities]\nread = data\n")
+
+    def test_from_file_works_through_either_reader(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".toml", delete=False) as handle:
+            handle.write(self.TEXT)
+            path = handle.name
+        try:
+            caps = CapabilitySet.from_file(path, base="/tmp")
+            self.assertTrue(caps.is_granted(FS_READ))
+            self.assertTrue(caps.is_denied(FS_WRITE))
+        finally:
+            os.unlink(path)
+
+
 class StructuralTests(unittest.TestCase):
     """The guarantees that make the model hard to bypass."""
 

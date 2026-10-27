@@ -8,7 +8,7 @@ semantic versioning for its toolchain; the language surface is `0.x` until
 ## [0.2.0] — 2026-10-27
 
 Silica UI 0.1: the UI DSL, the UI core and the web renderer. Three additive
-grammar changes, one new subsystem, and 84 new tests (407 total). The `.sbc`
+grammar changes, one new subsystem, and 90 new tests (413 total). The `.sbc`
 format is unchanged at 1.0, so every existing bytecode file still loads.
 
 ### Added — grammar (all provably additive)
