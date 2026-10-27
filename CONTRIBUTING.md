@@ -15,7 +15,7 @@ goal is a correct, readable, well-tested core rather than a wide feature surface
 ## Development setup
 
 ```bash
-git clone <your-fork-url> silica
+git clone https://github.com/sufiyan-sabeel/silica.git silica
 cd silica
 python3 -m unittest discover -s tests -t .   # must be green before and after
 ```

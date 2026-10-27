@@ -21,7 +21,9 @@ classifiers = [
 silica = "silica.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/umaizsufiyan/silica"
+Repository = "https://github.com/sufiyan-sabeel/silica.git"
+Issues = "https://github.com/sufiyan-sabeel/silica/issues"
+Homepage = "https://github.com/sufiyan-sabeel/silica"
 
 [tool.setuptools]
 packages = ["silica"]

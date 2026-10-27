@@ -31,7 +31,7 @@ Requires Python 3.9+ (the reference engine is written in Python; see
 [Implementation language](#implementation-language)).
 
 ```bash
-git clone <your-fork-url> silica
+git clone https://github.com/sufiyan-sabeel/silica.git silica
 cd silica
 
 # run straight from the checkout
