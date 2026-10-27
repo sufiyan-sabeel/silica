@@ -5,6 +5,39 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## [0.6.0] — 2026-10-27
+
+Desktop GUI, and the audit the language roadmap asked for.
+
+### Added — GUI
+- **`use gui`** with `gui.lib.widgets`, `gui.lib.layout` and `gui.lib.theme`:
+  windows, labels, headings, buttons with click handlers, text fields,
+  checkboxes, rows, columns, spacers and colour tokens, backed by tkinter.
+- **Click handlers are Silica functions by name** (`gui.on_click(button,
+  "handle_click")`), resolved against the compiled chunk and run on a VM sharing
+  the parent's globals and widget registry. No `eval`, no `exec`, no language
+  change.
+- **The `gui.run` capability** (`--allow-gui`) guards opening windows and running
+  the loop. Building the tree needs no capability, so a headless machine can
+  inspect a UI and gets a named error at `show`.
+- **`gui.click(widget)`** activates a button through tkinter's own `invoke()`, so
+  the path a test takes is the path a user takes.
+- **`docs/GUI.md`**, `examples/gui_demo.sc`, and 19 tests in `tests/test_gui.py`,
+  including a real window tier that opens a Tk window, invokes a real button and
+  asserts the Silica handler ran.
+- **`docs/AUDIT.md`**: the repository audit and prioritised roadmap requested by
+  the language brief.
+
+### Notes
+- The namespace is `gui`, not `ui`: `ui` is the HTML/UI-DSL from 0.2.0, and giving
+  `ui.app` a second meaning would have broken existing programs.
+- CI now runs the suite under `xvfb-run` when it is available, so the window tests
+  execute rather than skip.
+- This environment had no python3-tk, no libtk8.6 and no X server, and no root to
+  install them. Tcl/Tk and Xvfb were extracted from Debian packages into a local
+  prefix and the X server's hard-coded `xkbcomp` path was redirected, which is
+  what made the window tests possible. `docs/GUI.md` records this.
+
 ## [0.5.0] — 2026-10-27
 
 Terminal UI, and two fixes to speech.

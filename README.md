@@ -22,8 +22,8 @@ $ silica run examples/square.sc
 144
 ```
 
-**Status: v0.5.0 — a working reference implementation, not a finished language.**
-Everything documented here works and is covered by 555 automated tests. What is
+**Status: v0.6.0 — a working reference implementation, not a finished language.**
+Everything documented here works and is covered by 574 automated tests. What is
 planned but absent is listed in [Limitations](#limitations-and-what-is-not-done)
 and in `docs/ROADMAP.md`. Nothing in this repository claims to be faster than
 Python, C or Rust — see `docs/PERFORMANCE.md` for the measured truth.
@@ -100,7 +100,7 @@ version once, then uses `¢ ` as the prompt:
 
 ```console
 $ silica
-Silica Interpreter v0.5.0
+Silica Interpreter v0.6.0
 ¢ let n: Int = 21
 n: Int = 21
 ¢ n * 2
@@ -223,7 +223,7 @@ Two things worth knowing:
 Rendered Silica UI pages can carry the mark too: `ui.render({..., favicon: oui})`
 embeds a 32px copy as a data URI, so the page stays self-contained.
 
-## Terminal UI
+## Desktop and terminal UI
 
 Real terminal applications on `curses` — no dependency beyond the standard
 library:
@@ -252,10 +252,29 @@ rather than dispatched through callbacks, because Silica has no first-class
 functions and re-entering the VM mid-instruction is not worth the risk — the
 program drives the loop and reads key names. `docs/TUI.md` has the details.
 
-**GUI is not implemented.** `tkinter` is absent from the build environment, there
-is no display server, and neither can be installed there, so a window could never
-have been opened or tested. Shipping untested window code would be the placeholder
-the brief forbids. `docs/GUI.md` explains exactly what it would take.
+**GUI** is real too, through tkinter: windows, labels, buttons with working click
+handlers, fields, checkboxes, rows and columns.
+
+```silica
+use gui
+
+sfn main() {
+    let app = gui.app("Silica GUI")
+    let window = gui.window(app, "Hello Silica", 640, 420)
+    gui.add(window, gui.heading("Hello from Silica"))
+    gui.show(window)
+    gui.run(app)
+}
+```
+
+```bash
+silica run examples/gui_demo.sc --allow-gui
+```
+
+Click handlers are named Silica functions (`gui.on_click(button, "handle_click")`),
+resolved against the compiled chunk — not `eval`. The widget tree builds without a
+display, so a headless machine can inspect a UI and gets a clear error at `show`.
+`docs/GUI.md` covers the details, and why the namespace is `gui` rather than `ui`.
 
 ## Speech
 
@@ -432,7 +451,7 @@ Format details: `docs/BYTECODE.md`.
 ## Testing
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 555 tests
+python3 -m unittest discover -s tests -t .   # 574 tests
 python3 -m silica test tests                 # Silica-level tests
 python3 benchmarks/bench.py --runs 3         # benchmarks + correctness check
 ```
@@ -462,6 +481,8 @@ silica/voice/      speech: Piper TTS, Whisper STT, the voice catalogue and
                    the speech.* native functions
 silica/tui/        terminal UI: widget tree, layout engine, curses driver and
                    the tui.* native functions
+silica/gui/        desktop windows: tkinter backend, click handlers and the
+                   gui.* native functions
 examples/          fifteen runnable programs with documented output
 assets/logo/       the Silica mark, wordmark and icon set
 editors/vscode/    VS Code extension: .sc language + file icon

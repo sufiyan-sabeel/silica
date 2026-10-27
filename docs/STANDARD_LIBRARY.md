@@ -217,6 +217,68 @@ sfn main() {
 
 ---
 
+## gui, gui.lib.widgets, gui.lib.layout, gui.lib.theme — desktop windows
+
+Real windows through tkinter. Opening a window and running an event loop
+needs the `gui.run` capability (`--allow-gui`); building the widget tree
+needs nothing, so a program can be inspected on a headless machine.
+Full guide: `docs/GUI.md`.
+
+| Function | Signature | Notes |
+|---|---|---|
+| `gui.add` | (Any, Any) -> Unit | attach a widget to a window or container |
+| `gui.app` | (String?) -> Any | create the application |
+| `gui.button` | (String) -> Any | a button; wire it with gui.on_click |
+| `gui.checkbox` | (String) -> Any | a toggle with a label |
+| `gui.click` | (Any) -> Unit | activate a button the way a user would |
+| `gui.close` | (Any) -> Unit | destroy the window |
+| `gui.column` | () -> Any | children stacked |
+| `gui.field` | (String?) -> Any | a single-line text entry |
+| `gui.heading` | (String) -> Any | a larger bold label |
+| `gui.on_click` | (Any, String) -> Unit | run a Silica function, by name, when pressed |
+| `gui.row` | () -> Any | children laid out side by side |
+| `gui.run` | (Any, Int?) -> Unit | enter the event loop; with a tick count, run that many cycles |
+| `gui.set_text` | (Any, String) -> Unit | change a widget's text |
+| `gui.set_value` | (Any, String) -> Unit | set a field's contents |
+| `gui.show` | (Any) -> Unit | create the real window (needs gui.run) |
+| `gui.spacer` | (Int?) -> Any | vertical gap |
+| `gui.status` | () -> Map | whether tkinter and a display are available |
+| `gui.text` | (String) -> Any | a label |
+| `gui.theme` | (Any, Map) -> Unit | override colour tokens |
+| `gui.value` | (Any) -> Any | read a widget's text, field contents or checked state |
+| `gui.widgets` | (Any) -> List | the kinds of a container's children |
+| `gui.window` | (Any, String?, Int?, Int?) -> Any | create a window (title, width, height) |
+| `gui.lib.widgets.add` | (Any, Any) -> Unit | attach a widget to a window or container |
+| `gui.lib.widgets.app` | (String?) -> Any | create the application |
+| `gui.lib.widgets.button` | (String) -> Any | a button; wire it with gui.on_click |
+| `gui.lib.widgets.checkbox` | (String) -> Any | a toggle with a label |
+| `gui.lib.widgets.click` | (Any) -> Unit | activate a button the way a user would |
+| `gui.lib.widgets.close` | (Any) -> Unit | destroy the window |
+| `gui.lib.widgets.column` | () -> Any | children stacked |
+| `gui.lib.widgets.field` | (String?) -> Any | a single-line text entry |
+| `gui.lib.widgets.heading` | (String) -> Any | a larger bold label |
+| `gui.lib.widgets.on_click` | (Any, String) -> Unit | run a Silica function, by name, when pressed |
+| `gui.lib.widgets.row` | () -> Any | children laid out side by side |
+| `gui.lib.widgets.run` | (Any, Int?) -> Unit | enter the event loop; with a tick count, run that many cycles |
+| `gui.lib.widgets.set_text` | (Any, String) -> Unit | change a widget's text |
+| `gui.lib.widgets.set_value` | (Any, String) -> Unit | set a field's contents |
+| `gui.lib.widgets.show` | (Any) -> Unit | create the real window (needs gui.run) |
+| `gui.lib.widgets.spacer` | (Int?) -> Any | vertical gap |
+| `gui.lib.widgets.status` | () -> Map | whether tkinter and a display are available |
+| `gui.lib.widgets.text` | (String) -> Any | a label |
+| `gui.lib.widgets.theme` | (Any, Map) -> Unit | override colour tokens |
+| `gui.lib.widgets.value` | (Any) -> Any | read a widget's text, field contents or checked state |
+| `gui.lib.widgets.widgets` | (Any) -> List | the kinds of a container's children |
+| `gui.lib.widgets.window` | (Any, String?, Int?, Int?) -> Any | create a window (title, width, height) |
+| `gui.lib.layout.add` | (Any, Any) -> Unit | attach a widget to a window or container |
+| `gui.lib.layout.column` | () -> Any | children stacked |
+| `gui.lib.layout.row` | () -> Any | children laid out side by side |
+| `gui.lib.layout.spacer` | (Int?) -> Any | vertical gap |
+| `gui.lib.theme.status` | () -> Map | whether tkinter and a display are available |
+| `gui.lib.theme.theme` | (Any, Map) -> Unit | override colour tokens |
+
+---
+
 ## tui, tui.lib.widgets, tui.lib.layout, tui.lib.style — terminal UI
 
 Real terminal applications on curses. `tui` holds the whole API; the

@@ -480,7 +480,8 @@ def _c_sum(ctx, args):
 # --- registry ----------------------------------------------------------------
 def _build():
     mods = {"core": {}, "math": {}, "string": {}, "collections": {},
-            "fs": {}, "json": {}, "speech": {}, "tui": {},
+            "fs": {}, "gui": {}, "gui.lib.widgets": {}, "gui.lib.layout": {},
+            "gui.lib.theme": {}, "json": {}, "speech": {}, "tui": {},
             "tui.lib.widgets": {}, "tui.lib.layout": {}, "tui.lib.style": {},
             "ui": {}, "ui.state": {},
             "ui.lib.widgets": {}, "ui.lib.theme": {}, "ui.lib.colors": {},
@@ -540,6 +541,13 @@ def _build():
         for name, params, ret, fn, requires, path_arg, min_args in table:
             add(module, name, params, ret, fn, min_args=min_args,
                 requires=requires, path_arg=path_arg)
+
+    from .gui.natives_gui import FUNCTION_TABLES as _GUI
+    for module, table in _GUI.items():
+        for (name, params, ret, fn, min_args, max_args,
+             requires, path_arg) in table:
+            add(module, name, params, ret, fn, min_args=min_args,
+                max_args=max_args, requires=requires, path_arg=path_arg)
 
     from .tui.natives_tui import FUNCTIONS as _TUI
     for module, table in _TUI.items():

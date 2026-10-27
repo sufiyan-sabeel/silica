@@ -9,7 +9,7 @@ self-hosting.
 
 The point of the first implementation is to pin down semantics: grammar, type
 rules, bytecode format, runtime behaviour and error messages. Those are now
-fixed and tested (555 tests, `docs/BYTECODE.md` version 1.0). A compiler written
+fixed and tested (574 tests, `docs/BYTECODE.md` version 1.0). A compiler written
 in Silica can be judged against this implementation by running the same test
 suite and comparing outputs.
 

@@ -1,78 +1,175 @@
-# GUI: not implemented, and why
+# GUI: real desktop windows
 
-This page exists because the request was for a GUI library alongside the TUI, and
-pretending it shipped would be worse than saying it did not.
+Silica opens real windows through **tkinter**. Labels, buttons with working click
+handlers, text fields, checkboxes, rows, columns, spacing, colours and a clean
+lifecycle — driven from Silica source.
 
-## Status
+```silica
+use gui
+use gui.lib.widgets
 
-**No GUI library is implemented.** There is no `use gui`, no window, no widget
-backend. Nothing in the repository claims otherwise.
+sfn handle_click() {
+    sprint("Button clicked")
+}
 
-## Why
-
-A GUI needs a toolkit and a display server. Neither is available in the
-environment this was built in, and neither can be installed there:
-
+sfn main() {
+    let app = gui.app("Silica GUI")
+    let window = gui.window(app, "Hello Silica", 640, 420)
+    gui.add(window, gui.heading("Hello from Silica"))
+    gui.add(window, gui.button("Click me"))
+    gui.on_click(button, "handle_click")
+    gui.show(window)
+    gui.run(app)
+}
 ```
-$ python3 -c "import tkinter"
-ImportError: cannot import name '_tkinter'
-
-$ echo $DISPLAY
-<empty>
-
-$ command -v Xvfb xvfb-run
-(neither present)
-```
-
-There is no `sudo` and no `apt`, so `python3-tk` cannot be installed, and without
-a display server there would be nothing to draw on even if it could. Every
-candidate toolkit has the same problem: they all need a real window system.
-
-## What the brief asked for, and what the constraint means
-
-The requirement was explicit: a `.sc` program must open an **actual window**,
-respond to **actual** interaction, and close cleanly — with automated tests, and
-"no advertised feature is a placeholder".
-
-Writing a tkinter backend here would produce code that had never once been run.
-That is precisely the placeholder the brief forbids, and it would let the
-documentation claim a working GUI on the strength of nothing. So it was not done.
-
-## What it would take
-
-The design is already settled by the TUI, and the GUI would mirror it:
-
-1. A `silica/gui/` package with the same node tree and layout engine as
-   `silica/tui/`, but a tkinter renderer instead of a curses one. The widget
-   model, theming and event model are backend-independent by construction — the
-   TUI proves that, because its layout engine already renders to plain text with
-   no terminal involved.
-2. A `gui` native namespace mirroring `tui`: `gui.app`, `gui.window`,
-   `gui.text`, `gui.button`, `gui.field`, `gui.checkbox`, `gui.add`, `gui.show`,
-   `gui.run`, `gui.close`.
-3. The `gui.run` capability, which already exists in the capability model and is
-   registered (`--allow-gui`), so the security boundary is ready.
-4. Tests: the layout tier runs anywhere; the window tier needs
-   `xvfb-run -a python -m silica run app.sc --allow-gui` on a machine with
-   tkinter, and would assert window creation, widget presence, a synthesised
-   click reaching the program, and clean shutdown.
-
-That is a focused piece of work — roughly the size of the TUI — and it is
-blocked on one thing only: an environment where a window can actually open.
-
-## How to unblock it
-
-Any of these makes the GUI implementable and testable:
 
 ```bash
-# Debian/Ubuntu, on a machine you control
-sudo apt install python3-tk xvfb
-xvfb-run -a python -m silica run app.sc --allow-gui
+silica run examples/gui_demo.sc --allow-gui
 ```
 
-or run the build in an environment that already has tkinter (most desktop Python
-installations do) and a virtual display.
+---
 
-Say the word once that exists and the GUI can be built against the same
-node-tree and layout engine the TUI uses, with the same three-tier test
-structure.
+## What is real, and what is not
+
+| Claim | Status |
+|---|---|
+| Real window creation and closing | Works — verified by opening a Tk window |
+| Window title, size | Works |
+| Labels, buttons, text fields, checkboxes | Works |
+| Click handlers that call Silica functions | Works — verified by invoking a real button |
+| Rows, columns, spacing | Works |
+| Colour theme tokens | Works |
+| Resizing, minimum dimensions | Tk default behaviour; no explicit API |
+| Menus and dialogs | **Not implemented** |
+| Accessibility | **Not addressed** — no roles, no screen-reader work |
+| macOS / Windows | Untested. tkinter is cross-platform, but nothing here was run there |
+| Termux / Android | **Not supported** — no X server |
+
+---
+
+## Why `gui` and not `ui`
+
+The brief's example used `ui.app(...)` for a desktop application. `ui` was
+already taken: it is the HTML/UI-DSL namespace from 0.2.0, where `ui.app` builds a
+web node tree that `ui.render` turns into HTML. Giving that name a second, window-
+based meaning would silently break every existing `ui` program.
+
+So desktop windows live in `gui`, and `ui` keeps its meaning. Everything else
+follows the brief's shape: `gui.window(app, title, w, h)`, `gui.add`,
+`gui.on_click`, `gui.show`, `gui.run`.
+
+---
+
+## Click handlers
+
+`gui.on_click(button, "handle_click")` takes the **name** of a Silica function.
+Silica has no first-class functions, so the runtime resolves the name against the
+compiled chunk — it is not `eval` and not `exec`. The chunk already contains the
+function; the VM is asked to run it.
+
+The handler runs on a short-lived VM that shares the parent's global slots and its
+widget registry, so a handler can reach the same widgets:
+
+```silica
+sfn on_press() {
+    gui.set_text(label, "pressed")
+}
+```
+
+**Locals do not persist between invocations** — a handler that needs state must
+put it in a global.
+
+---
+
+## Layout
+
+* a **window** stacks its children vertically
+* a **row** puts children side by side; a **column** stacks them
+* a **spacer** adds a vertical gap
+
+There is no constraint solver and no grid. Tk packs widgets in order, which is
+predictable and enough for forms and panels.
+
+---
+
+## Theming
+
+```silica
+gui.theme(app, {"accent": "#2F6F5E", "surface": "#FFFFFF"})
+```
+
+Tokens: `background`, `surface`, `text`, `text_muted`, `accent`, `border`,
+`error`. `gui.status()` reports whether tkinter and a display are actually
+available before you build anything.
+
+---
+
+## Security and headless behaviour
+
+Opening a window needs the `gui.run` capability:
+
+```bash
+silica run app.sc --allow-gui
+```
+
+Building the widget tree needs **no** capability, so on a headless machine you can
+still construct and inspect a UI:
+
+```
+$ silica run app.sc          # no DISPLAY
+["heading", "text", "field", "checkbox", "button"]
+app.sc:20: runtime error: gui.show: tkinter is present but cannot load its Tk
+libraries (libtk8.6.so: cannot open shared object file). On Debian/Ubuntu:
+sudo apt install python3-tk libtk8.6
+```
+
+The tree is built, the failure is named, and there is no traceback. The core CLI
+is unaffected: `silica check`, `fmt` and `test` never touch a display.
+
+---
+
+## Dependencies
+
+| Platform | Command |
+|---|---|
+| Debian / Ubuntu | `sudo apt install python3-tk` |
+| Fedora | `sudo dnf install python3-tkinter` |
+| Arch | `sudo pacman -S tk` |
+| Termux | not supported (no X server) |
+
+---
+
+## Testing
+
+`tests/test_gui.py`, two tiers:
+
+1. **Tree and bridge** — build widgets, wire handlers, validate arguments, check
+   the errors. No display needed; runs anywhere.
+2. **Real windows** — creates an actual Tk window, checks the widgets are there,
+   invokes a real button and asserts the Silica handler ran, then closes. Skipped
+   when there is no display.
+
+```bash
+xvfb-run -a python -m pytest tests/test_gui.py     # with a virtual display
+```
+
+That is how it was verified here. This environment had no `python3-tk`, no
+`libtk8.6`, no X server and no root, so Tcl/Tk and Xvfb were extracted from
+Debian packages into a local prefix, `LD_LIBRARY_PATH`/`TCL_LIBRARY` were pointed
+at them, and the X server's hard-coded `xkbcomp` path was redirected to a writable
+directory. Under that setup the window tests run for real: a window opens, a click
+reaches a Silica function, and the window closes.
+
+CI runs the suite under `xvfb-run` so the window tier executes there too.
+
+---
+
+## Limits
+
+* **No menus or dialogs.**
+* **No accessibility work** — no ARIA-equivalent roles, no screen-reader testing.
+* **No image or canvas widgets.**
+* **One window is focused** in `gui.run`; multiple windows are created but only
+  the first is driven by the loop.
+* **Handler locals do not persist.**
+* **Untested on macOS and Windows.**

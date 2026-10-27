@@ -291,9 +291,10 @@ class StructuralTests(unittest.TestCase):
 
     def test_no_other_module_claims_a_capability(self):
         # only the modules that touch the machine may declare capabilities
-        privileged = {"fs", "speech", "tui"}
+        privileged = {"fs", "gui", "speech", "tui"}
         for module, functions in MODULES.items():
-            if module in privileged:
+            # a submodule of a privileged namespace inherits the right to declare one
+            if module in privileged or module.split(".")[0] in privileged:
                 continue
             for name, native in functions.items():
                 with self.subTest(native="%s.%s" % (module, name)):

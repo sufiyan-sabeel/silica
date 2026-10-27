@@ -1,7 +1,7 @@
 name: CI
 
 # This workflow runs exactly the checks the README documents locally:
-#   python3 -m unittest discover -s tests -t .   (555 tests)
+#   python3 -m unittest discover -s tests -t .   (574 tests)
 #   python3 -m silica test tests
 #   python3 -m silica fmt --check <every .sc file>
 on:
@@ -24,8 +24,25 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install
         run: python -m pip install --upgrade pip && python -m pip install ".[dev]"
+      - name: Install GUI test dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq python3-tk xvfb >/dev/null
+
+      - name: Install GUI test dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq python3-tk xvfb >/dev/null || true
+
       - name: Unit tests
-        run: python -m unittest discover -s tests -t . -v
+        # xvfb-run gives the GUI window tier a display, so it runs instead of skipping
+        run: |
+          if command -v xvfb-run >/dev/null 2>&1; then
+            xvfb-run -a --server-args="-screen 0 1024x768x24" \
+              python -m unittest discover -s tests -t . -v
+          else
+            python -m unittest discover -s tests -t . -v
+          fi
       - name: Silica-level tests
         run: python -m silica test tests
       - name: Formatting
