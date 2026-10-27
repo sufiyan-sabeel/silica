@@ -21,7 +21,7 @@ file icon in the one editor that can show one. No language, bytecode or VM chang
   sub-project — the repository has no editor of its own to integrate with.
 - `ui.render({..., favicon: oui})`: embeds a 32px mark as a data URI so a
   rendered page carries the Silica icon without an extra file. Off by default.
-- `tests/test_assets.py`: 27 tests (440 total) covering the asset files, the icon set, the
+- `tests/test_assets.py`: 28 tests (441 total) covering the asset files, the icon set, the
   editor manifests, the grammar's keyword coverage and the `hello.sc` check.
 
 ### Changed

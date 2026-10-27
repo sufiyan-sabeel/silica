@@ -248,6 +248,16 @@ class VSCodeExtensionTests(unittest.TestCase):
                 self.assertTrue(os.path.exists(os.path.join(VSCODE, relative)),
                                 relative)
 
+    def test_the_marketplace_icon_is_a_128px_png(self):
+        icon = self.manifest.get("icon")
+        self.assertIsNotNone(icon, "the extension has no marketplace icon")
+        path = os.path.join(VSCODE, icon)
+        self.assertTrue(os.path.exists(path), path)
+        if HAVE_PILLOW:
+            with Image.open(path) as image:
+                self.assertEqual(image.format, "PNG")
+                self.assertEqual(image.size, (128, 128))
+
     def test_every_json_file_parses(self):
         for dirpath, _dirs, files in os.walk(VSCODE):
             for name in files:

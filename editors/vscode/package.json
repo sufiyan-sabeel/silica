@@ -48,5 +48,6 @@
         "path": "./icon-theme/silica-icon-theme.json"
       }
     ]
-  }
+  },
+  "icon": "icons/silica-symbol.png"
 }
