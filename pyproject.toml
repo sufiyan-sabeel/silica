@@ -18,7 +18,8 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "pillow>=9", "build>=1", "wheel", "setuptools>=64"]
+dev = ["pytest>=7", "pillow>=9", "build>=1", "wheel", "setuptools>=64",
+       "numpy>=1.21"]
 
 [project.scripts]
 silica = "silica.cli:main"

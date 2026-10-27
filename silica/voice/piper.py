@@ -14,7 +14,10 @@ thing, not an approximation.
 import json
 import os
 
-import numpy as np
+try:
+    import numpy as np
+except ModuleNotFoundError:  # status and availability must still work
+    np = None
 
 from . import espeak
 
@@ -24,6 +27,14 @@ BOS, EOS, PAD = "^", "$", "_"
 
 class TTSError(RuntimeError):
     pass
+
+
+def _numpy():
+    if np is None:
+        raise TTSError(
+            "numpy is not installed, so audio cannot be assembled. "
+            "Install it with `pip install numpy`.")
+    return np
 
 
 def _onnxruntime():
@@ -96,6 +107,7 @@ class PiperVoice:
     # -- synthesis ------------------------------------------------------------
     def synthesize(self, text, length_scale=None, noise_scale=None):
         """Return (float32 samples in -1..1, sample rate)."""
+        _numpy()
         ids = self.ids(text)
         if not ids:
             raise TTSError("nothing to say: %r produced no phonemes" % text)
@@ -128,6 +140,8 @@ def load_voice(model_path, name=None):
 
 def available():
     """True when onnxruntime and espeak-ng are both usable."""
+    if np is None:
+        return False
     try:
         _onnxruntime()
     except TTSError:

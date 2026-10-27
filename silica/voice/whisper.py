@@ -17,7 +17,6 @@ than speaking does. The docs say so rather than implying symmetry.
 
 import os
 
-from . import audio
 
 # "tiny" is the default because "base" needs ~1 GB free and phones do not
 # have it. Set SILICA_WHISPER_MODEL=base for better accuracy on a desktop.
@@ -64,6 +63,8 @@ def load_model(size=None, model_dir=None):
 
 def transcribe(path, size=None, language=None, model_dir=None):
     """Transcribe an audio file. Returns a dict with text, language and segments."""
+    from . import audio  # imports numpy; only needed once we actually decode
+
     if not os.path.exists(path):
         raise STTError("no such audio file: %s" % path)
     samples = audio.load_for_whisper(path)
@@ -83,7 +84,7 @@ def transcribe(path, size=None, language=None, model_dir=None):
         "text": text,
         "language": getattr(info, "language", None),
         "language_probability": round(float(getattr(info, "language_probability", 0.0)), 4),
-        "seconds": round(samples.size / float(audio.WHISPER_RATE), 3),
+        "seconds": round(samples.size / 16000.0, 3),
         "segments": [{"start": round(s.start, 2), "end": round(s.end, 2),
                       "text": s.text.strip()} for s in pieces],
     }

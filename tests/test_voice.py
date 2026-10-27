@@ -15,13 +15,23 @@ import shutil
 import tempfile
 import unittest
 
-import numpy as np
+try:
+    import numpy as np
+    HAVE_NUMPY = True
+except ModuleNotFoundError:  # pragma: no cover - CI installs it via .[dev]
+    np = None
+    HAVE_NUMPY = False
 
 from silica.capabilities import (SPEECH_LISTEN, SPEECH_SPEAK, CapabilitySet,
                                  KNOWN)
 from silica.errors import CapabilityError, SilicaRuntimeError
 from silica.natives import MODULES
-from silica.voice import audio, catalogue, espeak, piper, whisper
+from silica.voice import catalogue  # pure Python: no numpy needed
+
+if HAVE_NUMPY:
+    from silica.voice import audio, espeak, piper, whisper
+else:  # the engine modules need numpy; the catalogue does not
+    audio = espeak = piper = whisper = None
 
 RUN_ENGINE_TESTS = os.environ.get("SILICA_VOICE_TESTS") == "1"
 
@@ -107,6 +117,7 @@ class CatalogueTests(unittest.TestCase):
                 _restore("SILICA_VOICES", previous)
 
 
+@unittest.skipUnless(HAVE_NUMPY, "numpy is needed for the audio tests")
 class AudioTests(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp(prefix="silica-audio-")
@@ -237,6 +248,7 @@ class CapabilityTests(unittest.TestCase):
         self.assertEqual(out.getvalue(), "Map\noui\n")
 
 
+@unittest.skipUnless(HAVE_NUMPY, "numpy is needed to reach the engines")
 class HonestErrorTests(unittest.TestCase):
     """When an engine is missing, say which one and how to install it."""
 
@@ -249,6 +261,7 @@ class HonestErrorTests(unittest.TestCase):
         message = str(ctx.exception)
         self.assertTrue("onnxruntime" in message or "espeak" in message, message)
 
+    @unittest.skipUnless(HAVE_NUMPY, "numpy is needed to write a test WAV")
     def test_stt_reports_the_missing_piece(self):
         if whisper.available():
             self.skipTest("faster-whisper is installed here")
