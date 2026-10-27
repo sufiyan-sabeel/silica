@@ -1,4 +1,4 @@
-# Silica Standard Library — v0.3.0
+# Silica Standard Library — v0.4.0
 
 `core` is always in scope. Every other module must be imported with `use`.
 Each entry lists its signature, what it returns, and when it raises a runtime
@@ -214,6 +214,41 @@ sfn main() {
     sprint(json.stringify(doc, 2))    # two-space indented
 }
 ```
+
+---
+
+## speech — `use speech` (requires a capability)
+
+Offline speech: a Piper neural voice out, Whisper in. No API key, no network at
+runtime, nothing uploaded. The full guide is `docs/VOICE.md`.
+
+| Function | Signature | Capability | Notes |
+|---|---|---|---|
+| `speech.speak` | `(String, Map?) -> Unit` | `speech.speak` | Synthesise and play through the system player (`paplay`, `aplay`, `play`, `afplay`, `termux-media-player`). Errors if none is available — use `speech.save` then. |
+| `speech.save` | `(String, String, Map?) -> Unit` | `speech.speak` | Synthesise and write a 16-bit mono WAV. The path must be inside a granted `speech.speak` root. |
+| `speech.transcribe` | `(String, Map?) -> Map` | `speech.listen` | Read an audio file and transcribe it. Returns `{text, language, seconds}`. The path must be inside a granted `speech.listen` root. |
+| `speech.voices` | `() -> List` | none | Every known voice with `name`, `language`, `label`, `installed`. |
+| `speech.languages` | `() -> Map` | none | `speaking`, `speaking_missing`, `listening` — what can be said, what cannot, and what can be heard. |
+| `speech.status` | `() -> Map` | none | `can_speak`, `can_listen`, `voices_installed`, `default_voice`, `voices_dir`. |
+
+Options for `speak`/`save`: `{voice: "hi_IN-pratham-medium", length_scale: 1.1,
+noise_scale: 0.6}`. `length_scale` > 1 speaks more slowly. For `transcribe`:
+`{model: "base", language: "hi"}`.
+
+```silica
+use speech
+
+sfn main() {
+    sprint(speech.status())
+    speech.save("Silica can talk.", "out/hello.wav", {voice: "en_US-lessac-medium"})
+    sprint(speech.transcribe("out/hello.wav"))
+}
+```
+
+Engines are optional: if `onnxruntime`, an espeak-ng library or `faster-whisper`
+is missing, the call fails with the exact install command rather than producing
+silence or noise. Downloading a voice is a CLI action
+(`silica voice install <name>`), never something a program does implicitly.
 
 ---
 

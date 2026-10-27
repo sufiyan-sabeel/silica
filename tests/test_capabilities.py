@@ -270,6 +270,16 @@ class StructuralTests(unittest.TestCase):
                 with self.subTest(native="%s.%s" % (module, name)):
                     self.assertIn(native.requires, KNOWN)
 
+    def test_the_speech_module_is_guarded_where_it_matters(self):
+        guarded = {"speak": "speech.speak", "save": "speech.speak",
+                   "transcribe": "speech.listen"}
+        for name, kind in guarded.items():
+            with self.subTest(native=name):
+                self.assertEqual(MODULES["speech"][name].requires, kind)
+        for name in ("voices", "languages", "status"):
+            with self.subTest(native=name):
+                self.assertIsNone(MODULES["speech"][name].requires)
+
     def test_every_fs_native_is_guarded(self):
         self.assertIn("fs", MODULES)
         for name, native in MODULES["fs"].items():
@@ -280,8 +290,10 @@ class StructuralTests(unittest.TestCase):
                                      "fs.%s has no path argument" % name)
 
     def test_no_other_module_claims_a_capability(self):
+        # only the modules that touch the machine may declare capabilities
+        privileged = {"fs", "speech"}
         for module, functions in MODULES.items():
-            if module == "fs":
+            if module in privileged:
                 continue
             for name, native in functions.items():
                 with self.subTest(native="%s.%s" % (module, name)):

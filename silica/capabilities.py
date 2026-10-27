@@ -56,8 +56,10 @@ from .errors import CapabilityError, SilicaRuntimeError
 FS_READ = "fs.read"
 FS_WRITE = "fs.write"
 FS_LIST = "fs.list"
+SPEECH_SPEAK = "speech.speak"
+SPEECH_LISTEN = "speech.listen"
 
-KNOWN = (FS_READ, FS_WRITE, FS_LIST)
+KNOWN = (FS_READ, FS_WRITE, FS_LIST, SPEECH_SPEAK, SPEECH_LISTEN)
 
 # which native argument holds the path, per capability, is declared on the
 # native itself; this table is only used for diagnostics and config parsing.
@@ -65,12 +67,16 @@ _TITLES = {
     FS_READ: "read files",
     FS_WRITE: "write files",
     FS_LIST: "list directories",
+    SPEECH_SPEAK: "synthesise and play speech",
+    SPEECH_LISTEN: "read audio and transcribe it",
 }
 
 _FLAGS = {
     FS_READ: "--allow-fs-read",
     FS_WRITE: "--allow-fs-write",
     FS_LIST: "--allow-fs-list",
+    SPEECH_SPEAK: "--allow-speech-speak",
+    SPEECH_LISTEN: "--allow-speech-listen",
 }
 
 
@@ -296,6 +302,17 @@ class CapabilitySet:
                         grants.setdefault(kind, []).extend(_as_root_list(roots, kind))
                 else:
                     grants.setdefault(key, []).extend(_as_root_list(value, key))
+                continue
+            if key == "speech":
+                if not isinstance(value, dict):
+                    raise CapabilityError("'speech' must be a table")
+                for sub, roots in value.items():
+                    grants.setdefault(_kind_from_parts("speech", sub), []).extend(
+                        _as_root_list(roots, "speech." + str(sub)))
+                continue
+            if key in ("speak", "listen"):
+                grants.setdefault(_kind_from_parts("speech", key), []).extend(
+                    _as_root_list(value, "speech." + key))
                 continue
             if key in ("read", "write", "list"):
                 kind = _kind_from_parts("fs", key)
@@ -523,6 +540,8 @@ def _normalise_kind(name, where):
         return name
     if name in ("read", "write", "list"):
         return _kind_from_parts("fs", name)
+    if name in ("speak", "listen"):
+        return _kind_from_parts("speech", name)
     raise CapabilityError(
         "unknown capability '%s' in '%s'" % (name, where),
         hint="known capabilities: %s" % ", ".join(KNOWN))

@@ -480,7 +480,7 @@ def _c_sum(ctx, args):
 # --- registry ----------------------------------------------------------------
 def _build():
     mods = {"core": {}, "math": {}, "string": {}, "collections": {},
-            "fs": {}, "json": {}, "ui": {}, "ui.state": {},
+            "fs": {}, "json": {}, "speech": {}, "ui": {}, "ui.state": {},
             "ui.lib.widgets": {}, "ui.lib.theme": {}, "ui.lib.colors": {},
             "ui.lib.layout": {}, "ui.lib.scroll": {}, "ui.lib.animation": {}}
 
@@ -538,6 +538,12 @@ def _build():
         for name, params, ret, fn, requires, path_arg, min_args in table:
             add(module, name, params, ret, fn, min_args=min_args,
                 requires=requires, path_arg=path_arg)
+
+    from .voice.natives_speech import FUNCTIONS as _SPEECH
+    for (name, params, ret, fn, min_args, max_args,
+         requires, path_arg) in _SPEECH:
+        add("speech", name, params, ret, fn, min_args=min_args,
+            max_args=max_args, requires=requires, path_arg=path_arg)
 
     from .ui.natives_ui import FUNCTIONS as _UI
     for (module, name, params, ret, fn, min_args, max_args,

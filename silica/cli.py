@@ -1,6 +1,6 @@
 """The `silica` command-line interface.
 
-Commands implemented in v0.3.0:
+Commands implemented in v0.4.0:
 
     silica run <file.sc|file.sbc>   compile (if needed), verify, execute
     silica check <file.sc>          parse + type-check only
@@ -27,7 +27,7 @@ from .engine import (check_source, compile_ast, compile_file, compile_source,
 from .errors import CapabilityError, ParseError, SilicaError
 from .natives import format_value, get_native
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 
 USAGE = """silica %s — the Silica language toolchain
 
@@ -41,6 +41,7 @@ usage:
   silica repl                     interactive session
   silica fmt <file.sc> [--check]  rewrite in canonical style
   silica test [dir]               run *_test.sc files under dir
+  silica voice <subcommand>       speech: list, install, speak, transcribe
   silica capabilities [flags]     print the effective capability set
   silica --version                print the version
   silica --help                   print this message
@@ -53,7 +54,7 @@ Capabilities (nothing is granted by default):
                          remove a capability a config file granted
   --capabilities FILE    read grants from a TOML [capabilities] table
 
-Not implemented in 0.3.0: new, add, remove, install, build (Milestone E).
+Not implemented in 0.4.0: new, add, remove, install, build (Milestone E).
 """ % VERSION
 
 
@@ -473,6 +474,159 @@ def cmd_repl(args):
     return 0
 
 
+# --- voice -------------------------------------------------------------------
+VOICE_USAGE = """usage: silica voice <subcommand>
+
+  silica voice list                 voices available, and which are installed
+  silica voice languages            what can be spoken and heard
+  silica voice status               which engines are present
+  silica voice install [name]       download a voice into the cache
+  silica voice speak "text" [opts]  synthesise and play
+  silica voice transcribe <file>    transcribe a WAV
+  silica voice info <file.wav>      duration, rate and level of a WAV
+
+Options for `speak`: --voice NAME, --out PATH (write instead of play)
+Options for `transcribe`: --model tiny|base|small|medium, --language CODE
+"""
+
+
+def cmd_voice(args):
+    if not args:
+        sys.stdout.write(VOICE_USAGE)
+        return 0
+    sub = args[0]
+    rest = args[1:]
+    from . import voice
+
+    if sub in ("-h", "--help", "help"):
+        sys.stdout.write(VOICE_USAGE)
+        return 0
+
+    if sub == "list":
+        rows = voice.voices()
+        if not rows:
+            sys.stdout.write("no voices are known\n")
+            return 0
+        sys.stdout.write("%-26s %-7s %-10s %s\n" % ("voice", "lang", "installed", "label"))
+        for row in rows:
+            sys.stdout.write("%-26s %-7s %-10s %s\n" % (
+                row["name"], row["language"],
+                "yes" if row["installed"] else "-", row["label"]))
+        return 0
+
+    if sub == "languages":
+        table = voice.languages()
+        sys.stdout.write("speaking:\n")
+        for code, names in table["speaking"].items():
+            sys.stdout.write("  %-8s %s\n" % (code, ", ".join(names)))
+        if table["speaking_missing"]:
+            sys.stdout.write("\nno voice available (speech recognition still works):\n")
+            for code, label in table["speaking_missing"].items():
+                sys.stdout.write("  %-8s %s\n" % (code, label))
+        sys.stdout.write("\nlistening: %s\n" % ", ".join(
+            sorted(table["listening"])))
+        return 0
+
+    if sub == "status":
+        info = voice.status()
+        available = voice.available()
+        sys.stdout.write("speaking : %s\n" % ("ready" if available["tts"] else "unavailable"))
+        sys.stdout.write("listening: %s\n" % ("ready" if available["stt"] else "unavailable"))
+        sys.stdout.write("espeak   : %s\n" % info["espeak"].get("detail", info["espeak"]))
+        sys.stdout.write("onnxruntime: %s\n" % info["tts"].get("onnxruntime"))
+        sys.stdout.write("whisper  : %s\n" % info["stt"].get("faster_whisper", "-"))
+        sys.stdout.write("voices dir  : %s\n" % info["voices_dir"])
+        sys.stdout.write("installed   : %s\n" % (", ".join(info["voices_installed"]) or "none"))
+        sys.stdout.write("default     : %s\n" % info["default_voice"])
+        return 0
+
+    if sub == "install":
+        name = rest[0] if rest else None
+        try:
+            path = voice.install(name)
+        except Exception as exc:
+            return _fail("error: %s" % exc)
+        sys.stdout.write("installed %s\n  at %s\n" % (
+            name or "the default voice", path))
+        return 0
+
+    if sub == "speak":
+        text_parts, options = [], {"voice": None, "out": None}
+        index = 0
+        while index < len(rest):
+            item = rest[index]
+            if item == "--voice" and index + 1 < len(rest):
+                options["voice"] = rest[index + 1]
+                index += 2
+                continue
+            if item == "--out" and index + 1 < len(rest):
+                options["out"] = rest[index + 1]
+                index += 2
+                continue
+            text_parts.append(item)
+            index += 1
+        text = " ".join(text_parts).strip()
+        if not text:
+            return _fail("usage: silica voice speak \"text\" [--voice NAME] [--out PATH]", 2)
+        try:
+            if options["out"]:
+                path = voice.synthesize(text, out=options["out"], voice=options["voice"])
+                from .voice import audio
+                info = audio.describe(path)
+                sys.stdout.write("wrote %s (%.2fs, %d Hz)\n"
+                                 % (path, info["seconds"], info["rate"]))
+            else:
+                result = voice.speak(text, voice=options["voice"])
+                sys.stdout.write("%s (%.2fs)\n" % (result["detail"], result["seconds"]))
+        except Exception as exc:
+            return _fail("error: %s" % exc)
+        return 0
+
+    if sub == "transcribe":
+        paths, options = [], {"model": None, "language": None}
+        index = 0
+        while index < len(rest):
+            item = rest[index]
+            if item == "--model" and index + 1 < len(rest):
+                options["model"] = rest[index + 1]
+                index += 2
+                continue
+            if item == "--language" and index + 1 < len(rest):
+                options["language"] = rest[index + 1]
+                index += 2
+                continue
+            paths.append(item)
+            index += 1
+        if not paths:
+            return _fail("usage: silica voice transcribe <file.wav>", 2)
+        if not os.path.exists(paths[0]):
+            return _fail("error: no such file: %s" % paths[0])
+        try:
+            result = voice.transcribe(paths[0], model=options["model"],
+                                      language=options["language"])
+        except Exception as exc:
+            return _fail("error: %s" % exc)
+        sys.stdout.write("%s\n" % result["text"])
+        if result["language"]:
+            sys.stdout.write("(%s, %.2f confidence, %.2fs of audio)\n" % (
+                result["language"], result["language_probability"], result["seconds"]))
+        return 0
+
+    if sub == "info":
+        if not rest:
+            return _fail("usage: silica voice info <file.wav>", 2)
+        from .voice import audio
+        try:
+            info = audio.describe(rest[0])
+        except Exception as exc:
+            return _fail("error: %s" % exc)
+        for key in ("path", "seconds", "rate", "peak", "rms", "silent"):
+            sys.stdout.write("%-8s %s\n" % (key, info[key]))
+        return 0
+
+    return _fail("error: unknown voice subcommand '%s'\n\n%s" % (sub, VOICE_USAGE), 2)
+
+
 # --- entry point -------------------------------------------------------------
 COMMANDS = {
     "run": cmd_run,
@@ -482,6 +636,7 @@ COMMANDS = {
     "test": cmd_test,
     "repl": cmd_repl,
     "capabilities": cmd_capabilities,
+    "voice": cmd_voice,
 }
 
 PLANNED = {
@@ -523,7 +678,7 @@ def main(argv=None):
         # and all, so there is one implementation of "run a file".
         return cmd_run(argv)
     if first in PLANNED:
-        return _fail("error: 'silica %s' is not implemented in 0.3.0 (%s)"
+        return _fail("error: 'silica %s' is not implemented in 0.4.0 (%s)"
                      % (first, PLANNED[first]))
     handler = COMMANDS.get(first)
     if handler is None:

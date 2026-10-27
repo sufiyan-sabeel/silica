@@ -5,6 +5,36 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## [0.4.0] — 2026-10-27
+
+Speech: Silica can talk and listen, offline, with no API key.
+
+### Added
+- **`use speech`** with `speak`, `save`, `transcribe`, `voices`, `languages` and
+  `status`. Text to speech and speech to text, callable from Silica source.
+- **`silica/voice/`**: a Piper TTS frontend (ONNX + espeak-ng phonemes, no
+  `piper-tts` dependency), a `faster-whisper` STT backend, a voice catalogue with
+  on-demand download, and WAV plumbing with resampling.
+- **Two new capabilities**: `speech.speak` and `speech.listen`, each scoped to
+  directory roots and enforced by the VM before the function body runs.
+- **`silica voice`** CLI: `list`, `languages`, `status`, `install`, `speak`,
+  `transcribe`, `info`.
+- **`docs/VOICE.md`**: engines, install for Linux and Termux, the language
+  matrix, the round-trip verification and every limitation.
+- 37 tests in `tests/test_voice.py`, in two tiers: the default tier needs no
+  engine, and an opt-in tier synthesises a sentence and transcribes it back.
+
+### Notes
+- Speaking covers English, Hindi, Telugu, Bengali, Malayalam and Marathi. Piper
+  has **no Tamil, Kannada, Gujarati or Punjabi voices**; listening covers those
+  because Whisper is multilingual. The asymmetry is documented, not glossed over.
+- `piper-tts` is deliberately not a dependency: its wheels are glibc-only and do
+  not install in Termux. `onnxruntime` and espeak-ng are used directly, and both
+  are Termux packages. The Termux path is untested on a device.
+- Whisper defaults to `tiny` because `base` needs roughly a gigabyte of RAM.
+- Audio output and input are capabilities, so a program with no grants cannot
+  speak or listen.
+
 ## [0.3.0] — 2026-10-27
 
 Global installation and distribution. Silica can now be installed with one

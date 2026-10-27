@@ -313,6 +313,21 @@ class PackagingTests(unittest.TestCase):
         self.assertTrue(os.path.exists(
             os.path.join(ROOT, "silica", "ui", "assets", "silica-32.png")))
 
+    def test_every_subpackage_is_declared_for_packaging(self):
+        """A subpackage missing from `packages` builds a wheel that cannot import."""
+        import re as _re
+        declared = set(_re.findall(r'"(silica(?:\.[a-z_]+)*)"',
+                                   _re.search(r"^packages = \[(.*?)\]",
+                                              pyproject_text(), _re.M | _re.S).group(0)))
+        root = os.path.join(ROOT, "silica")
+        found = {"silica"}
+        for entry in sorted(os.listdir(root)):
+            if os.path.isdir(os.path.join(root, entry)) and os.path.exists(
+                    os.path.join(root, entry, "__init__.py")):
+                found.add("silica." + entry)
+        self.assertEqual(found - declared, set(),
+                         "these subpackages are missing from pyproject `packages`")
+
     def test_documentation_the_installer_points_at_exists(self):
         for name in ("INSTALL.md", "RELEASING.md"):
             with self.subTest(doc=name):

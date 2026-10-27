@@ -22,8 +22,8 @@ $ silica run examples/square.sc
 144
 ```
 
-**Status: v0.3.0 — a working reference implementation, not a finished language.**
-Everything documented here works and is covered by 489 automated tests. What is
+**Status: v0.4.0 — a working reference implementation, not a finished language.**
+Everything documented here works and is covered by 526 automated tests. What is
 planned but absent is listed in [Limitations](#limitations-and-what-is-not-done)
 and in `docs/ROADMAP.md`. Nothing in this repository claims to be faster than
 Python, C or Rust — see `docs/PERFORMANCE.md` for the measured truth.
@@ -100,7 +100,7 @@ version once, then uses `¢ ` as the prompt:
 
 ```console
 $ silica
-Silica Interpreter v0.3.0
+Silica Interpreter v0.4.0
 ¢ let n: Int = 21
 n: Int = 21
 ¢ n * 2
@@ -137,6 +137,10 @@ UTF-8 rather than crashing, and falls back to `> ` only if it cannot.
 | `silica fmt <file.sc> [--check]` | Rewrite in canonical style, or check without writing. |
 | `silica test [dir]` | Run every `*_test.sc` under `dir` (default `tests`). |
 | `silica capabilities` | Print the effective capability set for a set of flags. |
+| `silica voice list` | Voices available, and which are installed. |
+| `silica voice install <name>` | Download a voice into the cache. |
+| `silica voice speak "text"` | Synthesise and play; `--out PATH` writes a WAV instead. |
+| `silica voice transcribe <file.wav>` | Transcribe an audio file. |
 | `silica --version` / `--help` | Version and usage. |
 
 `silica new/add/remove/install/build` are **not implemented** (Milestone E) and
@@ -218,6 +222,50 @@ Two things worth knowing:
 
 Rendered Silica UI pages can carry the mark too: `ui.render({..., favicon: oui})`
 embeds a 32px copy as a data URI, so the page stays self-contained.
+
+## Speech
+
+Silica can talk and listen, offline, with no API key. Both directions are
+ordinary Silica modules:
+
+```silica
+use speech
+
+sfn main() {
+    speech.save("Silica can talk.", "out/hello.wav")
+    sprint(speech.transcribe("out/hello.wav"))
+}
+```
+
+```bash
+silica voice install en_US-lessac-medium      # one 63 MB download, once
+silica voice speak "Silica can talk." --out out/hello.wav
+silica voice transcribe out/hello.wav
+```
+
+**Speaking** uses Piper voices — a neural ONNX model driven by espeak-ng
+phonemes. It deliberately does not depend on the `piper-tts` wheel, which is
+glibc-only and cannot be installed in Termux; instead it needs `onnxruntime` and
+an espeak-ng library, both of which Termux packages.
+
+**Listening** uses Whisper through `faster-whisper`, which Termux also packages
+(`ctranslate2`).
+
+**Languages, honestly.** Piper has voices for English, Hindi, Telugu, Bengali,
+Malayalam and Marathi. It has **no Tamil, Kannada, Gujarati or Punjabi** voices.
+Whisper is multilingual, so *listening* covers those languages even though
+*speaking* does not — the two directions are not symmetric, and
+`silica voice languages` prints exactly what exists.
+
+**How good is the voice?** It is a neural voice: clearly better than formant
+synthesis, not as natural as a large cloud model. The check that means something
+is the round trip — synthesise a sentence, transcribe it, compare — and for
+English it comes back word for word. That measures intelligibility, not beauty.
+
+Audio output and audio input are privileged, so they are capabilities:
+`speech.speak` and `speech.listen`, granted per directory like `fs.*`.
+
+Full guide: `docs/VOICE.md`.
 
 ## Capabilities and file access
 
@@ -350,7 +398,7 @@ Format details: `docs/BYTECODE.md`.
 ## Testing
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 489 tests
+python3 -m unittest discover -s tests -t .   # 526 tests
 python3 -m silica test tests                 # Silica-level tests
 python3 benchmarks/bench.py --runs 3         # benchmarks + correctness check
 ```
@@ -376,6 +424,8 @@ silica/            the engine package (lexer, parser, checker, compiler,
                    stdlib_json, fmt, cli, engine)
 silica/ui/         the UI core: node tree, theme, style model, web
                    renderer and the ui.* native functions
+silica/voice/      speech: Piper TTS, Whisper STT, the voice catalogue and
+                   the speech.* native functions
 examples/          fifteen runnable programs with documented output
 assets/logo/       the Silica mark, wordmark and icon set
 editors/vscode/    VS Code extension: .sc language + file icon
