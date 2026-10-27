@@ -2,7 +2,8 @@
 
 A small, statically typed programming language with its own bytecode engine:
 short keywords, braces, a real type checker, a versioned `.sbc` format, a
-verifying VM, and a toolchain you can actually run.
+verifying VM, a toolchain you can actually run, and a UI DSL that renders to
+HTML/CSS.
 
 ```silica
 sfn square(n: Int) -> Int {
@@ -19,8 +20,8 @@ $ silica run examples/square.sc
 144
 ```
 
-**Status: v0.1.1 — a working reference implementation, not a finished language.**
-Everything documented here works and is covered by 323 automated tests. What is
+**Status: v0.2.0 — a working reference implementation, not a finished language.**
+Everything documented here works and is covered by 407 automated tests. What is
 planned but absent is listed in [Limitations](#limitations-and-what-is-not-done)
 and in `docs/ROADMAP.md`. Nothing in this repository claims to be faster than
 Python, C or Rust — see `docs/PERFORMANCE.md` for the measured truth.
@@ -89,7 +90,7 @@ library in `docs/STANDARD_LIBRARY.md`.
 
 ## Examples
 
-Twelve runnable programs live in `examples/`:
+Fifteen runnable programs live in `examples/`:
 
 ```bash
 python3 -m silica run examples/conditionals.sc   # Pass
@@ -101,6 +102,9 @@ python3 -m silica run examples/math_demo.sc      # math module
 python3 -m silica run examples/json_demo.sc      # JSON parse/serialise
 python3 -m silica run examples/calculator.sc     # reads stdin
 python3 -m silica run examples/fs_demo.sc --allow-fs-read examples --allow-fs-list examples
+python3 -m silica run examples/ui_hello.sc   --allow-fs-write build   # UI -> HTML/CSS
+python3 -m silica run examples/ui_tasks.sc   --allow-fs-write build   # events + list
+python3 -m silica run examples/ui_animate.sc --allow-fs-write build   # reduced motion
 ```
 
 `examples/calculator.sc` in action:
@@ -142,6 +146,76 @@ filesystem functions: each privileged native declares the capability it needs,
 the VM authorises the call, and the native receives the path that was actually
 authorised. See `docs/STANDARD_LIBRARY.md` and `SECURITY.md`.
 
+## Silica UI
+
+Silica UI is real Silica — no template language, no markup blobs. A builder block
+is a call followed by a `{ ... }` body, and the widgets inside it are ordinary
+statements:
+
+```silica
+use ui
+use ui.lib.widgets
+
+sfn main() {
+    let tasks: List = ["Design tokens", "Responsive layout"]
+
+    ui.app("Tasks") {
+        ui.screen({padding: {sm: "12px", md: "24px"}}) {
+            ui.row({gap: "12px", align: "center"}) {
+                ui.text("Tasks", {size: "xl", weight: "600"})
+                ui.spacer()
+                ui.button("Toggle theme") {
+                    ui.on("click") {
+                        ui.state.toggle("dark")
+                    }
+                }
+            }
+            ui.lib.widgets.scroll({direction: "vertical"}) {
+                ui.lib.widgets.list(tasks) {
+                    ui.card({padding: "12px"}) {
+                        ui.text(item)
+                    }
+                }
+            }
+        }
+    }
+
+    ui.render({target: "web", out: "build/index.html"})
+}
+```
+
+```bash
+silica run examples/ui_tasks.sc --allow-fs-write build
+# wrote build/ui_tasks.html, build/theme.css, build/silica-ui-runtime.js
+```
+
+Three grammar additions made this possible, all provably additive — every new
+form was a parse error or a type error in 0.1.x:
+
+1. **Dotted imports**: `use ui.lib.widgets`.
+2. **Member-path resolution**: longest imported prefix is the module, one member
+   follows it.
+3. **Builder blocks**: `call { ... }` in statement position, block on the same
+   line as the call.
+
+**The honest execution model.** The browser cannot run Silica — the VM is
+Python-hosted with no JS or WASM backend. Event bodies are therefore a restricted
+action subset (`ui.state.set/toggle/push`, `ui.navigate`, `ui.toggle`) compiled to
+a declarative JSON program that a small bundled runtime interprets. Anything
+beyond that runs at build time or not at all. Real client-side Silica needs a
+WASM build of the VM and is not scheduled.
+
+**The web renderer is the only renderer.** Android, iOS, desktop, terminal and
+the framework adapters are specified names that fail loudly, never fake backends.
+Layout is CSS — flexbox and grid do the work; the tests assert emitted structure
+and CSS rules, not pixels.
+
+**Writing needs a capability.** `ui.render` requires `fs.write` for its output
+path, the same capability `fs` uses. A program with no grants cannot write a
+file, and that includes a rendered page.
+
+Full reference: `docs/UI.md`.
+
 ## Architecture
 
 ```
@@ -171,7 +245,7 @@ Format details: `docs/BYTECODE.md`.
 ## Testing
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 323 tests
+python3 -m unittest discover -s tests -t .   # 407 tests
 python3 -m silica test tests                 # Silica-level tests
 python3 benchmarks/bench.py --runs 3         # benchmarks + correctness check
 ```
@@ -195,10 +269,12 @@ consume the same files and be validated against this one. See
 silica/            the engine package (lexer, parser, checker, compiler,
                    bytecode, vm, natives, capabilities, stdlib_fs,
                    stdlib_json, fmt, cli, engine)
-examples/          twelve runnable programs with documented output
+silica/ui/         the UI core: node tree, theme, style model, web
+                   renderer and the ui.* native functions
+examples/          fifteen runnable programs with documented output
 tests/             Python test suite + Silica-level *_test.sc files
 benchmarks/        benchmark programs, Python equivalents and runner
-docs/              language spec, grammar, bytecode, stdlib, performance,
+docs/              language spec, grammar, bytecode, stdlib, UI, performance,
                    bootstrap, roadmap
 bin/silica         launcher for running from a checkout
 pyproject.toml     packaging; installs the `silica` command
@@ -213,7 +289,8 @@ pyproject.toml     packaging; installs the `silica` command
 * File I/O exists but only behind an explicit capability grant; there is no
   ambient authority and no network or environment access at all.
 * No package manager and no registry.
-* Silica UI (CSS-inspired styling) is a design goal, not code.
+* Silica UI ships one renderer (web). No native, terminal or OS-UI target, no
+  framework adapters, no client-side Silica, no virtualized lists, no 3D.
 * Not self-hosted; the compiler is Python (`docs/BOOTSTRAP.md`).
 * Slower than CPython on every measured workload (`docs/PERFORMANCE.md`).
 

@@ -106,10 +106,10 @@ class Iterator:
 
 class Native:
     __slots__ = ("module", "name", "params", "ret", "fn", "min_args", "max_args",
-                 "requires", "path_arg")
+                 "requires", "path_arg", "accepts_block")
 
     def __init__(self, module, name, params, ret, fn, min_args=None, max_args=None,
-                 requires=None, path_arg=None):
+                 requires=None, path_arg=None, accepts_block=False):
         self.module = module
         self.name = name
         self.params = params
@@ -122,6 +122,9 @@ class Native:
         # means the native touches nothing outside the VM's own state.
         self.requires = requires
         self.path_arg = path_arg
+        # Builder metadata: True when the native may be followed by a { ... }
+        # block (a UI widget), False for an ordinary function.
+        self.accepts_block = accepts_block
 
     @property
     def qualified(self):
@@ -477,12 +480,14 @@ def _c_sum(ctx, args):
 # --- registry ----------------------------------------------------------------
 def _build():
     mods = {"core": {}, "math": {}, "string": {}, "collections": {},
-            "fs": {}, "json": {}}
+            "fs": {}, "json": {}, "ui": {}, "ui.state": {},
+            "ui.lib.widgets": {}, "ui.lib.theme": {}, "ui.lib.colors": {},
+            "ui.lib.layout": {}, "ui.lib.scroll": {}, "ui.lib.animation": {}}
 
     def add(module, name, params, ret, fn, min_args=None, max_args=None,
-            requires=None, path_arg=None):
+            requires=None, path_arg=None, accepts_block=False):
         native = Native(module, name, params, ret, fn, min_args, max_args,
-                        requires, path_arg)
+                        requires, path_arg, accepts_block)
         mods[module][name] = native
 
     add("core", "sprint", ["Any"], "Unit", _n_sprint)
@@ -534,6 +539,12 @@ def _build():
             add(module, name, params, ret, fn, min_args=min_args,
                 requires=requires, path_arg=path_arg)
 
+    from .ui.natives_ui import FUNCTIONS as _UI
+    for (module, name, params, ret, fn, min_args, max_args,
+         accepts_block) in _UI:
+        add(module, name, params, ret, fn, min_args=min_args, max_args=max_args,
+            accepts_block=accepts_block)
+
     return mods
 
 
@@ -547,6 +558,12 @@ CONSTANTS = {
 # modules that exist as documentation but are not implemented yet
 PLANNED_MODULES = {"path", "time", "random", "regex", "http",
                    "net", "process", "log", "crypto", "test", "async", "ai"}
+
+
+def ui_reserved_modules():
+    """Reserved and adapter module names, with the reason they are unavailable."""
+    from .ui.natives_ui import ADAPTER_MODULES, RESERVED_MODULES
+    return RESERVED_MODULES, ADAPTER_MODULES
 
 
 def get_native(module, name):

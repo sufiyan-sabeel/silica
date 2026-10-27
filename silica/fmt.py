@@ -81,6 +81,13 @@ class Printer:
                 self.stmt(inner)
             self.depth -= 1
             self.write("}")
+        elif isinstance(node, ast.BuilderStmt):
+            self.write("%s {" % self.expr(node.call, 0))
+            self.depth += 1
+            for inner in node.block.stmts:
+                self.stmt(inner)
+            self.depth -= 1
+            self.write("}")
         elif isinstance(node, ast.FuncDecl):
             params = ", ".join(
                 (name if ptype is None else "%s: %s" % (name, ptype))

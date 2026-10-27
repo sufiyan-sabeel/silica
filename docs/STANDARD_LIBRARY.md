@@ -217,6 +217,111 @@ sfn main() {
 
 ---
 
+## ui, ui.state, ui.lib.* — the UI DSL
+
+The UI modules are documented in full in `docs/UI.md`: the grammar, the
+property vocabulary, the event model and the renderer. This is the function
+list, generated from the same registry the checker uses.
+
+Widgets are builders: they take a `{ ... }` block, except `text`, `image`,
+`spacer` and `divider`. `ui` re-exports nine core primitives; the canonical
+home of every widget is `ui.lib.widgets`.
+
+### `ui`
+
+| Function | Signature | Notes |
+|---|---|---|
+| `ui.__end_block` | `() -> Unit` | Internal. Emitted by the compiler to close a builder scope; the checker refuses it in source. |
+| `ui.app` | `(title: String, props?: Map) -> Unit` | Document root. Everything else lives inside it. |
+| `ui.button` | `(label: String, props?: Map) -> Unit` | Interactive control; takes `ui.on` children. |
+| `ui.card` | `(props?: Map) -> Unit` | Elevated surface. |
+| `ui.column` | `(props?: Map) -> Unit` | Flex column. |
+| `ui.navigate` | `(href: String) -> Unit` | Event action: set location.href. |
+| `ui.on` | `(event: String) -> Unit` | Event action list. Allowed events: click, submit, change, input, focus, blur, keydown, mouseenter, mouseleave. |
+| `ui.render` | `(options: Map) -> Unit` | Write the artifact. Requires `fs.write` for the output path. Options: target, out, inline_css, inline_runtime, language. |
+| `ui.row` | `(props?: Map) -> Unit` | Flex row. |
+| `ui.screen` | `(props?: Map) -> Unit` | Top-level surface with safe-area padding. |
+| `ui.set_theme` | `(mode: String) -> Unit` | Switch mode: "light", "dark" or "system". |
+| `ui.spacer` | `(props?: Map) -> Unit` | Flexible gap; takes no block. |
+| `ui.stack` | `(props?: Map) -> Unit` | Single-cell grid. |
+| `ui.text` | `(value: Any, props?: Map) -> Unit` | Text node; takes no block. |
+| `ui.theme` | `(name: String, props?: Map) -> Unit` | Define the theme. Colours are checked for WCAG AA contrast. |
+| `ui.toggle` | `(key: String, class_name: String) -> Unit` | Event action: toggle a CSS class while state is true. |
+
+### `ui.state`
+
+| Function | Signature | Notes |
+|---|---|---|
+| `ui.state.push` | `(key: String, value: Any) -> Unit` | Event action: append to a list state key. |
+| `ui.state.set` | `(key: String, value: Any) -> Unit` | Event action: set a state key. |
+| `ui.state.toggle` | `(key: String) -> Unit` | Event action: flip a boolean state key. |
+
+### `ui.lib.widgets`
+
+| Function | Signature | Notes |
+|---|---|---|
+| `ui.lib.widgets.animate` | `(props?: Map) -> Unit` | Transition wrapper; always emits a reduced-motion override. |
+| `ui.lib.widgets.app` | `` | Document root. |
+| `ui.lib.widgets.button` | `` | Interactive control; takes `ui.on` children. |
+| `ui.lib.widgets.card` | `(props?: Map) -> Unit` | Elevated surface. |
+| `ui.lib.widgets.column` | `(props?: Map) -> Unit` | Flex column. |
+| `ui.lib.widgets.divider` | `(props?: Map) -> Unit` | Separator; takes no block. |
+| `ui.lib.widgets.grid` | `(props?: Map) -> Unit` | CSS grid; set `columns`. |
+| `ui.lib.widgets.image` | `(src: String, props?: Map) -> Unit` | Image. `alt` is required. |
+| `ui.lib.widgets.link` | `(href: String, props?: Map) -> Unit` | Anchor with child content. |
+| `ui.lib.widgets.list` | `(items: List, props?: Map) -> Unit` | Repeats the block once per item, binding `item`. |
+| `ui.lib.widgets.list_item` | `(props?: Map) -> Unit` | One row inside a list. |
+| `ui.lib.widgets.row` | `(props?: Map) -> Unit` | Flex row. |
+| `ui.lib.widgets.screen` | `` | Top-level surface with safe-area padding. |
+| `ui.lib.widgets.scroll` | `(props?: Map) -> Unit` | Scroll container: direction, snap, physics, overscroll. |
+| `ui.lib.widgets.spacer` | `(props?: Map) -> Unit` | Flexible gap; takes no block. |
+| `ui.lib.widgets.stack` | `(props?: Map) -> Unit` | Single-cell grid. |
+| `ui.lib.widgets.sticky` | `(props?: Map) -> Unit` | Sticky-positioned section. |
+| `ui.lib.widgets.text` | `` | Text node; takes no block. |
+
+### `ui.lib.theme`
+
+| Function | Signature | Notes |
+|---|---|---|
+| `ui.lib.theme.contrast` | `(token: String, against: String) -> Float` | WCAG contrast ratio between two theme tokens. |
+| `ui.lib.theme.token` | `(name: String) -> String` | Look up a theme colour token. |
+
+### `ui.lib.colors`
+
+| Function | Signature | Notes |
+|---|---|---|
+| `ui.lib.colors.blend` | `(a: String, b: String, amount: Any) -> String` | Linear blend; amount 0.0 to 1.0. |
+| `ui.lib.colors.contrast` | `(a: String, b: String) -> Float` | WCAG contrast ratio between two colours. |
+| `ui.lib.colors.parse` | `(hex: String) -> Map` | Split a hex colour into r, g, b and hex. |
+
+### `ui.lib.layout`
+
+| Function | Signature | Notes |
+|---|---|---|
+| `ui.lib.layout.breakpoint` | `(name: String) -> Int` | Breakpoint width in pixels: sm 640, md 768, lg 1024, xl 1280. |
+| `ui.lib.layout.breakpoints` | `() -> Map` | Every breakpoint and its width. |
+
+### `ui.lib.scroll`
+
+| Function | Signature | Notes |
+|---|---|---|
+| `ui.lib.scroll.horizontal` | `(props?: Map) -> Map` | Props map for a horizontal scroll container. |
+| `ui.lib.scroll.vertical` | `(props?: Map) -> Map` | Props map for a vertical scroll container. |
+
+### `ui.lib.animation`
+
+| Function | Signature | Notes |
+|---|---|---|
+| `ui.lib.animation.transition` | `(property: String, duration: String, easing: String?) -> Map` | Props map for `animate`. |
+
+Reserved UI modules (`ui.lib.motion3d`, `ui.lib.navigation`,
+`ui.lib.gestures`, `ui.lib.accessibility`, `ui.lib.platform`,
+`ui.lib.terminal`, `ui.lib.graphics`, `ui.lib.canvas`) and the adapter slots
+(`ui.lib.react`, `.flutter`, `.compose`, `.swiftui`, `.css`, `.qt`) fail with a
+clear error instead of pretending to work.
+
+---
+
 ## Planned modules (not implemented)
 
 `path`, `time`, `random`, `regex`, `http`, `net`, `process`, `log`, `crypto`,

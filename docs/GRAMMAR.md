@@ -1,12 +1,13 @@
-# Silica Grammar — v0.1.1
+# Silica Grammar — v0.2.0
 
-EBNF for the grammar the v0.1.1 parser accepts. `NEWLINE` is a significant token
+EBNF for the grammar the v0.2.0 parser accepts. `NEWLINE` is a significant token
 that terminates statements and is ignored inside `(` … `)` and `[` … `]`.
 
 ```ebnf
 program        = { NEWLINE | use-decl | func-decl | global-decl } EOF ;
 
-use-decl       = "use" IDENT NEWLINE ;
+use-decl       = "use" module-path NEWLINE ;                 (* 0.2.0 *)
+module-path    = IDENT { "." IDENT } ;
 func-decl      = "sfn" IDENT "(" [ param { "," param } ] ")" [ "->" type ] block ;
 param          = IDENT [ ":" type ] ;
 global-decl    = ("let" | "const") IDENT [ ":" type ] "=" expr NEWLINE ;
@@ -16,7 +17,7 @@ type           = "Int" | "Float" | "Bool" | "String" | "Unit" | "List" | "Map" |
 block          = "{" { NEWLINE | stmt } [ "fin" ] "}" ;
 
 stmt           = let-stmt | assign-stmt | if-stmt | while-stmt | for-stmt
-               | ret-stmt | halt-stmt | expr-stmt | "fin" ;
+               | ret-stmt | halt-stmt | builder-stmt | expr-stmt | "fin" ;
 
 let-stmt       = ("let" | "const") IDENT [ ":" type ] "=" expr NEWLINE ;
 assign-stmt    = IDENT "=" expr NEWLINE ;
@@ -26,6 +27,9 @@ for-stmt       = "per" IDENT "in" expr block ;
 ret-stmt       = "ret" [ expr ] NEWLINE ;
 halt-stmt      = "halt" [ "(" expr ")" ] NEWLINE ;
 expr-stmt      = expr NEWLINE ;
+builder-stmt   = postfix-expr block ;                          (* 0.2.0 *)
+                 (* statement position only; the head must be a call, and the
+                    "{" must be on the same line as the closing ")" *)
 
 expr           = or-expr ;
 or-expr        = and-expr { "ou" and-expr } ;

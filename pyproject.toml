@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "silica-lang"
-version = "0.1.1"
-description = "Silica — a small, statically typed, bytecode-compiled programming language"
+version = "0.2.0"
+description = "Silica — a small, statically typed, bytecode-compiled programming language with a UI DSL and a web renderer"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }

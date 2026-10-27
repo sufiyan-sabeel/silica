@@ -9,7 +9,8 @@ compatible with every type. That is a documented limitation, not an oversight.
 
 from . import ast
 from .errors import SilicaTypeError
-from .natives import PLANNED_MODULES, get_constant, get_native, module_exists
+from .natives import (PLANNED_MODULES, get_constant, get_native, module_exists,
+                      ui_reserved_modules)
 
 NUMERIC = ("Int", "Float")
 ANY = "Any"
@@ -51,6 +52,10 @@ class Checker:
         self.modules = set()
         self.scopes = []
         self.current_func = None
+        # builder-block context: how deep we are inside `call { ... }` blocks and
+        # inside an event body (`ui.on(...) { ... }`), both reset per function
+        self.builder_depth = 0
+        self.event_depth = 0
 
     # -- diagnostics ---------------------------------------------------------
     def error(self, message, node=None, hint=None):
@@ -115,8 +120,74 @@ class Checker:
                            self.functions["main"].node)
         return self
 
+    def is_imported(self, module):
+        """True when `module` was imported, directly or as a submodule.
+
+        `use ui` makes `ui.state.set` and `ui.lib.widgets.text` resolvable,
+        because importing a module brings its submodules into scope. Importing
+        only `ui.lib.widgets` does *not* bring `ui` into scope.
+        """
+        if module in self.modules:
+            return True
+        for imported in self.modules:
+            if module.startswith(imported + "."):
+                return True
+        return False
+
+    def resolve_member_path(self, expr):
+        """G2: longest prefix that names an imported module, one member after it.
+
+        Returns (module, member) or raises a located type error.
+        """
+        segments, tail = _flatten_member(expr)
+        if not segments:
+            self.error("only standard-library modules have members in Silica v0.2.0",
+                       expr)
+        whole = ".".join(segments)
+        if module_exists(whole):
+            self.error("`%s` is a module path, not a value" % whole, expr,
+                       hint="call a member, e.g. %s.%s"
+                            % (whole, native_names_hint(whole)))
+        for split in range(len(segments) - 1, 0, -1):
+            module = ".".join(segments[:split])
+            if module_exists(module) or module in PLANNED_MODULES:
+                if split != len(segments) - 1:
+                    self.error(
+                        "`%s` is a module and only one member may follow it"
+                        % module, expr,
+                        hint="did you mean to `use %s`?" % ".".join(segments[:-1]))
+                if not self.is_imported(module):
+                    self.error("module '%s' is not imported" % module, expr,
+                               hint="add 'use %s' at the top of the file" % module)
+                return module, segments[-1]
+            reserved, adapters = ui_reserved_modules()
+            if module in adapters:
+                self.error(
+                    "no adapter installed for %s; adapters are specified but not "
+                    "implemented" % module, expr)
+            if module in reserved:
+                self.error("%s is planned but not implemented (%s)"
+                           % (module, reserved[module]), expr)
+        # nothing matched: report the longest plausible prefix
+        prefix = ".".join(segments[:-1])
+        if not self.is_imported(prefix) and not module_exists(prefix):
+            self.error("unknown module '%s'" % prefix, expr,
+                       hint="implemented modules: %s"
+                            % ", ".join(sorted(module_names())))
+        self.error("module '%s' has no member '%s'" % (prefix, segments[-1]), expr,
+                   hint="available: %s" % _module_members(prefix))
+
     def check_use(self, stmt):
         mod = stmt.module
+        reserved, adapters = ui_reserved_modules()
+        if mod in adapters:
+            self.error("no adapter installed for %s; adapters are specified but not "
+                       "implemented" % mod, stmt,
+                       hint="UI 0.1 ships no adapters; see docs/UI.md")
+        if mod in reserved:
+            self.error("%s is planned but not implemented (%s)"
+                       % (mod, reserved[mod]), stmt,
+                       hint="reserved names fail loudly instead of pretending")
         if module_exists(mod):
             self.modules.add(mod)
             return
@@ -147,6 +218,9 @@ class Checker:
     def check_function(self, decl):
         info = self.functions[decl.name]
         outer = self.current_func
+        outer_builder, outer_event = self.builder_depth, self.event_depth
+        self.builder_depth = 0
+        self.event_depth = 0
         self.current_func = info
         self.push_scope()
         for name, ptype, line, col in decl.params:
@@ -159,6 +233,7 @@ class Checker:
                 hint="every path must end in 'ret' (or 'halt'); add a 'ret' after the last block")
         self.pop_scope()
         self.current_func = outer
+        self.builder_depth, self.event_depth = outer_builder, outer_event
 
     def always_returns(self, block):
         """True when control cannot reach the end of `block`."""
@@ -185,7 +260,19 @@ class Checker:
             self.pop_scope()
 
     def check_stmt(self, stmt):
-        if isinstance(stmt, ast.LetStmt):
+        if self.event_depth > 0:
+            self.check_event_statement(stmt)
+        if isinstance(stmt, ast.BuilderStmt):
+            self.check_builder(stmt)
+        elif isinstance(stmt, ast.ReturnStmt) and self.builder_depth > 0:
+            self.error("'ret' inside a builder block is not allowed; close the block "
+                       "first", stmt,
+                       hint="a widget tree is closed structurally, so leaving one "
+                            "early is almost always a mistake")
+        elif isinstance(stmt, ast.HaltStmt) and self.builder_depth > 0:
+            self.error("'halt' inside a builder block is not allowed; close the block "
+                       "first", stmt)
+        elif isinstance(stmt, ast.LetStmt):
             self.check_let(stmt)
         elif isinstance(stmt, ast.AssignStmt):
             self.check_assign(stmt)
@@ -239,6 +326,65 @@ class Checker:
             self.check_block(stmt)
         else:  # pragma: no cover - defensive
             self.error("unsupported statement", stmt)
+
+    def native_of_call(self, call):
+        """The native a call resolves to, or None for user functions."""
+        callee = getattr(call, "callee", None)
+        if isinstance(callee, ast.Ident):
+            return get_native("core", callee.name)
+        if isinstance(callee, ast.Member):
+            module, member = self.resolve_member_path(callee)
+            return get_native(module, member)
+        return None
+
+    def check_builder(self, stmt):
+        call = stmt.call
+        ret = self.call_type(call)
+        native = self.native_of_call(call)
+        if native is None:
+            self.error("a builder block must follow a call to a widget, e.g. "
+                       "`ui.card() { ... }`", call)
+        if not native.accepts_block:
+            self.error("`%s` does not take a block; pass properties as a map "
+                       "argument" % native.qualified, call,
+                       hint='e.g. %s("text", {size: "lg"})' % native.qualified)
+        is_event = native.qualified == "ui.on"
+        self.builder_depth += 1
+        if is_event:
+            self.event_depth += 1
+        self.push_scope()
+        if native.name == "list":
+            # ui.list(items) { ... } binds `item` for the block, like a `per` loop
+            self.declare(VarInfo("item", ANY, True, call.line, call.col), call)
+        for inner in stmt.block.stmts:
+            self.check_stmt(inner)
+        self.pop_scope()
+        if is_event:
+            self.event_depth -= 1
+        self.builder_depth -= 1
+        return ret
+
+    def check_event_statement(self, stmt):
+        """E7: an event body may contain only the documented actions."""
+        from .ui.natives_ui import EVENT_ACTIONS
+        if not isinstance(stmt, ast.ExprStmt) or not isinstance(stmt.expr, ast.Call):
+            self.error(
+                "event bodies run in the browser; only %s are allowed in UI 0.1"
+                % ", ".join(EVENT_ACTIONS), stmt,
+                hint="compute values before the ui.on block, then act on them")
+        call = stmt.expr
+        callee = call.callee
+        name = None
+        if isinstance(callee, ast.Ident):
+            name = callee.name
+        elif isinstance(callee, ast.Member):
+            module, member = self.resolve_member_path(callee)
+            name = "%s.%s" % (module, member)
+        if name not in EVENT_ACTIONS:
+            self.error(
+                "event bodies run in the browser; only %s are allowed in UI 0.1"
+                % ", ".join(EVENT_ACTIONS), call,
+                hint="'%s' cannot run client-side; move it out of ui.on" % (name or "this"))
 
     def check_let(self, stmt, top_level=False):
         declared = stmt.type_ann
@@ -421,22 +567,14 @@ class Checker:
         self.error("cannot index a value of type %s" % t, expr)
 
     def member_type(self, expr):
-        obj = expr.obj
-        if not isinstance(obj, ast.Ident):
-            self.error("only standard-library modules have members in Silica v0.1.1", expr)
-        module = obj.name
-        if module not in self.modules:
-            if module_exists(module) or module in PLANNED_MODULES:
-                self.error("module '%s' is not imported" % module, obj,
-                           hint="add 'use %s' at the top of the file" % module)
-            self.error("unknown module '%s'" % module, obj)
-        found, _value = get_constant(module, expr.name)
+        module, member = self.resolve_member_path(expr)
+        found, _value = get_constant(module, member)
         if found:
             return "Float"
-        native = get_native(module, expr.name)
+        native = get_native(module, member)
         if native is not None:
             self.error("'%s' must be called with (...)" % native.qualified, expr)
-        self.error("module '%s' has no member '%s'" % (module, expr.name), expr,
+        self.error("module '%s' has no member '%s'" % (module, member), expr,
                    hint="available: %s" % _module_members(module))
 
     def call_type(self, expr):
@@ -454,28 +592,24 @@ class Checker:
             var = self.lookup(name)
             if var is not None:
                 self.error("'%s' is a value of type %s, not a function" % (name, var.type),
-                           callee, hint="Silica v0.1.1 has no first-class functions")
+                           callee, hint="Silica v0.2.0 has no first-class functions")
             if name in self.modules:
                 self.error("module '%s' needs a member, e.g. %s.%s"
                            % (name, name, native_names_hint(name)), callee)
             self.error("unknown function '%s'" % name, callee,
                        hint="declare it with 'sfn %s(...)'" % name)
         if isinstance(callee, ast.Member):
-            obj = callee.obj
-            if not isinstance(obj, ast.Ident):
-                self.error("only standard-library modules have members", callee)
-            module = obj.name
-            if module not in self.modules:
-                if module_exists(module) or module in PLANNED_MODULES:
-                    self.error("module '%s' is not imported" % module, obj,
-                               hint="add 'use %s' at the top of the file" % module)
-                self.error("unknown module '%s'" % module, obj)
-            native = get_native(module, callee.name)
+            module, member = self.resolve_member_path(callee)
+            if member.startswith("__"):
+                self.error("'%s.%s' is internal and cannot be called from Silica "
+                           "source" % (module, member), callee,
+                           hint="the compiler emits it for builder blocks")
+            native = get_native(module, member)
             if native is None:
-                if get_constant(module, callee.name)[0]:
+                if get_constant(module, member)[0]:
                     self.error("'%s.%s' is a constant, not a function"
-                               % (module, callee.name), callee)
-                self.error("module '%s' has no function '%s'" % (module, callee.name),
+                               % (module, member), callee)
+                self.error("module '%s' has no function '%s'" % (module, member),
                            callee, hint="available: %s" % _module_members(module))
             self.check_native_args(expr, native)
             return native.ret
@@ -533,6 +667,25 @@ class Checker:
         if expected == "Bool" or actual == "Bool":
             return "Silica does not coerce numbers to Bool"
         return None
+
+
+def _flatten_member(expr):
+    """`ui.lib.widgets.text` -> ["ui", "lib", "widgets", "text"]."""
+    parts = []
+    node = expr
+    while isinstance(node, ast.Member):
+        parts.append(node.name)
+        node = node.obj
+    if not isinstance(node, ast.Ident):
+        return [], None
+    parts.append(node.name)
+    parts.reverse()
+    return parts, None
+
+
+def module_names():
+    from .natives import MODULES
+    return sorted(MODULES)
 
 
 def native_names_hint(module):

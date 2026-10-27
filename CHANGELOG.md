@@ -5,6 +5,62 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## [0.2.0] — 2026-10-27
+
+Silica UI 0.1: the UI DSL, the UI core and the web renderer. Three additive
+grammar changes, one new subsystem, and 84 new tests (407 total). The `.sbc`
+format is unchanged at 1.0, so every existing bytecode file still loads.
+
+### Added — grammar (all provably additive)
+- **Dotted module paths** in `use`: `use ui.lib.widgets`. Was
+  `parse error: unexpected '.' after statement`.
+- **Member-path resolution**: in a chain, the longest prefix that names an
+  imported module is the module and exactly one member may follow it. Was
+  `type error: only standard-library modules have members`.
+- **Builder blocks**: `call { ... }` in statement position, `{` on the same line
+  as the call, head must be a call, contents are ordinary Silica. Was
+  `parse error: unexpected '{' after statement`.
+- Importing a module now also brings its submodules into scope.
+
+### Added — UI core
+- `silica/ui/`: node tree and runtime, theme with WCAG AA contrast validation,
+  property-to-CSS style model with responsive breakpoints, and declarative
+  events lowered to JSON actions.
+- Widget catalogue: `app`, `screen`, `row`, `column`, `stack`, `grid`, `card`,
+  `text`, `button`, `image` (with required `alt`), `link`, `spacer`, `divider`,
+  `scroll`, `list` (binds `item` per element), `list_item`, `sticky`, `animate`,
+  `on`.
+- Modules: `ui` (nine re-exported primitives plus `theme`, `set_theme`,
+  `navigate`, `toggle`, `render`), `ui.state`, `ui.lib.widgets`, `ui.lib.theme`,
+  `ui.lib.colors`, `ui.lib.layout`, `ui.lib.scroll`, `ui.lib.animation`.
+- Reserved namespaces (`ui.lib.motion3d`, `navigation`, `gestures`,
+  `accessibility`, `platform`, `terminal`, `graphics`, `canvas`) and adapter
+  slots (`react`, `flutter`, `compose`, `swiftui`, `css`, `qt`) that fail loudly.
+- Diagnostics E1–E11, each with a specific message and, where useful, a hint.
+
+### Added — web renderer
+- `ui.render({target: "web", out: "..."})` writes the document, `theme.css` and
+  a dependency-free `silica-ui-runtime.js`. Nothing is written unless `render`
+  is called.
+- `ui.render` requires the `fs.write` capability for its output path, so the
+  capability model covers rendering too.
+- Responsive properties become media queries; scrolling and sticky map to
+  `overflow`, `scroll-snap-type`, `overscroll-behavior` and `position: sticky`;
+  every animation also emits a `prefers-reduced-motion` override.
+- Event bodies compile to a declarative JSON action list interpreted by the
+  bundled runtime. The browser does not run Silica, and the docs say so.
+
+### Added — tooling, docs and examples
+- The formatter understands builder blocks.
+- `docs/UI.md`: grammar, namespaces, widgets, properties, events, renderer,
+  diagnostics and the compatibility matrix.
+- `examples/ui_hello.sc`, `examples/ui_tasks.sc`, `examples/ui_animate.sc`.
+
+### Changed
+- Version 0.2.0. `.sbc` format stays at 1.0.
+- `ui` re-exports exactly nine primitives; a test asserts the two lists never
+  diverge from `ui.lib.widgets`.
+
 ## [0.1.1] — 2026-10-27
 
 Milestone D: the capability model, the `fs` module and the `json` module. The

@@ -21,6 +21,25 @@ from .tokens import BUILTIN_TYPES, Token
 
 _IO_KEYWORDS = {"sprint", "dit", "input"}
 
+
+def _callee_text(expr):
+    """A readable rendering of a call's callee, for diagnostics."""
+    callee = getattr(expr, "callee", None)
+    if callee is None:
+        return "call"
+    if isinstance(callee, ast.Ident):
+        return callee.name
+    if isinstance(callee, ast.Member):
+        parts = [callee.name]
+        obj = callee.obj
+        while isinstance(obj, ast.Member):
+            parts.append(obj.name)
+            obj = obj.obj
+        if isinstance(obj, ast.Ident):
+            parts.append(obj.name)
+        return ".".join(reversed(parts))
+    return "call"
+
 # binary operator precedence, lowest first
 _BINARY_LEVELS = [
     {"ou"},
@@ -105,7 +124,11 @@ class Parser:
         stmts = []
         self.skip_newlines()
         while self.cur.kind != "eof":
-            stmts.append(self.parse_statement())
+            result = self.parse_statement()
+            if isinstance(result, list):
+                stmts.extend(result)
+            else:
+                stmts.append(result)
             self.skip_newlines()
         return ast.Program(stmts, line=1, col=1)
 
@@ -146,9 +169,29 @@ class Parser:
             self.end_statement()
             return ast.AssignStmt(tok.value, value, line=tok.line, col=tok.col)
         expr = self.parse_expression()
+        if self.at_op("{"):
+            return self.parse_builder(expr, tok)
+        if isinstance(expr, ast.Call) and self.cur.kind == "newline":
+            save = self.pos
+            self.skip_newlines()
+            if self.at_op("{"):
+                self.error(
+                    "the block of a builder must open on the same line as the call",
+                    hint="write `%s() { ... }`, not `%s()` followed by a newline"
+                         % (_callee_text(expr), _callee_text(expr)))
+            self.pos = save
         stmt = ast.ExprStmt(expr, line=tok.line, col=tok.col)
         self.end_statement()
         return stmt
+
+    def parse_builder(self, expr, tok):
+        """`call { ... }` — statement position only, head must be a call."""
+        if not isinstance(expr, ast.Call):
+            self.error("a builder block must follow a call, e.g. `ui.card() { ... }`",
+                       hint="only a call can take a block; this expression has no "
+                            "widget to attach the block to")
+        block = self.parse_block()
+        return ast.BuilderStmt(expr, block, line=tok.line, col=tok.col)
 
     def parse_let(self):
         tok = self.advance()  # let / const
@@ -240,8 +283,12 @@ class Parser:
     def parse_use(self):
         tok = self.advance()  # use
         mod = self.expect_ident("module name")
+        parts = [mod.value]
+        while self.at_op("."):
+            self.advance()
+            parts.append(self.expect_ident("module name").value)
         self.end_statement()
-        return ast.UseStmt(mod.value, line=tok.line, col=tok.col)
+        return ast.UseStmt(".".join(parts), line=tok.line, col=tok.col)
 
     def parse_halt(self):
         tok = self.advance()  # halt
@@ -269,7 +316,11 @@ class Parser:
                     self.error("'fin' must be the last element of a block",
                                fin, hint="put 'fin' immediately before the closing '}'")
                 continue
-            stmts.append(self.parse_statement())
+            result = self.parse_statement()
+            if isinstance(result, list):
+                stmts.extend(result)
+            else:
+                stmts.append(result)
             self.skip_newlines()
         self.advance()  # }
         return ast.Block(stmts, line=start.line, col=start.col)

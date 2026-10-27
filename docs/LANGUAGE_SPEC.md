@@ -1,6 +1,6 @@
-# Silica Language Specification — v0.1.1
+# Silica Language Specification — v0.2.0
 
-This document is normative for the v0.1.1 reference implementation. Anything
+This document is normative for the v0.2.0 reference implementation. Anything
 described here is implemented and covered by tests in `tests/`; anything else is
 listed under [Not implemented yet](#not-implemented-yet).
 
@@ -202,9 +202,15 @@ sfn main() {
 `core` (print, input, conversions, `len`, `range`, `push`, `keys`, `values`,
 `has`, `assert`, `type_of`) is always available without a `use`.
 
-Implemented modules: `math`, `string`, `collections`, `json`, and `fs`. Using a
-module that exists in the plan but is not implemented (for example `http`) is a
-compile error that says so.
+Implemented modules: `math`, `string`, `collections`, `json`, `fs`, and the UI
+modules (`ui`, `ui.state`, `ui.lib.widgets`, `ui.lib.theme`, `ui.lib.colors`,
+`ui.lib.layout`, `ui.lib.scroll`, `ui.lib.animation`). Using a module that exists
+in the plan but is not implemented (for example `http`) is a compile error that
+says so.
+
+Module paths may be dotted (`use ui.lib.widgets`). Importing a module also brings
+its submodules into scope. In a member chain the longest prefix that names an
+imported module is the module, and exactly one member may follow it.
 
 `fs` is the only module that reaches outside the engine, and it is guarded by the
 capability model described in section 11.

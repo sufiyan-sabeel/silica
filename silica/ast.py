@@ -196,6 +196,19 @@ class HaltStmt(Node):
 
 
 @dataclass
+class BuilderStmt(Node):
+    """`call { ... }` in statement position: a UI builder block.
+
+    The head must be a call; the block has no value and cannot appear inside an
+    expression. Added in 0.2.0 — it was a parse error before, so it is additive.
+    """
+    call: Node
+    block: Block
+    line: int = 0
+    col: int = 0
+
+
+@dataclass
 class FinStmt(Node):
     """Explicit end-of-block marker. Accepted, never required."""
     line: int = 0

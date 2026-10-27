@@ -40,11 +40,14 @@ Done: `core`, `math`, `string`, `collections`; the capability model with
 `fs.read` / `fs.write` / `fs.list` granted per root path and enforced at the VM
 dispatch point; the `fs` module behind those capabilities; the `json` module
 with a documented value mapping, position-reporting errors and round trips;
-`silica capabilities`; 323 automated tests.
+`silica capabilities`; 323 automated tests at 0.1.1.
 
 Not done: `path`, `time`, `random`, `regex`, `log`. Each needs its own capability
 story before it is exposed (`time` and `random` are the easy ones; `path` is
 mostly pure string work and could be added without a capability at all).
+
+At 0.1.1 the milestone also delivered `silica capabilities`; the UI work that
+followed in 0.2.0 is recorded under Milestone F.
 
 ## Milestone E — packaging, CI, release · **not started**
 
@@ -55,15 +58,27 @@ mostly pure string work and could be added without a capability at all).
 * Rust port of the engine (the reference implementation is Python; see
   `docs/PERFORMANCE.md` for why this matters and what the baseline is).
 
-## Milestone F — Silica UI and self-hosting · **not started**
+## Milestone F — Silica UI and self-hosting · **UI 0.1 done, self-hosting not started**
 
-* Silica UI: a CSS-inspired styling language for components, layouts, themes.
-  Requires a rendering target to be chosen and documented first; no renderer
-  exists, so no UI support is claimed.
-* Self-hosting: see `docs/BOOTSTRAP.md` for the staged plan. Silica does not
-  compile itself today.
+Done (Silica 0.2.0, documented in `docs/UI.md`):
 
-## Known limitations in v0.1.1
+* Three additive grammar changes: dotted imports, member-path resolution and
+  builder blocks.
+* The UI core: node tree, theme with WCAG contrast validation, property-to-CSS
+  style model, and declarative events.
+* The web renderer: HTML + `theme.css` + a dependency-free `silica-ui-runtime.js`.
+* Responsive breakpoints, scrolling, sticky headers, CSS animation with a
+  reduced-motion override, and `ui.list` binding `item` per element.
+* Reserved namespaces and adapter slots that fail loudly.
+
+Not done: every other renderer (terminal, Android, iOS, desktop, OS-UI), the
+framework adapters, client-side Silica (needs a WASM build of the VM),
+virtualized lists, 3D transforms and shared-element transitions.
+
+Self-hosting: see `docs/BOOTSTRAP.md` for the staged plan. Silica does not
+compile itself today.
+
+## Known limitations in v0.2.0
 
 * No generics: `List`/`Map` elements check as `Any`.
 * No first-class functions, closures, methods or user-defined types.

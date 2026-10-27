@@ -11,7 +11,7 @@ from . import ast
 from .bytecode import (Chunk, Function, MAX_STACK, OPS, OPERANDS, constant_key,
                        encode, verify_function, write_varint)
 from .errors import CompileError
-from .natives import get_constant, get_native
+from .natives import get_constant, get_native, module_exists
 
 VARINT_MAX = (1 << 63) - 1
 
@@ -249,6 +249,8 @@ class Compiler:
                          idx, line=line)
         elif isinstance(stmt, ast.ExprStmt):
             self.compile_expr_stmt(emitter, stmt)
+        elif isinstance(stmt, ast.BuilderStmt):
+            self.compile_builder(emitter, stmt)
         elif isinstance(stmt, ast.IfStmt):
             self.compile_expr(emitter, stmt.cond)
             jump_else = emitter.emit_jump("JUMP_IF_FALSE", line=line)
@@ -317,6 +319,71 @@ class Compiler:
             return
         self.compile_expr(emitter, expr)
         emitter.emit("POP", line=line)
+        if self.accepts_block(expr):
+            # a widget called without a block still opened a scope at run time
+            self.emit_end_block(emitter, line)
+
+    # -- builder blocks -------------------------------------------------------
+    def resolve_native(self, call):
+        """(module, member) for a call, or (None, None) when it is not a native."""
+        callee = getattr(call, "callee", None)
+        if isinstance(callee, ast.Ident):
+            if callee.name in self.func_index:
+                return None, None
+            return "core", callee.name
+        if isinstance(callee, ast.Member):
+            parts = []
+            node = callee
+            while isinstance(node, ast.Member):
+                parts.append(node.name)
+                node = node.obj
+            if not isinstance(node, ast.Ident):
+                return None, None
+            parts.append(node.name)
+            parts.reverse()
+            for split in range(len(parts) - 1, 0, -1):
+                module = ".".join(parts[:split])
+                if module_exists(module):
+                    return module, parts[-1]
+        return None, None
+
+    def accepts_block(self, expr):
+        if not isinstance(expr, ast.Call):
+            return False
+        module, member = self.resolve_native(expr)
+        if module is None:
+            return False
+        native = get_native(module, member)
+        return bool(native is not None and native.accepts_block)
+
+    def emit_end_block(self, emitter, line):
+        """Pop the builder scope: an existing CALL_NATIVE, no new opcode."""
+        emitter.emit("CALL_NATIVE", self.intern_string("ui"),
+                     self.intern_string("__end_block"), 0, line=line)
+        emitter.emit("POP", line=line)
+
+    def compile_builder(self, emitter, stmt):
+        line = stmt.line
+        self.compile_call(emitter, stmt.call)
+        emitter.emit("POP", line=line)
+        module, member = self.resolve_native(stmt.call)
+        if member == "list" and stmt.call.args:
+            # ui.list(items) { ... } runs its block once per item, with `item`
+            # bound — the same iteration the `per` loop compiles to.
+            self.compile_expr(emitter, stmt.call.args[0])
+            emitter.emit("ITER_START", line=line)
+            start = emitter.here
+            jump_end = emitter.emit_jump("ITER_NEXT", line=line)
+            emitter.push_scope()
+            slot = emitter.declare("item", line, 0)
+            emitter.emit("STORE_LOCAL", slot, line=line)
+            self.compile_block(emitter, stmt.block, new_scope=False)
+            emitter.pop_scope()
+            emitter.emit("JUMP", start, line=line)
+            emitter.patch(jump_end, emitter.here)
+        else:
+            self.compile_block(emitter, stmt.block)
+        self.emit_end_block(emitter, line)
 
     # -- expressions ---------------------------------------------------------
     def compile_expr(self, emitter, expr):
@@ -410,16 +477,19 @@ class Compiler:
                 return
             raise CompileError("unknown function '%s'" % name, line, callee.col,
                                self.filename)
-        if isinstance(callee, ast.Member) and isinstance(callee.obj, ast.Ident):
-            module = callee.obj.name
-            native = get_native(module, callee.name)
+        if isinstance(callee, ast.Member):
+            module, member = self.resolve_native(expr)
+            if module is None:
+                raise CompileError("cannot compile call", line, expr.col,
+                                   self.filename)
+            native = get_native(module, member)
             if native is None:
-                raise CompileError("unknown native '%s.%s'" % (module, callee.name),
+                raise CompileError("unknown native '%s.%s'" % (module, member),
                                    line, callee.col, self.filename)
             for arg in expr.args:
                 self.compile_expr(emitter, arg)
             mod_idx = self.intern_string(module)
-            fn_idx = self.intern_string(callee.name)
+            fn_idx = self.intern_string(member)
             emitter.emit("CALL_NATIVE", mod_idx, fn_idx, len(expr.args), line=line)
             return
         raise CompileError("cannot compile call", line, expr.col, self.filename)

@@ -51,6 +51,14 @@ GATED = {
                    "oui\nsfn main() {\noui\nnein\n"),
 }
 
+# UI examples render into build/ and need fs.write for it. Their stdout is a list
+# of absolute paths, so it is asserted by suffix rather than by equality.
+UI_EXAMPLES = {
+    "ui_hello.sc": "ui_hello.html",
+    "ui_tasks.sc": "ui_tasks.html",
+    "ui_animate.sc": "ui_animate.html",
+}
+
 CALCULATOR_INPUT = "12\n*\n4\n"
 CALCULATOR_OUTPUT = "first number: operator (+ - * /): second number: 48.0\n"
 
@@ -111,6 +119,46 @@ class ExampleTests(unittest.TestCase):
                     code = cli.main(["run", path] + flags)
                 self.assertEqual(code, 0)
                 self.assertEqual(out.getvalue(), expected)
+
+    def test_ui_examples_render(self):
+        import shutil
+        build = os.path.join(ROOT, "build")
+        created = not os.path.isdir(build)
+        os.makedirs(build, exist_ok=True)
+        try:
+            for name, artifact in UI_EXAMPLES.items():
+                path = os.path.join(EXAMPLES, name)
+                with self.subTest(example=name):
+                    out = io.StringIO()
+                    err = io.StringIO()
+                    with mock.patch("sys.stdin", io.StringIO("")), \
+                            contextlib.redirect_stdout(out), \
+                            contextlib.redirect_stderr(err):
+                        code = cli.main(["run", path, "--allow-fs-write", build])
+                    self.assertEqual(code, 0, err.getvalue())
+                    self.assertIn(artifact, out.getvalue())
+                    produced = os.path.join(build, artifact)
+                    self.assertTrue(os.path.exists(produced), produced)
+                    with open(produced, encoding="utf-8") as handle:
+                        html = handle.read()
+                    self.assertIn("<!DOCTYPE html>", html)
+                    self.assertIn("silica-ui-actions", html)
+                    for shared in ("theme.css", "silica-ui-runtime.js"):
+                        self.assertTrue(os.path.exists(os.path.join(build, shared)))
+        finally:
+            shutil.rmtree(build, ignore_errors=True)
+
+    def test_ui_examples_need_the_write_capability(self):
+        for name in UI_EXAMPLES:
+            path = os.path.join(EXAMPLES, name)
+            with self.subTest(example=name):
+                err = io.StringIO()
+                with mock.patch("sys.stdin", io.StringIO("")), \
+                        contextlib.redirect_stdout(io.StringIO()), \
+                        contextlib.redirect_stderr(err):
+                    code = cli.main(["run", path])
+                self.assertEqual(code, 1)
+                self.assertIn("capability error", err.getvalue())
 
     def test_calculator_reads_input(self):
         path = os.path.join(EXAMPLES, "calculator.sc")

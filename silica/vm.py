@@ -56,6 +56,14 @@ class Context:
         """The capability set of the running VM (read-only in practice)."""
         return self.vm.capabilities
 
+    @property
+    def ui(self):
+        """The UI runtime for this VM, created on first use."""
+        if self.vm.ui is None:
+            from .ui import UIRuntime
+            self.vm.ui = UIRuntime()
+        return self.vm.ui
+
 
 class Frame:
     __slots__ = ("fn", "index", "ip", "locals", "stack")
@@ -77,6 +85,7 @@ class VM:
         self.filename = filename
         # Least privilege: a VM with no explicit grants can touch nothing.
         self.capabilities = capabilities if capabilities is not None else CapabilitySet.empty()
+        self.ui = None
         self._global_slots = [None] * len(chunk.globals)
         if initial_globals:
             for i, value in enumerate(initial_globals[:len(self._global_slots)]):
