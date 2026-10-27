@@ -74,7 +74,10 @@ def transcribe(path, size=None, language=None, model_dir=None):
     model = load_model(size=size, model_dir=model_dir)
     try:
         segments, info = model.transcribe(
-            samples, beam_size=1, language=language or None, vad_filter=False)
+            samples, beam_size=1, language=language or None, vad_filter=False,
+            # deterministic and stateless: conditioning on earlier text is what
+            # makes Whisper loop or hallucinate on a repeated phrase
+            temperature=0.0, condition_on_previous_text=False)
         pieces = list(segments)
     except Exception as exc:
         raise STTError("transcription failed: %s" % exc)

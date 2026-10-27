@@ -217,6 +217,61 @@ sfn main() {
 
 ---
 
+## tui, tui.lib.widgets, tui.lib.layout, tui.lib.style — terminal UI
+
+Real terminal applications on curses. `tui` holds the whole API; the
+`tui.lib.*` modules re-export parts of it so the documented imports resolve
+to real functions. Drawing to the screen needs the `tui.run` capability
+(`--allow-tui`). The full guide is `docs/TUI.md`.
+
+| Function | Signature | Notes |
+|---|---|---|
+| `tui.add` | (Any, Any) -> Unit | attach a widget to a container |
+| `tui.app` | (String) -> Any | create an application |
+| `tui.button` | (String) -> Any | focusable button |
+| `tui.close` | (Any) -> Unit | restore the terminal |
+| `tui.column` | () -> Any | children stacked (the default) |
+| `tui.divider` | () -> Any | horizontal rule across the width |
+| `tui.field` | (String) -> Any | editable single-line field (`input` is a keyword) |
+| `tui.heading` | (String) -> Any | one line, rendered upper-case |
+| `tui.list` | (List) -> Any | focusable list |
+| `tui.panel` | (String) -> Any | bordered container with a title |
+| `tui.poll` | (Any) -> String | block for a key, redraw, return its name |
+| `tui.render` | (Any) -> List | draw one frame; returns the lines |
+| `tui.row` | () -> Any | children side by side, equal widths |
+| `tui.run` | (Any, String?) -> Unit | loop until the quit key (default `q`) |
+| `tui.selected` | (Any) -> String | the focused widget's text or value |
+| `tui.set_text` | (Any, String) -> Unit | set a widget's text or field value |
+| `tui.size` | (Any) -> Map | {width, height} of the terminal |
+| `tui.spacer` | (Int?) -> Any | vertical gap, default 1 |
+| `tui.table` | (List) -> Any | rows of columns, first row is the header |
+| `tui.text` | (String) -> Any | one line of text |
+| `tui.theme` | (Any, Map) -> Unit | override colour tokens |
+| `tui.tokens` | (Any) -> Map | the effective colour tokens |
+| `tui.value` | (Any) -> String | read a widget's text or value |
+| `tui.lib.widgets.app` | (String) -> Any | create an application |
+| `tui.lib.widgets.button` | (String) -> Any | focusable button |
+| `tui.lib.widgets.column` | () -> Any | children stacked (the default) |
+| `tui.lib.widgets.divider` | () -> Any | horizontal rule across the width |
+| `tui.lib.widgets.field` | (String) -> Any | editable single-line field (`input` is a keyword) |
+| `tui.lib.widgets.heading` | (String) -> Any | one line, rendered upper-case |
+| `tui.lib.widgets.list` | (List) -> Any | focusable list |
+| `tui.lib.widgets.panel` | (String) -> Any | bordered container with a title |
+| `tui.lib.widgets.row` | () -> Any | children side by side, equal widths |
+| `tui.lib.widgets.spacer` | (Int?) -> Any | vertical gap, default 1 |
+| `tui.lib.widgets.table` | (List) -> Any | rows of columns, first row is the header |
+| `tui.lib.widgets.text` | (String) -> Any | one line of text |
+| `tui.lib.layout.add` | (Any, Any) -> Unit | attach a widget to a container |
+| `tui.lib.layout.column` | () -> Any | children stacked (the default) |
+| `tui.lib.layout.divider` | () -> Any | horizontal rule across the width |
+| `tui.lib.layout.row` | () -> Any | children side by side, equal widths |
+| `tui.lib.layout.spacer` | (Int?) -> Any | vertical gap, default 1 |
+| `tui.lib.style.size` | (Any) -> Map | {width, height} of the terminal |
+| `tui.lib.style.theme` | (Any, Map) -> Unit | override colour tokens |
+| `tui.lib.style.tokens` | (Any) -> Map | the effective colour tokens |
+
+---
+
 ## speech — `use speech` (requires a capability)
 
 Offline speech: a Piper neural voice out, Whisper in. No API key, no network at

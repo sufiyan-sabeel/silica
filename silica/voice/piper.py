@@ -13,6 +13,7 @@ thing, not an approximation.
 
 import json
 import os
+import re
 
 try:
     import numpy as np
@@ -23,6 +24,15 @@ from . import espeak
 
 # Piper's special tokens, as they appear in every voice config.
 BOS, EOS, PAD = "^", "$", "_"
+
+# Silence inserted between clauses and between sentences, in milliseconds. Without
+# this the whole utterance is one unbroken run of phonemes and sounds rushed —
+# espeak marks clause boundaries with a newline and they were being discarded.
+CLAUSE_PAUSE_MS = 60
+SENTENCE_PAUSE_MS = 140
+
+# Sentence ends for Latin and for the Indic danda / double danda.
+_SENTENCE_END = re.compile(r"(?<=[.!?\u0964\u0965])\s+")
 
 
 class TTSError(RuntimeError):
@@ -91,7 +101,9 @@ class PiperVoice:
 
     def ids(self, text):
         """Phonemes to model ids, with the pad token between each — as Piper does."""
-        phonemes = self.phonemes(text)
+        return self.ids_for_phonemes(self.phonemes(text))
+
+    def ids_for_phonemes(self, phonemes):
         if not phonemes:
             return []
         ids = list(self.id_map.get(BOS, [1]))
@@ -104,15 +116,25 @@ class PiperVoice:
         ids.extend(self.id_map.get(PAD, [0]))
         return ids
 
+    def clauses(self, text):
+        """Split into sentences, then into espeak's clause breaks within each.
+
+        espeak separates clauses with a newline; keeping those boundaries is what
+        turns a rushed stream of phonemes into speech with pauses in it.
+        """
+        sentences = [s for s in _SENTENCE_END.split(text.strip()) if s.strip()]
+        if not sentences:
+            return []
+        out = []
+        for sentence in sentences:
+            for clause in self.phonemes(sentence).split("\n"):
+                clause = clause.strip()
+                if clause:
+                    out.append(clause)
+        return out
+
     # -- synthesis ------------------------------------------------------------
-    def synthesize(self, text, length_scale=None, noise_scale=None):
-        """Return (float32 samples in -1..1, sample rate)."""
-        _numpy()
-        ids = self.ids(text)
-        if not ids:
-            raise TTSError("nothing to say: %r produced no phonemes" % text)
-        length = float(length_scale if length_scale is not None else self.length_scale)
-        noise = float(noise_scale if noise_scale is not None else self.noise_scale)
+    def _run(self, ids, length, noise):
         feeds = {
             "input": np.array([ids], dtype=np.int64),
             "input_lengths": np.array([len(ids)], dtype=np.int64),
@@ -123,8 +145,43 @@ class PiperVoice:
             audio = self.session.run(None, feeds)[0]
         except Exception as exc:
             raise TTSError("the voice model failed: %s" % exc)
-        samples = np.asarray(audio, dtype=np.float32).reshape(-1)
-        return samples, self.rate
+        return np.asarray(audio, dtype=np.float32).reshape(-1)
+
+    def synthesize(self, text, length_scale=None, noise_scale=None,
+                   pause_scale=1.0):
+        """Return (float32 samples in -1..1, sample rate).
+
+        Each clause is synthesised separately and joined with silence, so the
+        result has the pauses a listener expects at commas and full stops.
+        """
+        np = _numpy()
+        length = float(length_scale if length_scale is not None else self.length_scale)
+        noise = float(noise_scale if noise_scale is not None else self.noise_scale)
+        scale = max(0.0, float(pause_scale))
+
+        pieces = self.clauses(text)
+        if not pieces:
+            raise TTSError("nothing to say: %r produced no phonemes" % text)
+
+        audio_parts = []
+        for index, clause in enumerate(pieces):
+            ids = self.ids_for_phonemes(clause)
+            if not ids:
+                continue
+            if audio_parts:
+                gap = CLAUSE_PAUSE_MS
+                # a longer pause where the clause ended a sentence
+                if clause is pieces[-1] or index and pieces[index - 1].endswith(
+                        (".", "!", "?", "\u0964", "\u0965")):
+                    gap = SENTENCE_PAUSE_MS
+                silence = np.zeros(int(self.rate * gap * scale / 1000.0),
+                                   dtype=np.float32)
+                audio_parts.append(silence)
+            audio_parts.append(self._run(ids, length, noise))
+
+        if not audio_parts:
+            raise TTSError("nothing to say: %r produced no audio" % text)
+        return np.concatenate(audio_parts), self.rate
 
 
 _LOADED = {}

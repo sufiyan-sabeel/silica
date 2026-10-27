@@ -22,8 +22,8 @@ $ silica run examples/square.sc
 144
 ```
 
-**Status: v0.4.0 — a working reference implementation, not a finished language.**
-Everything documented here works and is covered by 528 automated tests. What is
+**Status: v0.5.0 — a working reference implementation, not a finished language.**
+Everything documented here works and is covered by 555 automated tests. What is
 planned but absent is listed in [Limitations](#limitations-and-what-is-not-done)
 and in `docs/ROADMAP.md`. Nothing in this repository claims to be faster than
 Python, C or Rust — see `docs/PERFORMANCE.md` for the measured truth.
@@ -100,7 +100,7 @@ version once, then uses `¢ ` as the prompt:
 
 ```console
 $ silica
-Silica Interpreter v0.4.0
+Silica Interpreter v0.5.0
 ¢ let n: Int = 21
 n: Int = 21
 ¢ n * 2
@@ -222,6 +222,40 @@ Two things worth knowing:
 
 Rendered Silica UI pages can carry the mark too: `ui.render({..., favicon: oui})`
 embeds a 32px copy as a data URI, so the page stays self-contained.
+
+## Terminal UI
+
+Real terminal applications on `curses` — no dependency beyond the standard
+library:
+
+```silica
+use tui
+use tui.lib.widgets
+
+sfn main() {
+    let app = tui.app("Silica Terminal")
+    let panel = tui.panel("Welcome to Silica")
+    tui.add(panel, tui.heading("Silica TUI"))
+    tui.add(app, panel)
+    tui.add(app, tui.button("Continue"))
+    tui.run(app)
+}
+```
+
+```bash
+silica run examples/tui_demo.sc --allow-tui
+```
+
+Panels, headings, text, buttons, editable fields, lists, tables, borders, colour
+tokens, arrow-key focus, resizing and clean terminal restore. Events are polled
+rather than dispatched through callbacks, because Silica has no first-class
+functions and re-entering the VM mid-instruction is not worth the risk — the
+program drives the loop and reads key names. `docs/TUI.md` has the details.
+
+**GUI is not implemented.** `tkinter` is absent from the build environment, there
+is no display server, and neither can be installed there, so a window could never
+have been opened or tested. Shipping untested window code would be the placeholder
+the brief forbids. `docs/GUI.md` explains exactly what it would take.
 
 ## Speech
 
@@ -398,7 +432,7 @@ Format details: `docs/BYTECODE.md`.
 ## Testing
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 528 tests
+python3 -m unittest discover -s tests -t .   # 555 tests
 python3 -m silica test tests                 # Silica-level tests
 python3 benchmarks/bench.py --runs 3         # benchmarks + correctness check
 ```
@@ -426,6 +460,8 @@ silica/ui/         the UI core: node tree, theme, style model, web
                    renderer and the ui.* native functions
 silica/voice/      speech: Piper TTS, Whisper STT, the voice catalogue and
                    the speech.* native functions
+silica/tui/        terminal UI: widget tree, layout engine, curses driver and
+                   the tui.* native functions
 examples/          fifteen runnable programs with documented output
 assets/logo/       the Silica mark, wordmark and icon set
 editors/vscode/    VS Code extension: .sc language + file icon

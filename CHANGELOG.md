@@ -5,6 +5,48 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## [0.5.0] — 2026-10-27
+
+Terminal UI, and two fixes to speech.
+
+### Added — TUI
+- **`use tui`** with `tui.lib.widgets`, `tui.lib.layout` and `tui.lib.style`:
+  panels, headings, text, buttons, editable fields, lists, tables, dividers,
+  spacers, rows and columns, drawn on curses with borders, focus and colour
+  tokens.
+- **`silica/tui/`**: a layout engine that renders a widget tree to plain text
+  (testable with no terminal at all) and a curses driver that paints it, reads
+  keys, handles resizing and restores the terminal.
+- **The `tui.run` capability** (`--allow-tui`), needed to draw and read keys.
+  Building widgets needs no capability.
+- **`docs/TUI.md`** and `examples/tui_demo.sc`.
+- 27 tests in `tests/test_tui.py`, the last tier of which runs a Silica program
+  inside a pseudo-terminal, sends keys, and requires exit 0 with the terminal
+  restored.
+
+### Changed — speech
+- **Pauses.** Synthesis now splits on sentences and on espeak's clause breaks and
+  inserts silence between them (60 ms per clause, 140 ms per sentence). Before
+  this the whole utterance was one unbroken run of phonemes, which is why it
+  sounded rushed. Verified by measuring the gaps in the output audio.
+- **STT decoding is deterministic**: `temperature=0` and
+  `condition_on_previous_text=False`, which stops Whisper looping or inventing
+  text on repeated phrases.
+
+### Fixed
+- `tui.field` is not called `input`, because `input` is a reserved Silica
+  keyword.
+- The TUI widget registry was module-global, so handles from one run leaked into
+  the next — two programs in one process (the REPL) would have aliased each
+  other's widgets. It is now per-VM.
+- A capability error hint was double-formatting its string, raising `TypeError`
+  instead of the intended message.
+
+### Not implemented
+- **GUI.** No `tkinter`, no display server, no way to install either in the build
+  environment, so a window could not be opened or tested. `docs/GUI.md` records
+  the constraint, the design it would follow, and how to unblock it.
+
 ## [0.4.0] — 2026-10-27
 
 Speech: Silica can talk and listen, offline, with no API key.

@@ -1,6 +1,6 @@
-# Silica Language Specification — v0.4.0
+# Silica Language Specification — v0.5.0
 
-This document is normative for the v0.4.0 reference implementation. Anything
+This document is normative for the v0.5.0 reference implementation. Anything
 described here is implemented and covered by tests in `tests/`; anything else is
 listed under [Not implemented yet](#not-implemented-yet).
 

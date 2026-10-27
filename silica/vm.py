@@ -51,6 +51,11 @@ class Context:
             line = line[:-1]
         return line
 
+    def next_handle(self):
+        """Opaque integer handle for a host object (a TUI widget, say)."""
+        self.vm.handle_counter += 1
+        return self.vm.handle_counter
+
     @property
     def capabilities(self):
         """The capability set of the running VM (read-only in practice)."""
@@ -83,6 +88,7 @@ class VM:
         import sys
         self.chunk = chunk
         self.filename = filename
+        self.handle_counter = 0
         # Least privilege: a VM with no explicit grants can touch nothing.
         self.capabilities = capabilities if capabilities is not None else CapabilitySet.empty()
         self.ui = None

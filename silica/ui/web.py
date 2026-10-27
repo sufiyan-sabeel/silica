@@ -217,7 +217,7 @@ def _document(title, body, styles, actions_json, theme_href, inline_css,
         '<meta charset="utf-8">',
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
         "<title>%s</title>" % html.escape(title, quote=False),
-        '<meta name="generator" content="Silica UI 0.4.0">',
+        '<meta name="generator" content="Silica UI 0.5.0">',
     ]
     if icon:
         head.append('<link rel="icon" type="image/png" href="%s">' % icon)

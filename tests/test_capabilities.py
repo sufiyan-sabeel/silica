@@ -291,7 +291,7 @@ class StructuralTests(unittest.TestCase):
 
     def test_no_other_module_claims_a_capability(self):
         # only the modules that touch the machine may declare capabilities
-        privileged = {"fs", "speech"}
+        privileged = {"fs", "speech", "tui"}
         for module, functions in MODULES.items():
             if module in privileged:
                 continue

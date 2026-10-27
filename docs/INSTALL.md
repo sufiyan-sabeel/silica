@@ -172,7 +172,7 @@ sh bin/silica examples/hello.sc
 
 ```bash
 python3 -m build                       # writes dist/*.whl and dist/*.tar.gz
-pip install dist/silica_lang-0.4.0-py3-none-any.whl
+pip install dist/silica_lang-0.5.0-py3-none-any.whl
 ```
 
 ---
@@ -202,7 +202,7 @@ The default, non-root installation is safer and is what the documentation assume
 ## Verifying an installation
 
 ```bash
-silica --version                 # silica 0.4.0
+silica --version                 # silica 0.5.0
 silica                           # the interpreter; Ctrl+D to leave
 silica examples/hello.sc         # Hello from Silica
 silica run examples/hello.sc     # same thing, explicit form

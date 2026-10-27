@@ -1,6 +1,6 @@
 """The `silica` command-line interface.
 
-Commands implemented in v0.4.0:
+Commands implemented in v0.5.0:
 
     silica run <file.sc|file.sbc>   compile (if needed), verify, execute
     silica check <file.sc>          parse + type-check only
@@ -20,14 +20,16 @@ import sys
 
 from . import ast
 from .bytecode import serialize
-from .capabilities import FS_LIST, FS_READ, FS_WRITE, CapabilitySet
+from .capabilities import (FS_LIST, FS_READ, FS_WRITE, GUI_RUN,
+                           SPEECH_LISTEN, SPEECH_SPEAK, TUI_RUN,
+                           CapabilitySet, grant_flag)
 from .engine import (check_source, compile_ast, compile_file, compile_source,
                      default_output_path, is_bytecode, load_bytecode, run_chunk,
                      run_chunk_vm)
 from .errors import CapabilityError, ParseError, SilicaError
 from .natives import format_value, get_native
 
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 
 USAGE = """silica %s — the Silica language toolchain
 
@@ -54,7 +56,7 @@ Capabilities (nothing is granted by default):
                          remove a capability a config file granted
   --capabilities FILE    read grants from a TOML [capabilities] table
 
-Not implemented in 0.4.0: new, add, remove, install, build (Milestone E).
+Not implemented in 0.5.0: new, add, remove, install, build (Milestone E).
 """ % VERSION
 
 
@@ -63,12 +65,21 @@ ALLOW_FLAGS = {
     "--allow-fs-read": FS_READ,
     "--allow-fs-write": FS_WRITE,
     "--allow-fs-list": FS_LIST,
+    "--allow-speech-speak": SPEECH_SPEAK,
+    "--allow-speech-listen": SPEECH_LISTEN,
+    "--allow-tui": TUI_RUN,
+    "--allow-gui": GUI_RUN,
 }
+
+# these grant a facility, not a directory, so they take no value
+UNSCOPED_FLAGS = {TUI_RUN, GUI_RUN}
 
 DENY_FLAGS = {
     "--deny-fs-read": FS_READ,
     "--deny-fs-write": FS_WRITE,
     "--deny-fs-list": FS_LIST,
+    "--deny-tui": TUI_RUN,
+    "--deny-gui": GUI_RUN,
 }
 
 
@@ -98,6 +109,10 @@ def _parse_capabilities(args, base=None):
             continue
         kind = ALLOW_FLAGS.get(item)
         if kind is not None:
+            if kind in UNSCOPED_FLAGS:
+                grants.append((kind, "."))
+                index += 1
+                continue
             if index + 1 >= len(args):
                 raise CapabilityError("%s needs a directory" % item)
             grants.append((kind, args[index + 1]))
@@ -678,7 +693,7 @@ def main(argv=None):
         # and all, so there is one implementation of "run a file".
         return cmd_run(argv)
     if first in PLANNED:
-        return _fail("error: 'silica %s' is not implemented in 0.4.0 (%s)"
+        return _fail("error: 'silica %s' is not implemented in 0.5.0 (%s)"
                      % (first, PLANNED[first]))
     handler = COMMANDS.get(first)
     if handler is None:

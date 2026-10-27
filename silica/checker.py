@@ -141,7 +141,7 @@ class Checker:
         """
         segments, tail = _flatten_member(expr)
         if not segments:
-            self.error("only standard-library modules have members in Silica v0.4.0",
+            self.error("only standard-library modules have members in Silica v0.5.0",
                        expr)
         whole = ".".join(segments)
         if module_exists(whole):
@@ -592,7 +592,7 @@ class Checker:
             var = self.lookup(name)
             if var is not None:
                 self.error("'%s' is a value of type %s, not a function" % (name, var.type),
-                           callee, hint="Silica v0.4.0 has no first-class functions")
+                           callee, hint="Silica v0.5.0 has no first-class functions")
             if name in self.modules:
                 self.error("module '%s' needs a member, e.g. %s.%s"
                            % (name, name, native_names_hint(name)), callee)

@@ -58,17 +58,25 @@ FS_WRITE = "fs.write"
 FS_LIST = "fs.list"
 SPEECH_SPEAK = "speech.speak"
 SPEECH_LISTEN = "speech.listen"
+TUI_RUN = "tui.run"
+GUI_RUN = "gui.run"
 
-KNOWN = (FS_READ, FS_WRITE, FS_LIST, SPEECH_SPEAK, SPEECH_LISTEN)
+KNOWN = (FS_READ, FS_WRITE, FS_LIST, SPEECH_SPEAK, SPEECH_LISTEN,
+         TUI_RUN, GUI_RUN)
 
 # which native argument holds the path, per capability, is declared on the
 # native itself; this table is only used for diagnostics and config parsing.
+# Capabilities that grant a whole facility rather than a directory of files.
+_UNSCOPED = (TUI_RUN, GUI_RUN)
+
 _TITLES = {
     FS_READ: "read files",
     FS_WRITE: "write files",
     FS_LIST: "list directories",
     SPEECH_SPEAK: "synthesise and play speech",
     SPEECH_LISTEN: "read audio and transcribe it",
+    TUI_RUN: "draw to the terminal and read keys",
+    GUI_RUN: "open windows and run an event loop",
 }
 
 _FLAGS = {
@@ -77,6 +85,8 @@ _FLAGS = {
     FS_LIST: "--allow-fs-list",
     SPEECH_SPEAK: "--allow-speech-speak",
     SPEECH_LISTEN: "--allow-speech-listen",
+    TUI_RUN: "--allow-tui",
+    GUI_RUN: "--allow-gui",
 }
 
 
@@ -240,8 +250,11 @@ class CapabilitySet:
             raise CapabilityError(
                 "capability '%s' (%s) is not granted"
                 % (kind, capability_title(kind)),
-                hint="grant it with %s <dir>; Silica grants nothing by default"
-                     % grant_flag(kind))
+                hint=("grant it with %s; Silica grants nothing by default"
+                  % _FLAGS.get(kind, "--allow-" + kind)
+                  if kind in _UNSCOPED else
+                  "grant it with %s <dir>; Silica grants nothing by default"
+                  % _FLAGS.get(kind, "--allow-" + kind)))
 
     # -- enforcement ----------------------------------------------------------
     def authorize_call(self, native, args):
@@ -309,6 +322,10 @@ class CapabilitySet:
                 for sub, roots in value.items():
                     grants.setdefault(_kind_from_parts("speech", sub), []).extend(
                         _as_root_list(roots, "speech." + str(sub)))
+                continue
+            if key in ("tui", "gui"):
+                grants.setdefault(TUI_RUN if key == "tui" else GUI_RUN, []).extend(
+                    _as_root_list(value, key))
                 continue
             if key in ("speak", "listen"):
                 grants.setdefault(_kind_from_parts("speech", key), []).extend(
@@ -499,6 +516,9 @@ def _contains(root, path):
 
 def _outside_hint(path, roots, kind):
     if not roots:
+        if kind in _UNSCOPED:
+            return ("grant it with %s; Silica grants nothing by default"
+                    % grant_flag(kind))
         return "grant it with %s <dir>; Silica grants nothing by default" % grant_flag(kind)
     listed = ", ".join(roots)
     if ".." in path.replace("\\", "/").split("/"):
@@ -542,6 +562,10 @@ def _normalise_kind(name, where):
         return _kind_from_parts("fs", name)
     if name in ("speak", "listen"):
         return _kind_from_parts("speech", name)
+    if name == "tui":
+        return TUI_RUN
+    if name == "gui":
+        return GUI_RUN
     raise CapabilityError(
         "unknown capability '%s' in '%s'" % (name, where),
         hint="known capabilities: %s" % ", ".join(KNOWN))
