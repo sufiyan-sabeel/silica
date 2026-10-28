@@ -111,6 +111,10 @@ class Printer:
                 self.write("halt")
             else:
                 self.write("halt(%s)" % self.expr(node.code, 0))
+        elif isinstance(node, ast.BreakStmt):
+            self.write("break")
+        elif isinstance(node, ast.ContinueStmt):
+            self.write("continue")
         elif isinstance(node, ast.FinStmt):
             self.write("fin")
         else:  # pragma: no cover
