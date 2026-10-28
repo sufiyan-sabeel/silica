@@ -66,7 +66,12 @@ tag push: it runs the tests, builds, generates the checksums and uploads the
 assets. Manual upload is the fallback if the workflow is unavailable.
 
 A release is **not** published until the wheel, the sdist and `SHA256SUMS.txt` are
-all attached. `install.sh` downloads the checksum file first and stops if it is
+all attached. Publishing the tag also triggers `verify-release.yml`, which
+downloads the public assets, verifies the checksums and installs them in a clean
+environment — so a broken release fails a workflow rather than a user.
+
+Silica is distributed through **GitHub Release assets only**. GitHub Packages has
+no Python registry, so nothing is published there; see `docs/PACKAGING.md`. `install.sh` downloads the checksum file first and stops if it is
 missing, so a half-populated release fails loudly rather than installing something
 unverified.
 
