@@ -5,12 +5,15 @@ Grammar summary (full EBNF in docs/GRAMMAR.md):
     program    := { NEWLINE | use | func | let | const }
     func       := 'sfn' IDENT '(' params ')' [ '->' type ] block
     block      := '{' { stmt } [ 'fin' ] '}'
-    stmt       := let | const | if | while | for | ret | halt | expr_stmt
+    stmt       := let | const | if | while | for | ret | halt | break
+                | continue | expr_stmt
     if         := 'si' expr block [ 'sino' block ]
     while      := 'tant' expr block
     for        := 'per' IDENT 'in' expr block
     ret        := 'ret' [ expr ]
     halt       := 'halt' [ '(' expr ')' ]
+    break      := 'break'                       (innermost loop only)
+    continue   := 'continue'                    (innermost loop only)
 
 Newlines terminate statements and are skipped inside `(` / `[`.
 """
@@ -153,6 +156,10 @@ class Parser:
                 return self.parse_use()
             if kw == "halt":
                 return self.parse_halt()
+            if kw == "break":
+                return self.parse_break()
+            if kw == "continue":
+                return self.parse_continue()
             if kw == "fin":
                 self.advance()
                 return ast.FinStmt(line=tok.line, col=tok.col)
@@ -279,6 +286,16 @@ class Parser:
             value = self.parse_expression()
         self.end_statement()
         return ast.ReturnStmt(value, line=tok.line, col=tok.col)
+
+    def parse_break(self):
+        tok = self.advance()  # break
+        self.end_statement()
+        return ast.BreakStmt(line=tok.line, col=tok.col)
+
+    def parse_continue(self):
+        tok = self.advance()  # continue
+        self.end_statement()
+        return ast.ContinueStmt(line=tok.line, col=tok.col)
 
     def parse_use(self):
         tok = self.advance()  # use
