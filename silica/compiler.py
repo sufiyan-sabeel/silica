@@ -7,7 +7,10 @@ patched to absolute code offsets during assembly, so the emitted code is what
 the verifier and VM see — nothing is re-parsed at run time.
 """
 
+import os
+
 from . import ast
+from . import optimizer
 from .bytecode import (Chunk, Function, MAX_STACK, OPS, OPERANDS, constant_key,
                        encode, verify_function, write_varint)
 from .errors import CompileError
@@ -132,6 +135,10 @@ class Compiler:
         self.func_index = {}
         # globals carried in from an earlier compile (the REPL keeps state)
         self.pre_globals = list(pre_globals or [])
+        # constant folding; SILICA_NO_OPT=1 turns it off, which is how the
+        # differential test proves folded and unfolded programs behave the same
+        self.optimize = os.environ.get("SILICA_NO_OPT") != "1"
+        self.optimize_stats = {"folded": 0}
 
     # -- constants pool ------------------------------------------------------
     def intern(self, value):
@@ -388,6 +395,13 @@ class Compiler:
     # -- expressions ---------------------------------------------------------
     def compile_expr(self, emitter, expr):
         line = getattr(expr, "line", 0)
+        if self.optimize and isinstance(expr, (ast.Binary, ast.Unary)):
+            folded = optimizer.constant_node(expr)
+            if folded is not None:
+                # one CONST instead of a sub-tree and its opcodes
+                self.optimize_stats["folded"] += 1
+                self.compile_expr(emitter, folded)
+                return
         if isinstance(expr, ast.IntLit):
             emitter.emit("CONST", self.intern(expr.value), line=line)
         elif isinstance(expr, ast.FloatLit):

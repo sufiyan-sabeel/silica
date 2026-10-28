@@ -22,8 +22,8 @@ $ silica run examples/square.sc
 144
 ```
 
-**Status: v0.6.0 — a working reference implementation, not a finished language.**
-Everything documented here works and is covered by 574 automated tests. What is
+**Status: v0.7.0 — a working reference implementation, not a finished language.**
+Everything documented here works and is covered by 587 automated tests. What is
 planned but absent is listed in [Limitations](#limitations-and-what-is-not-done)
 and in `docs/ROADMAP.md`. Nothing in this repository claims to be faster than
 Python, C or Rust — see `docs/PERFORMANCE.md` for the measured truth.
@@ -100,7 +100,7 @@ version once, then uses `¢ ` as the prompt:
 
 ```console
 $ silica
-Silica Interpreter v0.6.0
+Silica Interpreter v0.7.0
 ¢ let n: Int = 21
 n: Int = 21
 ¢ n * 2
@@ -222,6 +222,28 @@ Two things worth knowing:
 
 Rendered Silica UI pages can carry the mark too: `ui.render({..., favicon: oui})`
 embeds a 32px copy as a data URI, so the page stays self-contained.
+
+## Performance, measured
+
+Silica is **not** fast. It is a bytecode VM written in Python, and the benchmark
+suite says so plainly: it runs 40–90× slower than CPython on arithmetic,
+recursion, collections and strings. `docs/AUDIT.md` records the numbers and
+`benchmarks/bench.py` reproduces them.
+
+What has changed is that there is now an optimizer. Constant folding runs at
+compile time:
+
+```
+$ python3 benchmarks/optimizer.py
+instructions   off: 1602    on: 402     (-74.9%)
+bytecode       off: 5214B   on: 3145B   (-39.7%)
+hot loop       off: 3.477s  on: 2.113s  (-39.2%)   output identical
+```
+
+Folding mirrors the VM's arithmetic exactly — 64-bit wrapping, integer division
+truncating toward zero, mixed Int/Float promoting — and declines whenever the
+result would differ from what the VM produces. `SILICA_NO_OPT=1` turns it off,
+which is how the differential test compares the two.
 
 ## Desktop and terminal UI
 
@@ -451,7 +473,7 @@ Format details: `docs/BYTECODE.md`.
 ## Testing
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 574 tests
+python3 -m unittest discover -s tests -t .   # 587 tests
 python3 -m silica test tests                 # Silica-level tests
 python3 benchmarks/bench.py --runs 3         # benchmarks + correctness check
 ```

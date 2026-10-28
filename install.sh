@@ -17,7 +17,7 @@
 # install anything whose SHA-256 does not match the published checksum.
 #
 # Environment overrides (all optional):
-#   SILICA_VERSION   release to install            (default: 0.6.0)
+#   SILICA_VERSION   release to install            (default: 0.7.0)
 #   SILICA_HOME      where the venv lives          (default: ~/.local/share/silica)
 #   SILICA_BIN       where the launcher goes       (default: ~/.local/bin)
 #   SILICA_ARTIFACT  install from a local wheel instead of downloading
@@ -28,7 +28,7 @@
 set -eu
 
 REPO="sufiyan-sabeel/silica"
-VERSION="${SILICA_VERSION:-0.6.0}"
+VERSION="${SILICA_VERSION:-0.7.0}"
 DIST_NAME="silica_lang"
 
 say() { printf '%s\n' "$*"; }

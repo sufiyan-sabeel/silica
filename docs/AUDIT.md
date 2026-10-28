@@ -24,7 +24,7 @@ $ python3 -m silica fmt --check examples/*.sc tests/silica/*.sc benchmarks/silic
 
 | | |
 |---|---|
-| Version | 0.6.0 |
+| Version | 0.7.0 |
 | Implementation | Python 3.9+, ~9,800 lines in `silica/`, ~4,900 lines of tests |
 | Test count | 555 (plus ~640 subtests) |
 | Bytecode format | `.sbc` 1.0, versioned, verified on load |
@@ -92,6 +92,23 @@ publishing "faster than Python" here would be false.
 The number worth acting on is the *shape*: recursion is worst (92×) because every
 Silica call builds a `Frame` and pushes a Python list; arithmetic is 49× because
 dispatch dominates. Those are the two places a profiler would point first.
+
+### Since this audit: constant folding (0.7.0)
+
+`silica/optimizer.py` folds literal arithmetic at compile time. Measured with
+`python3 benchmarks/optimizer.py`:
+
+| What | Off | On | Change |
+|---|---|---|---|
+| Instructions, 200 literal expressions | 1602 | 402 | −74.9% |
+| Bytecode, same program | 5214 B | 3145 B | −39.7% |
+| Hot loop, 300k iterations | 3.477 s | 2.113 s | −39.2% |
+
+Output is identical in every case, and a differential test compiles 32 expressions
+both ways and requires the same stdout, stderr and exit code. This does not change
+the table above, because those benchmarks use variables, not literals — folding
+has nothing to fold there. The next real win is the call path, which is Stage F of
+the roadmap below.
 
 ---
 
