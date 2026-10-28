@@ -1,4 +1,6 @@
-<p align="center"><img src="assets/logo/silica-logo.png" alt="Silica" width="440"></p>
+<p align="center">
+  <img src="assets/logo/silica-logo.png" alt="Silica logo" width="320">
+</p>
 
 # Silica
 
@@ -6,8 +8,8 @@ A small, fast-moving programming language with its own syntax, a checked compile
 a versioned bytecode format, a capability-based security model, a standard library
 that includes speech and UI, and a **Script Mode IDE** you run in your browser.
 
-**Latest release: [v0.8.0](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.8.0)** ·
-MIT licensed · 614 tests, green on Python 3.9, 3.11 and 3.12
+**Latest release: [v0.9.0](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.9.0)** ·
+MIT licensed · 671 tests, green on Python 3.9, 3.11 and 3.12
 
 ```silica
 sfn main() {
@@ -42,7 +44,7 @@ host memory structures.
 
 | Area | Status |
 |---|---|
-| Language | functions, `let`/`const`, `si`/`sino`, `tant`/`per`, lists, maps, strings, Int/Float/Bool |
+| Language | functions, `let`/`const`, `si`/`sino`, `tant`/`per` with `break`/`continue`, lists, maps, strings (four delimiter forms), Int/Float/Bool |
 | Types | static checking with inference for locals; `Int` wraps at 64 bits |
 | Bytecode | compile to `.sbc`, versioned and verified, malformed input rejected |
 | Optimizer | constant folding at compile time (`SILICA_NO_OPT=1` disables it) |
@@ -58,10 +60,13 @@ generics, no structs or enums, no pattern matching, no `Result`/error type, no
 package manager (`new`, `add`, `install`, `build` are not implemented and say so),
 no language server, no debugger, no concurrency, no `net`/`http`/`crypto`.
 
-Silica is also **not fast**: it runs 40–90× slower than CPython on the benchmark
-suite, because the VM is a Python loop. `docs/AUDIT.md` has the numbers and the
-plan. One measured improvement has landed — constant folding cut a hot loop by
-39% — and `benchmarks/optimizer.py` reproduces it.
+Silica is also **not fast**: on the four benchmarks in `benchmarks/bench.py` it
+ran **38–101× slower than CPython** when measured on 2026-10-28 (Linux x86_64,
+CPython 3.12.13, Silica 0.9.0, best of 3 runs), because the VM is a Python loop.
+The ratio moves with the machine and with CPython's own version, so re-run the
+script before quoting a figure; `docs/PERFORMANCE.md` and `docs/AUDIT.md` record
+the runs and the plan. One measured improvement has landed — constant folding cut
+a hot loop by 39% — and `benchmarks/optimizer.py` reproduces it.
 
 ---
 
@@ -223,7 +228,7 @@ python3 benchmarks/bench.py                   # vs CPython
 python3 benchmarks/optimizer.py               # constant folding, measured
 ```
 
-Current state: **614 tests**, 607 passing and 7 skipped when no display or speech
+Current state: **671 tests**, 664 passing and 7 skipped when no display or speech
 engine is present, green on Python 3.9 / 3.11 / 3.12.
 
 To build a release locally:
@@ -270,7 +275,7 @@ silica/ui/         web UI DSL and HTML renderer
 silica/tui/        terminal UI: layout engine + curses driver
 silica/gui/        desktop windows on tkinter
 silica/ide/        Script Mode IDE: workspace, runner, HTTP API, editor page
-tests/             614 tests
+tests/             671 tests
 examples/          runnable .sc programs
 docs/              language spec, bytecode, security, audit, IDE, UI, voice
 benchmarks/        benchmarks against CPython
@@ -278,7 +283,7 @@ benchmarks/        benchmarks against CPython
 
 Documentation worth reading: [`docs/AUDIT.md`](docs/AUDIT.md) (measured state and
 roadmap), [`docs/IDE.md`](docs/IDE.md), [`docs/LANGUAGE_SPEC.md`](docs/LANGUAGE_SPEC.md),
-[`docs/BYTECODE.md`](docs/BYTECODE.md), [`docs/SECURITY.md`](SECURITY.md),
+[`docs/BYTECODE.md`](docs/BYTECODE.md), [`SECURITY.md`](SECURITY.md),
 [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
@@ -299,6 +304,7 @@ platform, say so in the docs rather than describing it as working.
 
 ## Releases
 
+- [v0.9.0](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.9.0) — loop control: `break` and `continue`
 - [v0.8.0](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.8.0) — Script Mode IDE
 - [v0.7.0](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.7.0) — constant folding optimizer
 - [v0.6.0](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.6.0) — desktop GUI
