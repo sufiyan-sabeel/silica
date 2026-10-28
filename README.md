@@ -163,7 +163,9 @@ silica --version                                       # -> silica 0.9.0
 ```
 
 See [`docs/PACKAGING.md`](docs/PACKAGING.md) for the wheel contents, the release
-pipeline and the Dependabot setup.
+pipeline and the Dependabot setup, and
+[`docs/SUPPLY_CHAIN.md`](docs/SUPPLY_CHAIN.md) for what security controls are
+actually in place — and which ones are still only planned.
 
 From a checkout instead:
 
@@ -298,7 +300,8 @@ silica/gui/        desktop windows on tkinter
 silica/ide/        Script Mode IDE: workspace, runner, HTTP API, editor page
 tests/             671 tests
 examples/          runnable .sc programs
-docs/              language spec, bytecode, security, audit, IDE, UI, voice, packaging
+docs/              language spec, bytecode, security, audit, IDE, UI, voice,
+                   packaging, supply chain
 benchmarks/        benchmarks against CPython
 ```
 
