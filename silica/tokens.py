@@ -21,6 +21,8 @@ KEYWORDS = {
     "tant",     # while
     "per",      # for ... in ...
     "in",       # part of `per name in expr`
+    "break",    # leave the innermost loop immediately
+    "continue", # abandon the rest of the body, start the next iteration
     "fin",      # optional explicit end-of-block marker
     "halt",     # terminate the program
     # declarations
@@ -34,7 +36,7 @@ KEYWORDS = {
 # Keywords that introduce a statement at the start of a line.
 STATEMENT_KEYWORDS = {
     "sprint", "dit", "input", "si", "sino", "tant", "per", "sfn", "ret",
-    "use", "let", "const", "halt", "fin",
+    "use", "let", "const", "halt", "fin", "break", "continue",
 }
 
 BUILTIN_TYPES = {"Int", "Float", "Bool", "String", "Unit", "List", "Map", "Any"}
