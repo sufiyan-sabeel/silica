@@ -1,0 +1,8 @@
+
+[dev]
+pytest>=7
+pillow>=9
+build>=1
+wheel
+setuptools>=64
+numpy>=1.21
