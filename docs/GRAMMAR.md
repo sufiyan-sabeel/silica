@@ -1,6 +1,6 @@
-# Silica Grammar — v0.8.0
+# Silica Grammar — v0.9.0
 
-EBNF for the grammar the v0.8.0 parser accepts. `NEWLINE` is a significant token
+EBNF for the grammar the v0.9.0 parser accepts. `NEWLINE` is a significant token
 that terminates statements and is ignored inside `(` … `)` and `[` … `]`.
 
 ```ebnf
@@ -17,7 +17,8 @@ type           = "Int" | "Float" | "Bool" | "String" | "Unit" | "List" | "Map" |
 block          = "{" { NEWLINE | stmt } [ "fin" ] "}" ;
 
 stmt           = let-stmt | assign-stmt | if-stmt | while-stmt | for-stmt
-               | ret-stmt | halt-stmt | builder-stmt | expr-stmt | "fin" ;
+               | ret-stmt | halt-stmt | break-stmt | continue-stmt
+               | builder-stmt | expr-stmt | "fin" ;
 
 let-stmt       = ("let" | "const") IDENT [ ":" type ] "=" expr NEWLINE ;
 assign-stmt    = IDENT "=" expr NEWLINE ;
@@ -26,6 +27,10 @@ while-stmt     = "tant" expr block ;
 for-stmt       = "per" IDENT "in" expr block ;
 ret-stmt       = "ret" [ expr ] NEWLINE ;
 halt-stmt      = "halt" [ "(" expr ")" ] NEWLINE ;
+break-stmt     = "break" NEWLINE ;                             (* 0.9.0 *)
+continue-stmt  = "continue" NEWLINE ;                          (* 0.9.0 *)
+                 (* both are legal only inside a loop body, which the
+                    checker enforces; the grammar cannot express it *)
 expr-stmt      = expr NEWLINE ;
 builder-stmt   = postfix-expr block ;                          (* 0.2.0 *)
                  (* statement position only; the head must be a call, and the
@@ -59,7 +64,7 @@ entry          = ( STRING | IDENT ) ":" expr ;
 | `IDENT` | `[A-Za-z_][A-Za-z0-9_]*`, excluding keywords |
 | `INT` | `[0-9]+` |
 | `FLOAT` | `[0-9]+ "." [0-9]+` with an optional `e[+-]?[0-9]+` exponent |
-| `STRING` | `"` characters `"` with escapes `\n \t \r \0 \\ \" \uXXXX` |
+| `STRING` | any of `"…"`, `'…'`, `"""…"""`, `'''…'''`; the triple-quoted forms may span lines. Escapes in all four: `\n \t \r \0 \\ \" \' \uXXXX` |
 | comment | `#` or `//` to end of line |
 | operators | `== != <= >= -> < > = + - * / % ( ) { } [ ] , : . ;` |
 
