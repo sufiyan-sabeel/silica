@@ -11,8 +11,12 @@ name: Verify release
 # package registry.
 
 on:
-  release:
-    types: [published]
+  # A release created with GITHUB_TOKEN does not trigger other workflows, so
+  # `release: [published]` would never fire for releases published by release.yml.
+  # Chaining on the Release workflow completing does fire.
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       tag:
@@ -24,12 +28,14 @@ permissions:
 
 jobs:
   verify:
+    # only after a successful Release run, or on an explicit dispatch
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Resolve the tag
         id: tag
         run: |
-          TAG="${{ github.event.inputs.tag || github.event.release.tag_name }}"
+          TAG="${{ github.event.inputs.tag || github.event.workflow_run.head_branch }}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
           echo "verifying $TAG"
