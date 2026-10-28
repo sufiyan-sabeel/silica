@@ -1,0 +1,60 @@
+# Dependabot configuration for Silica.
+#
+# Two ecosystems actually exist in this repository, so two are configured:
+#
+#   github-actions  the workflows in .github/workflows/ use actions/checkout,
+#                   actions/setup-python and softprops/action-gh-release
+#   pip             pyproject.toml declares development dependencies
+#                   (pytest, pillow, build, wheel, setuptools, numpy)
+#
+# Silica itself has **no runtime dependencies** — the core language, CLI,
+# standard library, TUI and IDE are pure Python 3.9+ with nothing to install.
+# So the pip entry below only ever proposes development-tool updates. There is
+# no npm, Cargo, Go or Maven manifest in this repository, and none is configured.
+#
+# Security updates do not need entries here: they are enabled in the repository's
+# security settings, not in this file. Dependabot alerts alone do not make the
+# project secure — see docs/PACKAGING.md for the full picture.
+version: 2
+
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    groups:
+      # One pull request for the small tooling packages keeps review cheap;
+      # pytest gets its own because a major bump there can change test behaviour.
+      build-tooling:
+        patterns:
+          - "build"
+          - "setuptools"
+          - "wheel"
+        update-types:
+          - "minor"
+          - "patch"
