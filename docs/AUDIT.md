@@ -24,7 +24,7 @@ $ python3 -m silica fmt --check examples/*.sc tests/silica/*.sc benchmarks/silic
 
 | | |
 |---|---|
-| Version | 0.7.0 |
+| Version | 0.8.0 |
 | Implementation | Python 3.9+, ~9,800 lines in `silica/`, ~4,900 lines of tests |
 | Test count | 555 (plus ~640 subtests) |
 | Bytecode format | `.sbc` 1.0, versioned, verified on load |
@@ -93,7 +93,7 @@ The number worth acting on is the *shape*: recursion is worst (92×) because eve
 Silica call builds a `Frame` and pushes a Python list; arithmetic is 49× because
 dispatch dominates. Those are the two places a profiler would point first.
 
-### Since this audit: constant folding (0.7.0)
+### Since this audit: constant folding (0.8.0)
 
 `silica/optimizer.py` folds literal arithmetic at compile time. Measured with
 `python3 benchmarks/optimizer.py`:
