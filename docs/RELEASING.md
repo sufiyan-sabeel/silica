@@ -56,8 +56,8 @@ banner and `silica --version` cannot disagree.
 ## Tagging and publishing
 
 ```bash
-git tag -a v0.7.0 -m "Silica 0.7.0"
-git push origin v0.7.0
+git tag -a v0.8.0 -m "Silica 0.8.0"
+git push origin v0.8.0
 ```
 
 Then create the release on GitHub and attach the three files from `dist/`. The
@@ -75,7 +75,7 @@ unverified.
 Verify the public path, not just the local build:
 
 ```bash
-curl -fsSL https://github.com/sufiyan-sabeel/silica/releases/download/v0.7.0/SHA256SUMS.txt
+curl -fsSL https://github.com/sufiyan-sabeel/silica/releases/download/v0.8.0/SHA256SUMS.txt
 HOME=/tmp/fresh sh install.sh          # fresh HOME, real download
 /tmp/fresh/.local/bin/silica --version
 ```
@@ -83,7 +83,7 @@ HOME=/tmp/fresh sh install.sh          # fresh HOME, real download
 ## Verifying a release you did not build
 
 ```bash
-VERSION=0.7.0
+VERSION=0.8.0
 BASE=https://github.com/sufiyan-sabeel/silica/releases/download/v$VERSION
 
 curl -fsSLO "$BASE/silica_lang-$VERSION-py3-none-any.whl"
