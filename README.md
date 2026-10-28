@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/logo/silica-logo.png" alt="Silica" width="440"></p>
+
 # Silica
 
 A small, fast-moving programming language with its own syntax, a checked compiler,
