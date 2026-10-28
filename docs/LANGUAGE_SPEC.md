@@ -1,6 +1,6 @@
-# Silica Language Specification — v0.8.0
+# Silica Language Specification — v0.9.0
 
-This document is normative for the v0.8.0 reference implementation. Anything
+This document is normative for the v0.9.0 reference implementation. Anything
 described here is implemented and covered by tests in `tests/`; anything else is
 listed under [Not implemented yet](#not-implemented-yet).
 
@@ -56,6 +56,8 @@ These words are reserved and may not be used as identifiers.
 | False | `nein` | Boolean literal `false`. |
 | While | `tant cond { }` | Loop while `cond` is `oui`. |
 | For | `per name in expr { }` | Iterate a `List`, `Map` (keys) or `String` (characters). |
+| Leave a loop | `break` | Leave the innermost enclosing loop immediately. |
+| Next iteration | `continue` | Abandon the rest of the body and start the next iteration. |
 | Function | `sfn name(params) -> T { }` | Declare a function. |
 | Return | `ret expr` / `ret` | Return a value from a function. |
 | Import | `use module` | Import a standard-library module. |
@@ -88,6 +90,36 @@ blocks, `fin` is optional everywhere and exists for readability.
 `halt` stops the program immediately. `halt` exits with status 0; `halt(n)`
 exits with status `n` (an `Int`). Code after a `halt` in the same block is not
 executed. The operating system sees `n & 0xFF`.
+
+### 2.4 What `break` and `continue` do
+
+`break` leaves the **innermost** enclosing loop immediately. `continue` abandons
+the rest of the current iteration and starts the next one. Both are statements,
+neither carries a value, and neither is a function.
+
+```
+per n in [1, 2, 3, 4] {
+    si n == 2 {
+        continue            # skip the rest of this iteration
+    }
+    si n == 4 {
+        break               # leave the loop
+    }
+    sprint(n)               # prints 1 and 3
+}
+```
+
+* In a `tant` loop, `continue` re-tests the condition. In a `per` loop it advances
+  the iteration. Update the loop variable **before** a `continue` in a `tant`
+  loop, or the loop makes no progress and never terminates.
+* Both apply to the innermost loop only. Inside nested loops, `break` leaves one
+  level; there are no labels (`break outer` does not exist).
+* A jump with no enclosing loop is a **compile-time** error:
+  `'break' is only allowed inside a loop`, with a hint naming `tant`/`per`. Loop
+  depth resets at every function boundary, so a jump cannot reach a caller's loop.
+* Neither may appear inside a `call { ... }` builder block, for the same reason
+  `ret` may not: a widget tree is closed structurally.
+* `break` is not `halt`: `break` ends a loop, `halt` ends the program.
 
 ## 3. Values and types
 
@@ -130,6 +162,39 @@ documented limitation — generics arrive in a later milestone.
 There is none. Every condition must be `Bool`, so `si x { }` with an `Int` is a
 compile error. Write the comparison you mean: `si x != 0 { }`.
 
+### 3.4 String literals
+
+A string literal may use any of four delimiters. The value is the same for all
+four; only the quoting rules differ.
+
+| Form | Multiline | Notes |
+|---|---|---|
+| `"silica"` | no | the classic form; `"` inside must be escaped as `\"` |
+| `'silica'` | no | `"` inside needs no escape; `'` inside must be escaped as `\'` |
+| `"""silica"""` | **yes** | runs to the next `"""`; raw newlines are kept |
+| `'''silica'''` | **yes** | runs to the next `'''`; raw newlines are kept |
+
+```
+let plain = "one line"
+let apostrophe = 'it\'s fine'
+let quoted = 'she said "hi"'
+let paragraph = """first line
+second line"""
+```
+
+Rules:
+
+* A single-quoted or double-quoted string is **one line**. A raw newline inside
+  one is a lex error; write `\n`, or use a triple-quoted string.
+* A triple-quoted string keeps every character between the delimiters, including
+  newlines. Nothing is trimmed, so `"""a\nb"""` is five characters.
+* Escapes work in all four forms: `\n \t \r \0 \\ \" \' \uXXXX`.
+* The empty string is `""`, `''`, `""""""` or `''''''`.
+* There is no string interpolation and no raw-string prefix: a backslash always
+  starts an escape.
+* `silica fmt` normalises every literal to a double-quoted, single-line form with
+  escapes — the value is unchanged, and a multiline string becomes `\n` escapes.
+
 ## 4. Operators and precedence
 
 From lowest to highest binding:
@@ -157,6 +222,8 @@ name = expr                # assignment to a let-bound variable
 si cond { ... } sino { ... }
 tant cond { ... }
 per item in expr { ... }
+break                      # leave the innermost loop
+continue                   # start the next iteration of the innermost loop
 ret expr
 halt(code)
 expr                       # expression statement; value is discarded
