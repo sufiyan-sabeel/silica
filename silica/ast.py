@@ -196,6 +196,20 @@ class HaltStmt(Node):
 
 
 @dataclass
+class BreakStmt(Node):
+    """`break` — leave the innermost enclosing loop (0.9.0)."""
+    line: int = 0
+    col: int = 0
+
+
+@dataclass
+class ContinueStmt(Node):
+    """`continue` — start the next iteration of the innermost loop (0.9.0)."""
+    line: int = 0
+    col: int = 0
+
+
+@dataclass
 class BuilderStmt(Node):
     """`call { ... }` in statement position: a UI builder block.
 
