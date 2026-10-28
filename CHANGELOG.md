@@ -5,6 +5,45 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## [0.8.0] — 2026-10-28
+
+Script Mode IDE: a real editor and runner for `.sc` files, in the browser.
+
+### Added
+- **`silica ide`**: serves a local web IDE bound to 127.0.0.1 with a per-session
+  token. File list, tabs, unsaved indicators, syntax highlighting driven by
+  `silica.tokens`, line numbers, and a Run button.
+- **The runner is the real toolchain.** `Run` starts `python -m silica run <file>`
+  as a subprocess with an argument array — no shell — and streams that process's
+  actual stdout, stderr and exit code. Stop terminates it.
+- **Structured diagnostics.** `file.sc:12:4: parse error: ...` is parsed into
+  `{path, line, col, kind, message}` and rendered as clickable problems that jump
+  the editor to the location. Unparseable stderr passes through unchanged.
+- **`silica/ide/`**: `Workspace` (path confinement), `Runner` (subprocess +
+  polling), HTTP routes, and `app.html` — one self-contained page with no
+  dependencies, no build step and no CDN.
+- **27 tests** in `tests/test_ide.py`, driving the real HTTP API: token
+  enforcement, path traversal in four forms, file CRUD, metadata taken from the
+  implementation, real script output, compile and runtime errors with parsed
+  locations, and stopping a running script.
+- **`docs/IDE.md`**: architecture, API, security model, platform matrix.
+
+### Fixed
+- The runner prepends the package's parent directory to `PYTHONPATH`, so
+  `python -m silica` works from a checkout as well as an installed wheel. Without
+  it a checkout failed with `No module named silica`, which looked like a broken
+  IDE rather than a path problem.
+- `stop()` recorded the outcome itself instead of waiting for the executor thread
+  to notice, so it can no longer return `running` after killing the process.
+
+### Not implemented
+- Search and replace, code folding, autocomplete.
+- No screenshot: no browser exists in this environment to capture one.
+
+### Platforms
+- Linux was executed end to end. Termux, Alpine, macOS, Windows and iOS are
+  expected to work — pure Python, no compiled parts — but were **not** run.
+
 ## [0.7.0] — 2026-10-28
 
 A compile-time optimizer: constant folding. The first measured performance change
