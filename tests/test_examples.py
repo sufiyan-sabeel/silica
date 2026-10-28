@@ -26,6 +26,7 @@ EXPECTED = {
     "conditionals.sc": "Pass\n",
     "logic.sc": "Ready\n",
     "loops.sc": "55\n5 4 3 2 1 \n",
+    "control_flow.sc": "8\n25\n11 21 31 \n",
     "strings.sc": ("SILICA\nLANGUAGE\nBYTECODE\n"
                    "silica | language | bytecode\n"
                    "silica language bytecode\noui\n24\ns\n"),
