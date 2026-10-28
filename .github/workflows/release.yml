@@ -67,11 +67,35 @@ jobs:
           printf 'sfn main() {\n    sprint("ok")\n}\n' > /tmp/ok.sc
           /tmp/check/bin/silica /tmp/ok.sc
 
+      - name: Write the release notes from the changelog
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          TAG="$TAG" python - <<'PY' > release-body.md
+          import os, pathlib, re
+          version = os.environ["TAG"].lstrip("v")
+          text = pathlib.Path("CHANGELOG.md").read_text()
+          match = re.search(r"^## \[%s\].*?(?=^## \[|\Z)" % re.escape(version),
+                            text, re.M | re.S)
+          if not match:
+              print("See CHANGELOG.md for the changes in %s." % os.environ["TAG"])
+          else:
+              print(match.group(0).strip())
+          PY
+          echo "---"
+          echo "### Artifacts"
+          echo 'Wheel, sdist and `SHA256SUMS.txt`. The installer verifies the checksums before installing.'
+          echo ""
+          echo '```bash'
+          echo "curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | sh"
+          echo '```'
+          cat release-body.md
+
       - name: Publish the release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           name: Silica ${{ github.event.inputs.tag || github.ref_name }}
+          body_path: release-body.md
           draft: false
           prerelease: false
           generate_release_notes: true
