@@ -102,6 +102,29 @@ does not protect against a compromised repository account, because the checksum
 lives beside the artifact. For that, build from source at a tag you have verified
 yourself.
 
+## Tag history — a tag is a fixed pointer
+
+A published tag is never moved: it names one commit for good. One consequence is
+worth knowing before the next release:
+
+| Tag | Points at | Note |
+|---|---|---|
+| `v0.8.0` | `88a90f346f` | cut **before** the README rewrite (`9e441fe453`) |
+
+So the source archive of `v0.8.0` still contains the previous, longer README.
+That tag is deliberately left where it is — moving it would silently change what
+everyone who already downloaded 0.8.0 has. The corrected README ships in the next
+release, **v0.9.0**, which is cut from a commit that contains it. Check before
+publishing:
+
+```bash
+# the tag's README must be the current one, not the pre-0.8.0 text
+git show v0.9.0:README.md | head -5
+```
+
+If a release archive turns out to carry a stale README, cut a new patch version.
+Do not re-tag.
+
 ## Rolling back
 
 Old releases are never deleted, so rollback is a version change, not a rebuild:
