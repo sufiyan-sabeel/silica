@@ -22,8 +22,8 @@ $ silica run examples/square.sc
 144
 ```
 
-**Status: v0.7.0 — a working reference implementation, not a finished language.**
-Everything documented here works and is covered by 587 automated tests. What is
+**Status: v0.8.0 — a working reference implementation, not a finished language.**
+Everything documented here works and is covered by 614 automated tests. What is
 planned but absent is listed in [Limitations](#limitations-and-what-is-not-done)
 and in `docs/ROADMAP.md`. Nothing in this repository claims to be faster than
 Python, C or Rust — see `docs/PERFORMANCE.md` for the measured truth.
@@ -100,7 +100,7 @@ version once, then uses `¢ ` as the prompt:
 
 ```console
 $ silica
-Silica Interpreter v0.7.0
+Silica Interpreter v0.8.0
 ¢ let n: Int = 21
 n: Int = 21
 ¢ n * 2
@@ -137,6 +137,7 @@ UTF-8 rather than crashing, and falls back to `> ` only if it cannot.
 | `silica fmt <file.sc> [--check]` | Rewrite in canonical style, or check without writing. |
 | `silica test [dir]` | Run every `*_test.sc` under `dir` (default `tests`). |
 | `silica capabilities` | Print the effective capability set for a set of flags. |
+| `silica ide` | Script Mode IDE in your browser. |
 | `silica voice list` | Voices available, and which are installed. |
 | `silica voice install <name>` | Download a voice into the cache. |
 | `silica voice speak "text"` | Synthesise and play; `--out PATH` writes a WAV instead. |
@@ -244,6 +245,29 @@ Folding mirrors the VM's arithmetic exactly — 64-bit wrapping, integer divisio
 truncating toward zero, mixed Int/Float promoting — and declines whenever the
 result would differ from what the VM produces. `SILICA_NO_OPT=1` turns it off,
 which is how the differential test compares the two.
+
+## Script Mode IDE
+
+`silica ide` serves a real editor and runner for `.sc` files in your browser.
+
+```bash
+silica ide                    # current directory
+silica ide --root ~/scripts   # a workspace
+```
+
+File list, tabs, syntax highlighting driven by the compiler's own keyword table,
+and a **Run** button that executes the actual toolchain — you see the real stdout,
+stderr, exit code and clickable `file:line:col` diagnostics. Stop works, and Run
+saves before executing.
+
+The editor is HTML so it runs on any browser, including a phone; the runner is
+Python, so it stays where your files are. On iOS the browser can point at a runner
+on another machine instead — explicitly, with a session token, never as an open
+service.
+
+No dependencies, no build step, no cloud account. `docs/IDE.md` covers the API,
+the security model, and what is honestly not there yet (search and replace,
+folding, autocomplete).
 
 ## Desktop and terminal UI
 
@@ -473,7 +497,7 @@ Format details: `docs/BYTECODE.md`.
 ## Testing
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 587 tests
+python3 -m unittest discover -s tests -t .   # 614 tests
 python3 -m silica test tests                 # Silica-level tests
 python3 benchmarks/bench.py --runs 3         # benchmarks + correctness check
 ```
@@ -505,6 +529,8 @@ silica/tui/        terminal UI: widget tree, layout engine, curses driver and
                    the tui.* native functions
 silica/gui/        desktop windows: tkinter backend, click handlers and the
                    gui.* native functions
+silica/ide/        Script Mode IDE: workspace, subprocess runner, HTTP API and
+                   the single-page editor
 examples/          fifteen runnable programs with documented output
 assets/logo/       the Silica mark, wordmark and icon set
 editors/vscode/    VS Code extension: .sc language + file icon
