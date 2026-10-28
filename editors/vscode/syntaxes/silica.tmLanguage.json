@@ -60,13 +60,46 @@
     "string": {
       "patterns": [
         {
+          "name": "string.quoted.triple.silica",
+          "begin": "\\\"\\\"\\\"",
+          "end": "\\\"\\\"\\\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.silica",
+              "match": "\\\\[\\\\\"'ntr0u]"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.triple.silica",
+          "begin": "'''",
+          "end": "'''",
+          "patterns": [
+            {
+              "name": "constant.character.escape.silica",
+              "match": "\\\\[\\\\\"'ntr0u]"
+            }
+          ]
+        },
+        {
           "name": "string.quoted.double.silica",
           "begin": "\\\"",
           "end": "\\\"",
           "patterns": [
             {
               "name": "constant.character.escape.silica",
-              "match": "\\\\[\\\\\\\"ntr]"
+              "match": "\\\\[\\\\\"'ntr0u]"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.silica",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.silica",
+              "match": "\\\\[\\\\\"'ntr0u]"
             }
           ]
         }
@@ -146,7 +179,7 @@
       "patterns": [
         {
           "name": "keyword.control.silica",
-          "match": "\\b(si|sino|tant|per|in|ret|halt|fin)\\b"
+          "match": "\\b(si|sino|tant|per|in|ret|halt|fin|break|continue)\\b"
         }
       ]
     },
