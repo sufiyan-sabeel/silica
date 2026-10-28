@@ -5,6 +5,71 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## [0.9.0] — 2026-10-28
+
+Loop control: `break` and `continue`.
+
+### Added
+- **`break`** leaves the innermost `tant`/`per` loop; **`continue`** abandons the
+  rest of the body and starts the next iteration. Both compile to plain jumps,
+  so there is no new opcode, the `.sbc` format version is unchanged, and 0.8.0
+  bytecode still loads.
+- **`silica/compiler.py`**: a loop-frame stack (`enter_loop` / `exit_loop` /
+  `emit_loop_jump`). A frame records the continue target — the condition for
+  `tant`, the `ITER_NEXT` instruction for `per` — and collects `break` jumps for
+  patching to the end of the loop. A `break` out of a `per` loop emits `POP`
+  first: the iterator lives on the value stack, and without the pop the
+  verifier's stack-depth analysis rejects the function.
+- **`silica/checker.py`**: `loop_depth`, with `'break' is only allowed inside a
+  loop` / `'continue' is only allowed inside a loop` and a hint naming the loop
+  keywords. Loop depth resets at every function boundary, so a jump can never
+  reach a caller's loop; a jump inside a builder block is rejected for the same
+  reason `ret` is.
+- **`silica/parser.py`, `silica/ast.py`, `silica/fmt.py`**: `BreakStmt` and
+  `ContinueStmt` end to end, including formatter support, so `silica fmt`
+  round-trips them.
+- **34 tests** in `tests/test_control_flow.py`: `while`/`for`/string/map
+  iteration, nested loops (break leaves only the inner one), the iterator-pop
+  case, bytecode serialisation round trip, the optimizer differential (folding on
+  and off), every diagnostic, and formatter stability.
+- `examples/control_flow.sc`.
+- `editors/vscode`: `break` and `continue` added to the control-flow scope.
+
+### Added — four string delimiters
+- **`'single'`, `"double"`, `'''triple'''` and `"""triple"""`** are all valid
+  string literals with the same value. The single-character forms are one line;
+  the triple-quoted forms are multiline and keep raw newlines.
+- **`silica/lexer.py`**: `_string` detects the delimiter, keeps line/column
+  tracking across embedded newlines, and reports a hint naming the closing
+  triple when a multiline literal is unterminated. `\'` added to the escape
+  table's documented list.
+- **23 tests** in `tests/test_string_delimiters.py`: delimiter equivalence,
+  embedded quotes of the other kind, all four empty-string forms, multiline
+  values and their length, source locations after a multiline literal, escapes
+  in every form, unterminated and newline errors, and formatter normalisation.
+- `docs/LANGUAGE_SPEC.md` section 3.4 documents the four forms; `docs/GRAMMAR.md`
+  and the VS Code grammar (triple + single patterns) follow it.
+- `silica fmt` still normalises to a double-quoted single-line literal, so a
+  multiline string becomes `\n` escapes. The value is unchanged and the output
+  is stable.
+
+### Docs
+- Performance figures re-measured: `docs/AUDIT.md`, `docs/PERFORMANCE.md` and the
+  README now report **47–111× slower than CPython** from one recorded run
+  (2026-10-28, Python 3.12.13, best of 3) instead of the older 40–90×/25–85×
+  numbers, which are labelled historical.
+- README: Silica logo added from `assets/logo/`, and a link whose visible label
+  (`docs/SECURITY.md`) did not match its target (`SECURITY.md`) corrected.
+
+### Compatibility
+- `break` and `continue` are now reserved words. A program using either as an
+  identifier stops compiling; nothing in this repository did.
+- Single-quoted text is now a string literal instead of a lex error. Nothing that
+  compiled before changes meaning: `'` could not appear in a program at all.
+
+### Not implemented
+- Labelled jumps (`break outer`), `else` clauses on loops.
+
 ## [0.8.0] — 2026-10-28
 
 Script Mode IDE: a real editor and runner for `.sc` files, in the browser.
