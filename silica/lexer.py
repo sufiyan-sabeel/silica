@@ -84,7 +84,7 @@ class Lexer:
                 self._number(line, col)
                 continue
 
-            if ch == '"':
+            if ch == '"' or ch == "'":
                 self._string(line, col)
                 continue
 
@@ -107,10 +107,6 @@ class Lexer:
                     self.depth = max(0, self.depth - 1)
                 self._emit("op", ch, line, col)
                 continue
-
-            if ch == "'":
-                self._error("single quotes are not string delimiters in Silica",
-                            line, col, 'use double quotes, e.g. sprint("hi")')
 
             self._error("unexpected character %r" % ch, line, col)
 
@@ -148,16 +144,39 @@ class Lexer:
             self._emit("int", int(text), line, col)
 
     def _string(self, line, col):
-        self._advance()  # opening quote
+        """Scan one string literal.
+
+        Four delimiters are accepted: a double quote, a single quote, and the
+        two triple-quoted forms built from them. The single-character forms end
+        at the first matching quote and may not contain a raw newline. The
+        triple-quoted forms are multiline: they run to the matching triple, so a
+        raw newline is allowed and is kept in the value. Escapes are processed in
+        all four.
+        """
+        quote = self._peek()
+        triple = self.src[self.i:self.i + 3] == quote * 3
+        if triple:
+            for _ in range(3):
+                self._advance()
+        else:
+            self._advance()
         out = []
         while True:
             if self.i >= len(self.src):
+                if triple:
+                    self._error("unterminated string literal", line, col,
+                                "a triple-quoted string ends at %s" % (quote * 3))
                 self._error("unterminated string literal", line, col)
+            if triple and self.src[self.i:self.i + 3] == quote * 3:
+                for _ in range(3):
+                    self._advance()
+                break
             ch = self._peek()
-            if ch == "\n":
+            if not triple and ch == "\n":
                 self._error("unterminated string literal (newline in string)", line, col,
-                            'use \\n inside the string for a line break')
-            if ch == '"':
+                            'use \\n inside the string for a line break, or a '
+                            'triple-quoted string for multiline text')
+            if not triple and ch == quote:
                 self._advance()
                 break
             if ch == "\\":
@@ -177,7 +196,7 @@ class Lexer:
                         self._advance()
                     continue
                 self._error("unknown escape sequence \\%s" % esc, self.line, self.col,
-                            "valid escapes: \\n \\t \\r \\0 \\\\ \\\" \\uXXXX")
+                            "valid escapes: \\n \\t \\r \\0 \\\\ \\\" \\' \\uXXXX")
             out.append(ch)
             self._advance()
         self._emit("string", "".join(out), line, col)
