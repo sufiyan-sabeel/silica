@@ -13,7 +13,7 @@ it can be reproduced.
 
 ```
 $ python3 -m unittest discover -s tests -t .
-Ran 555 tests ... OK
+Ran 671 tests ... OK (skipped=7)
 
 $ python3 -m silica test tests
 5/5 test files passed
@@ -22,13 +22,16 @@ $ python3 -m silica fmt --check examples/*.sc tests/silica/*.sc benchmarks/silic
 (exit 0)
 ```
 
+Re-run on 2026-10-28 for this release. The first version of this audit recorded
+555 tests at 0.8.0; that figure is historical and has been superseded.
+
 | | |
 |---|---|
-| Version | 0.8.0 |
-| Implementation | Python 3.9+, ~9,800 lines in `silica/`, ~4,900 lines of tests |
-| Test count | 555 (plus ~640 subtests) |
+| Version | 0.9.0 |
+| Implementation | Python 3.9+, ~10,700 lines in `silica/`, ~5,900 lines of tests |
+| Test count | 671 |
 | Bytecode format | `.sbc` 1.0, versioned, verified on load |
-| CI | GitHub Actions, Python 3.9 / 3.11 / 3.12, all green |
+| CI | GitHub Actions, Python 3.9 / 3.11 / 3.12 |
 
 ---
 
@@ -76,22 +79,31 @@ once, and the resolved path is what the native receives.
 ## 3. Performance, measured
 
 ```
-$ python3 benchmarks/bench.py --runs 1
-workload                                  silica     python     ratio
-arithmetic loop (1e6 iterations)        11336.4ms    229.5ms    49.40x
-recursion (fib 24)                       1476.6ms     15.9ms    92.66x
-collections (200k push + iterate)        2772.3ms     66.1ms    41.95x
-strings (20k join + split)                193.7ms      4.7ms    40.86x
+$ python3 benchmarks/bench.py --runs 3
+host: Linux x86_64 · python 3.12.13 · silica 0.9.0 · best of 3
+workload                                       silica     python      ratio  check
+arithmetic loop (1e6 iterations)             15155.8ms     323.4ms     46.87x  ok
+recursion (fib 24)                            1945.0ms      17.5ms    111.06x  ok
+collections (200k push + iterate + sort)      3098.0ms      56.6ms     54.76x  ok
+strings (20k join + split)                     183.1ms       3.7ms     49.53x  ok
 ```
 
-Silica is **40–93× slower than CPython** on these workloads. That is expected: the
-VM is a Python loop over decoded instructions, and every value is a Python object.
-**No claim is made that Silica is fast.** The brief is right to insist on this —
-publishing "faster than Python" here would be false.
+Re-measured on 2026-10-28 for this release. Silica is **47–111× slower than
+CPython** on these workloads. That is expected: the VM is a Python loop over
+decoded instructions, and every value is a Python object. **No claim is made that
+Silica is fast.** Publishing "faster than Python" here would be false.
 
-The number worth acting on is the *shape*: recursion is worst (92×) because every
-Silica call builds a `Frame` and pushes a Python list; arithmetic is 49× because
+The number worth acting on is the *shape*: recursion is worst (111×) because every
+Silica call builds a `Frame` and pushes a Python list; arithmetic is 47× because
 dispatch dominates. Those are the two places a profiler would point first.
+
+### The earlier 0.8.0 run — historical, not current
+
+The first audit recorded the same four workloads at 41–93× (`--runs 1`, Python
+3.12.13). Those figures are kept only as history: they were taken before the
+release that added this run, on a different load, and the spread between runs of
+the same benchmark is several percent. Treat the table above as the current
+number and any older one as superseded.
 
 ### Since this audit: constant folding (0.8.0)
 
