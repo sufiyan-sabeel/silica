@@ -1,7 +1,7 @@
 """Token definitions and the Silica keyword table."""
 
 # --- Silica keyword vocabulary -------------------------------------------------
-# These are the only reserved words in Silica v0.7.0. They may not be used as
+# These are the only reserved words in Silica v0.8.0. They may not be used as
 # identifiers. See docs/LANGUAGE_SPEC.md for the meaning of each one.
 KEYWORDS = {
     # core I/O
