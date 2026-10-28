@@ -1,6 +1,6 @@
 """The `silica` command-line interface.
 
-Commands implemented in v0.7.0:
+Commands implemented in v0.8.0:
 
     silica run <file.sc|file.sbc>   compile (if needed), verify, execute
     silica check <file.sc>          parse + type-check only
@@ -29,7 +29,7 @@ from .engine import (check_source, compile_ast, compile_file, compile_source,
 from .errors import CapabilityError, ParseError, SilicaError
 from .natives import format_value, get_native
 
-VERSION = "0.7.0"
+VERSION = "0.8.0"
 
 USAGE = """silica %s — the Silica language toolchain
 
@@ -43,6 +43,8 @@ usage:
   silica repl                     interactive session
   silica fmt <file.sc> [--check]  rewrite in canonical style
   silica test [dir]               run *_test.sc files under dir
+  silica ide [--root DIR] [--port N] [--host H]
+                                  Script Mode IDE in your browser
   silica voice <subcommand>       speech: list, install, speak, transcribe
   silica capabilities [flags]     print the effective capability set
   silica --version                print the version
@@ -56,7 +58,7 @@ Capabilities (nothing is granted by default):
                          remove a capability a config file granted
   --capabilities FILE    read grants from a TOML [capabilities] table
 
-Not implemented in 0.7.0: new, add, remove, install, build (Milestone E).
+Not implemented in 0.8.0: new, add, remove, install, build (Milestone E).
 """ % VERSION
 
 
@@ -642,6 +644,81 @@ def cmd_voice(args):
     return _fail("error: unknown voice subcommand '%s'\n\n%s" % (sub, VOICE_USAGE), 2)
 
 
+
+# --- Script Mode IDE ---------------------------------------------------------
+IDE_USAGE = """usage: silica ide [options]
+
+Starts the Script Mode IDE and prints its URL. The editor runs in a browser; the
+runner stays here, on this machine.
+
+  --root DIR    workspace to edit (default: the current directory)
+  --port N      port to listen on (default: a free one)
+  --host HOST   interface to bind (default: 127.0.0.1)
+  --no-open     do not launch a browser
+  --quiet       do not log requests
+
+The URL carries a session token. Anyone with the URL can edit and run files in
+the workspace, so do not share it, and do not bind to 0.0.0.0 on a network you do
+not control.
+"""
+
+
+def cmd_ide(args):
+    from .ide import IDEError, serve
+
+    root = "."
+    port = 0
+    host = "127.0.0.1"
+    open_browser = True
+    quiet = True
+    index = 0
+    while index < len(args):
+        item = args[index]
+        if item in ("-h", "--help", "help"):
+            sys.stdout.write(IDE_USAGE)
+            return 0
+        if item == "--root" and index + 1 < len(args):
+            root = args[index + 1]; index += 2; continue
+        if item == "--port" and index + 1 < len(args):
+            try:
+                port = int(args[index + 1])
+            except ValueError:
+                return _fail("error: --port needs a number", 2)
+            index += 2; continue
+        if item == "--host" and index + 1 < len(args):
+            host = args[index + 1]; index += 2; continue
+        if item == "--no-open":
+            open_browser = False; index += 1; continue
+        if item == "--verbose":
+            quiet = False; index += 1; continue
+        return _fail("error: unexpected argument '%s'\n\n%s" % (item, IDE_USAGE), 2)
+
+    try:
+        server, url = serve(root, port=port, host=host, open_browser=open_browser,
+                            quiet=quiet)
+    except IDEError as exc:
+        return _fail("error: %s" % exc.message)
+    except OSError as exc:
+        return _fail("error: cannot start the IDE: %s" % exc)
+
+    sys.stdout.write("Silica Script Mode\n\n")
+    sys.stdout.write("  workspace : %s\n" % os.path.abspath(root))
+    sys.stdout.write("  listening : %s:%d\n" % (host, server.server_address[1]))
+    sys.stdout.write("  open      : %s\n\n" % url)
+    if host not in ("127.0.0.1", "localhost"):
+        sys.stdout.write("  warning: bound to %s — anyone who can reach this port\n"
+                         "           and has the URL can edit and run files.\n\n" % host)
+    sys.stdout.write("Press Ctrl+C to stop.\n")
+    sys.stdout.flush()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        sys.stdout.write("\nstopped\n")
+    finally:
+        server.server_close()
+    return 0
+
+
 # --- entry point -------------------------------------------------------------
 COMMANDS = {
     "run": cmd_run,
@@ -652,6 +729,7 @@ COMMANDS = {
     "repl": cmd_repl,
     "capabilities": cmd_capabilities,
     "voice": cmd_voice,
+    "ide": cmd_ide,
 }
 
 PLANNED = {
@@ -693,7 +771,7 @@ def main(argv=None):
         # and all, so there is one implementation of "run a file".
         return cmd_run(argv)
     if first in PLANNED:
-        return _fail("error: 'silica %s' is not implemented in 0.7.0 (%s)"
+        return _fail("error: 'silica %s' is not implemented in 0.8.0 (%s)"
                      % (first, PLANNED[first]))
     handler = COMMANDS.get(first)
     if handler is None:
