@@ -46,6 +46,8 @@ class Emitter:
         self.scopes = [Scope(is_block=False)]
         self.n_locals = 0
         self.loop_depth = 0
+        # one frame per enclosing loop; `break`/`continue` read the innermost
+        self.loops = []
 
     # -- emission ------------------------------------------------------------
     def emit(self, op, *operands, line=0):
@@ -61,6 +63,40 @@ class Emitter:
     @property
     def here(self):
         return len(self.instrs)
+
+    # -- loops ---------------------------------------------------------------
+    def enter_loop(self, continue_to, has_iterator=False):
+        """Open a loop frame.
+
+        `continue_to` is the instruction index that begins the next iteration:
+        the condition for `tant`, and the ITER_NEXT instruction for `per`.
+        `has_iterator` records that a `per` loop keeps its iterator on the
+        value stack, so a `break` must pop it before jumping out.
+        """
+        self.loop_depth += 1
+        frame = {"continue_to": continue_to, "has_iterator": has_iterator,
+                 "breaks": []}
+        self.loops.append(frame)
+        return frame
+
+    def exit_loop(self, frame):
+        self.loops.pop()
+        self.loop_depth -= 1
+        return frame
+
+    def emit_loop_jump(self, keyword, line):
+        """Emit `break`/`continue` for the innermost enclosing loop."""
+        if not self.loops:
+            raise CompileError("'%s' outside a loop" % keyword, line, 0,
+                               self.compiler.filename)
+        frame = self.loops[-1]
+        if keyword == "continue":
+            self.emit("JUMP", frame["continue_to"], line=line)
+            return
+        # leaving a `per` loop abandons its iterator, which lives on the stack
+        if frame["has_iterator"]:
+            self.emit("POP", line=line)
+        frame["breaks"].append(self.emit_jump("JUMP", line=line))
 
     # -- constants -----------------------------------------------------------
     def const(self, value):
@@ -273,11 +309,14 @@ class Compiler:
             start = emitter.here
             self.compile_expr(emitter, stmt.cond)
             jump_end = emitter.emit_jump("JUMP_IF_FALSE", line=line)
-            emitter.loop_depth += 1
+            frame = emitter.enter_loop(continue_to=start)
             self.compile_block(emitter, stmt.body)
-            emitter.loop_depth -= 1
+            emitter.exit_loop(frame)
             emitter.emit("JUMP", start, line=line)
-            emitter.patch(jump_end, emitter.here)
+            end = emitter.here
+            emitter.patch(jump_end, end)
+            for index in frame["breaks"]:
+                emitter.patch(index, end)
         elif isinstance(stmt, ast.ForStmt):
             self.compile_expr(emitter, stmt.iterable)
             emitter.emit("ITER_START", line=line)
@@ -286,10 +325,15 @@ class Compiler:
             emitter.push_scope()
             slot = emitter.declare(stmt.var, stmt.line, stmt.col)
             emitter.emit("STORE_LOCAL", slot, line=line)
+            frame = emitter.enter_loop(continue_to=start, has_iterator=True)
             self.compile_block(emitter, stmt.body, new_scope=False)
+            emitter.exit_loop(frame)
             emitter.pop_scope()
             emitter.emit("JUMP", start, line=line)
-            emitter.patch(jump_end, emitter.here)
+            end = emitter.here
+            emitter.patch(jump_end, end)
+            for index in frame["breaks"]:
+                emitter.patch(index, end)
         elif isinstance(stmt, ast.ReturnStmt):
             if stmt.value is None:
                 emitter.emit("UNIT", line=line)
@@ -302,6 +346,10 @@ class Compiler:
             else:
                 self.compile_expr(emitter, stmt.code)
                 emitter.emit("HALT_POP", line=line)
+        elif isinstance(stmt, ast.BreakStmt):
+            emitter.emit_loop_jump("break", line)
+        elif isinstance(stmt, ast.ContinueStmt):
+            emitter.emit_loop_jump("continue", line)
         elif isinstance(stmt, ast.FinStmt):
             pass
         elif isinstance(stmt, ast.UseStmt):
