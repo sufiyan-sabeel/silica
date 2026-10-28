@@ -42,8 +42,17 @@ workflow asserts it is present and non-truncated in the installed wheel, because
 missing `app.html` would break `silica ide` only at run time.
 
 Excluded from the build: caches (`__pycache__`, `*.pyc`), `.pytest_cache`,
-`*.egg-info`, `build/`, `dist/`, `.venv/`, and `.sbc` build output. These are in
-`.gitignore` and are not part of the wheel.
+`build/`, `dist/`, `.venv/`, and `.sbc` build output. These are in `.gitignore`
+and appear in neither archive.
+
+One nuance worth stating: the **sdist contains `silica_lang.egg-info/`**, because
+setuptools generates it as part of building an sdist. That is standard, not a
+leftover — the repository tree contains no `egg-info` directory. The `package`
+job in `ci.yml` therefore rejects `egg-info` inside the **wheel** only, and
+rejects caches in both.
+
+The `package` job also builds and installs the wheel on every push, so packaging
+breakage is caught on a normal commit instead of at tag time.
 
 ---
 
@@ -110,7 +119,7 @@ silica /tmp/ok.sc
 |---|---|---|
 | `ci.yml` | push to `main`, pull request | tests on 3.9/3.11/3.12, Silica-level tests, formatter check |
 | `release.yml` | tag `v*` | tests, version-vs-tag check, build, checksums, clean-venv smoke test, publish |
-| `verify-release.yml` | release published | downloads the **public** assets, checks checksums, installs, runs a script |
+| `verify-release.yml` | Release workflow completes, or manual dispatch | downloads the **public** assets, checks checksums, installs, runs a script |
 
 `release.yml` refuses to publish if the tag, `silica/__init__.py` and the
 `install.sh` default disagree — that check is what stops a release whose version
@@ -120,6 +129,11 @@ numbers have drifted.
 tests them the way a stranger would: over HTTPS from the public URL, with the
 published checksums, into a clean environment. A missing asset or a wrong checksum
 fails the workflow rather than going unnoticed.
+
+It chains on the **Release workflow completing**, not on `release: [published]`.
+A release created with `GITHUB_TOKEN` does not trigger other workflows, so a
+`release` event trigger would silently never fire. It also has `workflow_dispatch`
+for verifying an older tag by hand.
 
 Both workflows declare least-privilege `permissions`: `contents: read` for CI and
 verification, `contents: write` only for the job that creates the release. No
@@ -169,4 +183,9 @@ pull request for you.
 * Workflows use least-privilege permissions and are triggered by tags and pushes
   to `main` only.
 * Not done, and not claimed: SHA-pinned actions, signed releases, SBOM generation,
-  or provenance attestation. Those are real improvements and none is in place.
+  or provenance attestation. Those are real improvements and none is in place;
+  `docs/SUPPLY_CHAIN.md` plans them in priority order.
+* Dependabot **alerts and security updates are disabled** on this repository — the
+  API returns `403 Dependabot alerts are disabled for this repository`. Enabling
+  them is a settings change in the GitHub UI, documented in
+  `docs/SUPPLY_CHAIN.md`.
