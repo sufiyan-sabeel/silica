@@ -56,6 +56,9 @@ class Checker:
         # inside an event body (`ui.on(...) { ... }`), both reset per function
         self.builder_depth = 0
         self.event_depth = 0
+        # how many loops enclose the statement being checked; `break` and
+        # `continue` are only legal when this is at least 1
+        self.loop_depth = 0
 
     # -- diagnostics ---------------------------------------------------------
     def error(self, message, node=None, hint=None):
@@ -219,8 +222,10 @@ class Checker:
         info = self.functions[decl.name]
         outer = self.current_func
         outer_builder, outer_event = self.builder_depth, self.event_depth
+        outer_loop = self.loop_depth
         self.builder_depth = 0
         self.event_depth = 0
+        self.loop_depth = 0
         self.current_func = info
         self.push_scope()
         for name, ptype, line, col in decl.params:
@@ -234,6 +239,7 @@ class Checker:
         self.pop_scope()
         self.current_func = outer
         self.builder_depth, self.event_depth = outer_builder, outer_event
+        self.loop_depth = outer_loop
 
     def always_returns(self, block):
         """True when control cannot reach the end of `block`."""
@@ -291,7 +297,9 @@ class Checker:
             if cond != "Bool" and cond != ANY:
                 self.error("condition of 'tant' must be Bool, found %s" % cond, stmt.cond,
                            hint="Silica has no truthiness: write a comparison, e.g. tant i < 10")
+            self.loop_depth += 1
             self.check_block(stmt.body)
+            self.loop_depth -= 1
         elif isinstance(stmt, ast.ForStmt):
             iterable = self.expr_type(stmt.iterable)
             if iterable == "List":
@@ -307,7 +315,9 @@ class Checker:
                            stmt.iterable)
             self.push_scope()
             self.declare(VarInfo(stmt.var, var_type, True), stmt)
+            self.loop_depth += 1
             self.check_block(stmt.body, new_scope=False)
+            self.loop_depth -= 1
             self.pop_scope()
         elif isinstance(stmt, ast.ReturnStmt):
             self.check_return(stmt)
@@ -316,6 +326,10 @@ class Checker:
                 t = self.expr_type(stmt.code)
                 if t not in ("Int", ANY):
                     self.error("'halt' exit code must be Int, found %s" % t, stmt.code)
+        elif isinstance(stmt, ast.BreakStmt):
+            self.check_loop_jump(stmt, "break")
+        elif isinstance(stmt, ast.ContinueStmt):
+            self.check_loop_jump(stmt, "continue")
         elif isinstance(stmt, ast.FinStmt):
             pass
         elif isinstance(stmt, (ast.FuncDecl, ast.UseStmt)):
@@ -326,6 +340,18 @@ class Checker:
             self.check_block(stmt)
         else:  # pragma: no cover - defensive
             self.error("unsupported statement", stmt)
+
+    def check_loop_jump(self, stmt, keyword):
+        """`break` and `continue` need an enclosing loop, and may not escape a
+        builder block: a widget tree is closed structurally."""
+        if self.builder_depth > 0:
+            self.error("'%s' inside a builder block is not allowed; close the block "
+                       "first" % keyword, stmt,
+                       hint="a widget tree is closed structurally, so leaving a loop "
+                            "from inside one is almost always a mistake")
+        if self.loop_depth == 0:
+            self.error("'%s' is only allowed inside a loop" % keyword, stmt,
+                       hint="put it inside the body of a 'tant' or 'per' loop")
 
     def native_of_call(self, call):
         """The native a call resolves to, or None for user functions."""
