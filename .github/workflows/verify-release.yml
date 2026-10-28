@@ -1,0 +1,90 @@
+name: Verify release
+
+# GitHub Packages has no Python registry (it supports npm, RubyGems, Maven,
+# Gradle, NuGet and containers), so Silica is distributed as versioned GitHub
+# Release assets instead. That makes the assets the real distribution, and this
+# workflow checks them the way a stranger would: download from the public URL,
+# verify the published checksums, install into a clean environment, run a real
+# script. If a release is missing an asset or a checksum is wrong, this fails.
+#
+# See docs/PACKAGING.md for why the assets are the distribution and not a
+# package registry.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to verify (e.g. v0.9.0)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve the tag
+        id: tag
+        run: |
+          TAG="${{ github.event.inputs.tag || github.event.release.tag_name }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "verifying $TAG"
+
+      - name: Download the published assets
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          BASE="https://github.com/${{ github.repository }}/releases/download/$TAG"
+          mkdir -p assets && cd assets
+          for name in SHA256SUMS.txt "silica_lang-${{ steps.tag.outputs.version }}-py3-none-any.whl" \
+                      "silica_lang-${{ steps.tag.outputs.version }}.tar.gz"; do
+            echo "downloading $name"
+            curl -fsSL --retry 3 --max-time 120 -O "$BASE/$name"
+          done
+          ls -l
+
+      - name: Verify the published checksums
+        run: |
+          cd assets
+          sha256sum --check SHA256SUMS.txt
+
+      - name: Install the wheel into a clean environment
+        run: |
+          python -m venv /tmp/verify
+          /tmp/verify/bin/pip install --quiet --no-index --no-deps \
+            "assets/silica_lang-${{ steps.tag.outputs.version }}-py3-none-any.whl"
+          /tmp/verify/bin/silica --version
+
+      - name: The installed CLI must report the released version
+        run: |
+          HAVE=$(/tmp/verify/bin/silica --version | awk '{print $2}')
+          WANT="${{ steps.tag.outputs.version }}"
+          echo "installed=$HAVE tag=$WANT"
+          [ "$HAVE" = "$WANT" ] || { echo "installed version does not match the tag"; exit 1; }
+
+      - name: Run a real Silica program from the installed wheel
+        run: |
+          cd /tmp
+          printf 'sfn main() {\n    sprint("verified from the release asset")\n}\n' > check.sc
+          /tmp/verify/bin/silica check.sc
+
+      - name: The IDE assets must resolve inside the installed package
+        run: |
+          /tmp/verify/bin/python - <<'PY'
+          import os, silica.ide
+          path = os.path.join(os.path.dirname(silica.ide.__file__), "app.html")
+          size = os.path.getsize(path)
+          assert size > 1000, "app.html is missing or truncated: %s" % path
+          print("app.html present:", size, "bytes")
+          PY
+
+      - name: The installer must verify the same checksums
+        run: |
+          cd assets
+          HOME=/tmp/fresh SILICA_VERSION="${{ steps.tag.outputs.version }}" \
+            SILICA_ARTIFACT="$PWD/silica_lang-${{ steps.tag.outputs.version }}-py3-none-any.whl" \
+            sh ../install.sh
+          /tmp/fresh/.local/bin/silica --version
