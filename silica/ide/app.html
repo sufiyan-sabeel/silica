@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>Silica Script Mode</title>
+<style>
+  :root {
+    --bg: #000000;
+    --surface: #0b0c0d;
+    --surface-2: #121415;
+    --surface-3: #191c1e;
+    --border: #23272a;
+    --border-strong: #33383c;
+    --text: #e6e8ea;
+    --text-dim: #9aa2a8;
+    --text-faint: #6b7278;
+    --accent: #7fd1b9;
+    --accent-dim: #2f6f5e;
+    --error: #e0776b;
+    --warn: #d9b26a;
+    --ok: #7fd1b9;
+    --kw: #c8a8f0;
+    --type: #7fd1b9;
+    --str: #d9c48a;
+    --num: #8fb8f0;
+    --com: #5f6b73;
+    --fn: #e0c07a;
+    --radius: 8px;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --ease: 140ms ease;
+  }
+  html[data-theme="light"] {
+    --bg: #f6f5f2; --surface: #ffffff; --surface-2: #f1f0ec; --surface-3: #e9e7e1;
+    --border: #dedbd3; --border-strong: #c9c5ba;
+    --text: #1b1e20; --text-dim: #5c6469; --text-faint: #858c91;
+    --accent: #2f6f5e; --accent-dim: #2f6f5e; --error: #b4463c; --warn: #8a6d1f;
+    --ok: #2f6f5e; --kw: #6b3fa0; --type: #2f6f5e; --str: #8a6d1f;
+    --num: #2c5c9c; --com: #8b9298; --fn: #8a5a1f;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text); font-family: var(--sans);
+    font-size: 14px; overflow: hidden; -webkit-text-size-adjust: 100%;
+  }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  button:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+
+  .app { display: grid; grid-template-rows: 48px 1fr 26px; height: 100%; }
+
+  /* ---- top bar ---- */
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 0 12px;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    min-width: 0;
+  }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: .2px; }
+  .brand svg { width: 18px; height: 18px; color: var(--accent); flex: none; }
+  .brand span { white-space: nowrap; }
+  .brand small { color: var(--text-faint); font-weight: 400; font-size: 11px; }
+  .spacer { flex: 1 1 auto; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
+    border: 1px solid var(--border-strong); border-radius: var(--radius);
+    background: var(--surface-2); transition: background var(--ease), border-color var(--ease);
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--surface-3); }
+  .btn svg { width: 15px; height: 15px; }
+  .btn.primary { background: var(--accent-dim); border-color: var(--accent-dim); color: #04120e; font-weight: 600; }
+  html[data-theme="light"] .btn.primary { color: #ffffff; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.danger { border-color: var(--error); color: var(--error); }
+  .btn[disabled] { opacity: .45; cursor: not-allowed; }
+  .icon-btn { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center;
+              border-radius: var(--radius); border: 1px solid transparent; }
+  .icon-btn:hover { background: var(--surface-2); border-color: var(--border); }
+
+  /* ---- body ---- */
+  main { display: grid; grid-template-columns: 220px 1fr; min-height: 0; }
+  main.no-sidebar { grid-template-columns: 0 1fr; }
+  aside {
+    background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+  }
+  .side-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 10px; border-bottom: 1px solid var(--border);
+    font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--text-faint);
+  }
+  .files { overflow: auto; padding: 6px; flex: 1 1 auto; }
+  .file {
+    display: block; width: 100%; text-align: left; padding: 7px 9px; border-radius: 6px;
+    color: var(--text-dim); font-size: 13px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .file:hover { background: var(--surface-2); color: var(--text); }
+  .file.active { background: var(--surface-3); color: var(--text); }
+  .file .dot { color: var(--accent); }
+
+  .editor-area { display: grid; grid-template-rows: auto 1fr auto; min-height: 0; min-width: 0; }
+  .tabs { display: flex; overflow-x: auto; background: var(--surface); border-bottom: 1px solid var(--border); scrollbar-width: thin; }
+  .tab {
+    display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 13px;
+    color: var(--text-dim); border-right: 1px solid var(--border); white-space: nowrap;
+  }
+  .tab.active { color: var(--text); background: var(--surface-2); box-shadow: inset 0 -2px 0 var(--accent); }
+  .tab .close { width: 16px; height: 16px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-faint); }
+  .tab .close:hover { background: var(--surface-3); color: var(--error); }
+  .tab .dirty { color: var(--accent); }
+
+  .panes { display: grid; grid-template-columns: 1fr; min-height: 0; position: relative; }
+  .editor { position: relative; overflow: hidden; background: var(--surface-2); min-height: 0; }
+  .scroll { position: absolute; inset: 0; overflow: auto; }
+  .code-wrap { display: flex; min-height: 100%; }
+  .gutter {
+    flex: none; padding: 12px 10px 12px 12px; text-align: right; color: var(--text-faint);
+    font-family: var(--mono); font-size: var(--fs, 13px); line-height: var(--lh, 1.55);
+    user-select: none; background: var(--surface-2); border-right: 1px solid var(--border);
+    position: sticky; left: 0; z-index: 2; white-space: pre;
+  }
+  .code {
+    position: relative; flex: 1 1 auto; min-width: 0;
+    font-family: var(--mono); font-size: var(--fs, 13px); line-height: var(--lh, 1.55);
+    tab-size: 4;
+  }
+  .code pre, .code textarea {
+    margin: 0; padding: 12px 16px; border: 0; font: inherit; line-height: inherit;
+    white-space: pre; overflow-wrap: normal; tab-size: 4;
+  }
+  .code pre {
+    position: absolute; inset: 0; pointer-events: none; color: var(--text);
+    overflow: hidden;
+  }
+  .code textarea {
+    position: relative; display: block; width: 100%; min-height: 100%;
+    background: transparent; color: transparent; caret-color: var(--accent);
+    resize: none; outline: none; z-index: 1;
+  }
+  .code textarea::selection { background: rgba(127, 209, 185, .25); }
+  .tok-kw { color: var(--kw); }
+  .tok-type { color: var(--type); }
+  .tok-str { color: var(--str); }
+  .tok-num { color: var(--num); }
+  .tok-com { color: var(--com); font-style: italic; }
+  .tok-fn { color: var(--fn); }
+  .tok-op { color: var(--text-dim); }
+
+  /* ---- output ---- */
+  .output {
+    border-top: 1px solid var(--border); background: var(--surface);
+    display: grid; grid-template-rows: auto 1fr; height: 190px; min-height: 80px;
+  }
+  .output.collapsed { height: 34px; }
+  .output.collapsed .out-body { display: none; }
+  .out-head { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+  .chip {
+    padding: 4px 9px; border-radius: 999px; font-size: 12px; color: var(--text-dim);
+    border: 1px solid transparent;
+  }
+  .chip.active { background: var(--surface-3); color: var(--text); border-color: var(--border-strong); }
+  .chip .count { color: var(--text-faint); margin-left: 4px; }
+  .out-body { overflow: auto; padding: 10px 14px; font-family: var(--mono); font-size: 12.5px; line-height: 1.5; }
+  .out-body pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+  .out-stdout { color: var(--text); }
+  .out-stderr { color: var(--error); }
+  .diag {
+    display: block; width: 100%; text-align: left; padding: 6px 8px; border-radius: 6px;
+    border-left: 2px solid var(--error); background: var(--surface-2); margin-bottom: 6px;
+    font-family: var(--mono); font-size: 12.5px;
+  }
+  .diag:hover { background: var(--surface-3); }
+  .diag .where { color: var(--accent); }
+  .diag .kind { color: var(--error); }
+  .empty { color: var(--text-faint); }
+
+  /* ---- status bar ---- */
+  footer {
+    display: flex; align-items: center; gap: 14px; padding: 0 12px; font-size: 11.5px;
+    color: var(--text-faint); background: var(--surface); border-top: 1px solid var(--border);
+    overflow: hidden; white-space: nowrap;
+  }
+  footer .grow { flex: 1 1 auto; }
+  .pill { padding: 1px 7px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); }
+  .pill.ok { color: var(--ok); border-color: var(--accent-dim); }
+  .pill.err { color: var(--error); border-color: var(--error); }
+
+  /* ---- mobile ---- */
+  @media (max-width: 860px) {
+    main { grid-template-columns: 1fr; }
+    aside {
+      position: fixed; inset: 48px 0 26px 0; z-index: 30; width: 82vw; max-width: 320px;
+      transform: translateX(-100%); transition: transform var(--ease);
+      border-right: 1px solid var(--border-strong); box-shadow: 0 0 0 100vmax rgba(0,0,0,.0);
+    }
+    aside.open { transform: translateX(0); box-shadow: 0 0 0 100vmax rgba(0,0,0,.5); }
+    .brand span { display: none; }
+    .output { height: 46vh; }
+    .tabs { font-size: 12px; }
+    .btn .label { display: none; }
+    .btn { padding: 0 10px; }
+  }
+  @media (max-width: 860px) and (orientation: landscape) {
+    .output { height: 60vh; }
+  }
+  .toast {
+    position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%);
+    background: var(--surface-3); border: 1px solid var(--border-strong);
+    padding: 8px 14px; border-radius: 999px; font-size: 12.5px; z-index: 60;
+    opacity: 0; pointer-events: none; transition: opacity var(--ease);
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <button class="icon-btn" id="menu" title="Files (Ctrl+B)" aria-label="Toggle file list">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6l8-4 8 4v12l-8 4-8-4z"/><path d="M12 2v20"/></svg>
+      <span>Silica <small>Script Mode</small></span>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn primary" id="run" title="Run (Ctrl+Enter)">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg><span class="label">Run</span>
+    </button>
+    <button class="btn danger" id="stop" title="Stop" disabled>
+      <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg><span class="label">Stop</span>
+    </button>
+    <button class="icon-btn" id="theme" title="Toggle theme" aria-label="Toggle theme">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg>
+    </button>
+  </header>
+
+  <main id="layout">
+    <aside id="sidebar">
+      <div class="side-head"><span>Scripts</span>
+        <button class="icon-btn" id="new-file" title="New script (Ctrl+N)" aria-label="New script">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </div>
+      <div class="files" id="files"><div class="empty">Loading…</div></div>
+    </aside>
+
+    <div class="editor-area">
+      <div class="tabs" id="tabs"></div>
+      <div class="panes">
+        <div class="editor">
+          <div class="scroll" id="scroll">
+            <div class="code-wrap">
+              <div class="gutter" id="gutter">1</div>
+              <div class="code">
+                <pre id="highlight" aria-hidden="true"></pre>
+                <textarea id="source" spellcheck="false" autocapitalize="off"
+                          autocomplete="off" autocorrect="off" wrap="off"
+                          aria-label="Silica source code"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="output" id="output">
+        <div class="out-head">
+          <button class="chip active" data-panel="stdout">Output</button>
+          <button class="chip" data-panel="stderr">Errors<span class="count" id="err-count"></span></button>
+          <button class="chip" data-panel="problems">Problems<span class="count" id="diag-count"></span></button>
+          <div class="spacer"></div>
+          <span id="run-status" class="empty">idle</span>
+          <button class="icon-btn" id="collapse" title="Collapse output" aria-label="Collapse output">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+        </div>
+        <div class="out-body">
+          <pre class="out-stdout" id="pane-stdout"><span class="empty">Press Run to execute this script.</span></pre>
+          <pre class="out-stderr" id="pane-stderr" hidden></pre>
+          <div id="pane-problems" hidden></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <span id="status-file" class="pill">no file</span>
+    <span id="status-pos">1:1</span>
+    <span class="grow"></span>
+    <span id="status-mode" class="pill">Silica</span>
+    <span id="status-exit" class="pill">—</span>
+    <span id="status-version">—</span>
+  </footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const TOKEN = "__SILICA_TOKEN__";
+const api = (path) => path + (path.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(TOKEN);
+
+const state = {
+  meta: null,
+  files: [],
+  tabs: [],          // {path, text, saved, dirty}
+  active: -1,
+  run: null,
+  timer: null,
+  panel: "stdout",
+  diagnostics: [],
+};
+
+const $ = (id) => document.getElementById(id);
+
+function toast(message, ms = 1800) {
+  const el = $("toast");
+  el.textContent = message;
+  el.classList.add("show");
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove("show"), ms);
+}
+
+async function request(path, options) {
+  const response = await fetch(api(path), options);
+  const text = await response.text();
+  let data = {};
+  try { data = text ? JSON.parse(text) : {}; } catch (e) { data = { error: text }; }
+  if (!response.ok) throw new Error(data.error || ("HTTP " + response.status));
+  return data;
+}
+
+/* ---------- highlighting ---------- */
+function escapeHtml(s) {
+  return s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+}
+
+function highlight(text) {
+  const meta = state.meta || { keywords: [], types: [] };
+  const keywords = new Set(meta.keywords || []);
+  const types = new Set(meta.types || []);
+  let out = "";
+  let i = 0;
+  const push = (cls, value) => {
+    out += cls ? '<span class="tok-' + cls + '">' + escapeHtml(value) + "</span>"
+               : escapeHtml(value);
+  };
+  while (i < text.length) {
+    const rest = text.slice(i);
+    let m;
+    if ((m = /^#.*/.exec(rest)) || (m = /^\/\/.*/.exec(rest))) {
+      push("com", m[0]); i += m[0].length; continue;
+    }
+    if ((m = /^"(\\.|[^"\\])*"/.exec(rest))) { push("str", m[0]); i += m[0].length; continue; }
+    if ((m = /^\d+\.\d+/.exec(rest)) || (m = /^\d+/.exec(rest))) {
+      push("num", m[0]); i += m[0].length; continue;
+    }
+    if ((m = /^[A-Za-z_][A-Za-z0-9_]*/.exec(rest))) {
+      const word = m[0];
+      const after = rest.slice(word.length);
+      let cls = null;
+      if (keywords.has(word)) cls = "kw";
+      else if (types.has(word)) cls = "type";
+      else if (/^\s*\(/.test(after)) cls = "fn";
+      push(cls, word); i += word.length; continue;
+    }
+    if ((m = /^(==|!=|<=|>=|->|[-+*\/%=<>!])/.exec(rest))) {
+      push("op", m[0]); i += m[0].length; continue;
+    }
+    push(null, text[i]); i += 1;
+  }
+  return out + "\n";
+}
+
+/* ---------- editor ---------- */
+function currentTab() { return state.tabs[state.active] || null; }
+
+function renderTabs() {
+  const box = $("tabs");
+  box.innerHTML = "";
+  state.tabs.forEach((tab, index) => {
+    const el = document.createElement("button");
+    el.className = "tab" + (index === state.active ? " active" : "");
+    const name = tab.path.split("/").pop();
+    el.innerHTML = '<span>' + escapeHtml(name) + '</span>' +
+      (tab.dirty ? '<span class="dirty">●</span>' : '') +
+      '<span class="close" role="button" aria-label="Close">×</span>';
+    el.onclick = (event) => {
+      if (event.target.classList.contains("close")) { closeTab(index); return; }
+      selectTab(index);
+    };
+    box.appendChild(el);
+  });
+}
+
+function renderEditor() {
+  const tab = currentTab();
+  const area = $("source");
+  if (!tab) {
+    area.value = "";
+    $("highlight").innerHTML = "";
+    $("gutter").textContent = "1";
+    $("status-file").textContent = "no file";
+    return;
+  }
+  if (area.value !== tab.text) area.value = tab.text;
+  $("highlight").innerHTML = highlight(tab.text);
+  updateGutter(tab.text);
+  $("status-file").textContent = tab.path + (tab.dirty ? " •" : "");
+  $("status-file").className = "pill" + (tab.dirty ? " ok" : "");
+}
+
+function updateGutter(text) {
+  const lines = text.split("\n").length;
+  let out = "";
+  for (let n = 1; n <= lines; n++) out += n + "\n";
+  $("gutter").textContent = out;
+}
+
+function syncScroll() {
+  const scroll = $("scroll");
+  const pre = $("highlight");
+  pre.style.transform = "translate(" + (-scroll.scrollLeft) + "px, " + (-scroll.scrollTop) + "px)";
+  pre.style.position = "absolute";
+  pre.style.inset = "0";
+  pre.style.padding = "12px 16px";
+  pre.style.minWidth = "100%";
+}
+
+function updatePosition() {
+  const area = $("source");
+  const upto = area.value.slice(0, area.selectionStart);
+  const line = upto.split("\n").length;
+  const col = upto.length - upto.lastIndexOf("\n");
+  $("status-pos").textContent = line + ":" + col;
+}
+
+function onInput() {
+  const tab = currentTab();
+  if (!tab) return;
+  tab.text = $("source").value;
+  tab.dirty = tab.text !== tab.saved;
+  $("highlight").innerHTML = highlight(tab.text);
+  updateGutter(tab.text);
+  updatePosition();
+  renderTabs();
+  $("status-file").textContent = tab.path + (tab.dirty ? " •" : "");
+  $("status-file").className = "pill" + (tab.dirty ? " ok" : "");
+}
+
+function selectTab(index) {
+  state.active = index;
+  renderTabs();
+  renderEditor();
+  syncScroll();
+}
+
+function closeTab(index) {
+  const tab = state.tabs[index];
+  if (tab && tab.dirty && !confirm("Discard unsaved changes in " + tab.path + "?")) return;
+  state.tabs.splice(index, 1);
+  if (state.active >= state.tabs.length) state.active = state.tabs.length - 1;
+  renderTabs(); renderEditor();
+}
+
+/* ---------- files ---------- */
+async function loadFiles() {
+  const data = await request("/api/files");
+  state.files = data.files || [];
+  const box = $("files");
+  box.innerHTML = "";
+  if (!state.files.length) {
+    box.innerHTML = '<div class="empty">No .sc files yet.</div>';
+    return;
+  }
+  for (const file of state.files) {
+    const el = document.createElement("button");
+    el.className = "file";
+    const open = state.tabs.some((t) => t.path === file.path);
+    el.innerHTML = (open ? '<span class="dot">● </span>' : "") + escapeHtml(file.path);
+    el.title = file.path;
+    el.onclick = () => openFile(file.path);
+    box.appendChild(el);
+  }
+}
+
+async function openFile(path) {
+  const existing = state.tabs.findIndex((t) => t.path === path);
+  if (existing >= 0) { selectTab(existing); return; }
+  try {
+    const data = await request("/api/file?path=" + encodeURIComponent(path));
+    state.tabs.push({ path: data.path, text: data.text, saved: data.text, dirty: false });
+    selectTab(state.tabs.length - 1);
+  } catch (error) { toast("Open failed: " + error.message); }
+}
+
+async function newFile() {
+  const name = prompt("New script name", "script.sc");
+  if (!name) return;
+  const path = name.endsWith(".sc") ? name : name + ".sc";
+  try {
+    await request("/api/file", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path, text: 'sfn main() {\n    sprint("Hello from Silica")\n}\n' }),
+    });
+    await loadFiles();
+    await openFile(path);
+    toast("Created " + path);
+  } catch (error) { toast("Create failed: " + error.message); }
+}
+
+async function save() {
+  const tab = currentTab();
+  if (!tab) return;
+  try {
+    await request("/api/file", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: tab.path, text: tab.text }),
+    });
+    tab.saved = tab.text;
+    tab.dirty = false;
+    renderTabs(); renderEditor();
+    toast("Saved " + tab.path);
+    loadFiles();
+  } catch (error) { toast("Save failed: " + error.message); }
+}
+
+/* ---------- run ---------- */
+async function run() {
+  const tab = currentTab();
+  if (!tab) { toast("Open a script first"); return; }
+  if (tab.dirty) await save();
+  $("run").disabled = true;
+  $("stop").disabled = false;
+  $("run-status").textContent = "running…";
+  $("run-status").className = "";
+  $("status-exit").textContent = "—";
+  $("status-exit").className = "pill";
+  setPanel("stdout");
+  $("pane-stdout").textContent = "";
+  $("pane-stderr").textContent = "";
+  try {
+    const started = await request("/api/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: tab.path }),
+    });
+    state.run = started.id;
+    poll();
+  } catch (error) {
+    finish({ status: "failed", stdout: "", stderr: error.message, exit_code: -1, diagnostics: [] });
+  }
+}
+
+function poll() {
+  clearTimeout(state.timer);
+  state.timer = setTimeout(async () => {
+    if (!state.run) return;
+    try {
+      const data = await request("/api/run?id=" + encodeURIComponent(state.run));
+      $("pane-stdout").textContent = data.stdout || "";
+      $("pane-stderr").textContent = data.stderr || "";
+      state.diagnostics = data.diagnostics || [];
+      renderDiagnostics();
+      if (data.status === "finished" || data.status === "stopped" || data.status === "failed") {
+        finish(data);
+      } else {
+        poll();
+      }
+    } catch (error) {
+      finish({ status: "failed", stdout: "", stderr: error.message, exit_code: -1, diagnostics: [] });
+    }
+  }, 180);
+}
+
+function finish(data) {
+  state.run = null;
+  clearTimeout(state.timer);
+  $("run").disabled = false;
+  $("stop").disabled = true;
+  $("pane-stdout").textContent = data.stdout || "";
+  $("pane-stderr").textContent = data.stderr || "";
+  state.diagnostics = data.diagnostics || [];
+  renderDiagnostics();
+  const code = data.exit_code;
+  $("status-exit").textContent = "exit " + code;
+  $("status-exit").className = "pill " + (code === 0 ? "ok" : "err");
+  $("run-status").textContent = data.status + " in " + (data.seconds || 0) + "s";
+  $("run-status").className = code === 0 ? "pill ok" : "pill err";
+  if (state.diagnostics.length) setPanel("problems");
+  else if ((data.stderr || "").trim()) setPanel("stderr");
+}
+
+async function stop() {
+  if (!state.run) return;
+  try { await request("/api/stop", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: state.run }),
+  }); } catch (error) { toast("Stop failed: " + error.message); }
+}
+
+/* ---------- panels ---------- */
+function setPanel(name) {
+  state.panel = name;
+  document.querySelectorAll(".chip").forEach((chip) => {
+    chip.classList.toggle("active", chip.dataset.panel === name);
+  });
+  $("pane-stdout").hidden = name !== "stdout";
+  $("pane-stderr").hidden = name !== "stderr";
+  $("pane-problems").hidden = name !== "problems";
+  $("output").classList.remove("collapsed");
+}
+
+function renderDiagnostics() {
+  const box = $("pane-problems");
+  const count = state.diagnostics.length;
+  $("diag-count").textContent = count ? String(count) : "";
+  $("err-count").textContent = count ? String(count) : "";
+  if (!count) {
+    box.innerHTML = '<div class="empty">No problems reported.</div>';
+    return;
+  }
+  box.innerHTML = "";
+  for (const diag of state.diagnostics) {
+    const el = document.createElement("button");
+    el.className = "diag";
+    el.innerHTML = '<span class="where">' + escapeHtml(diag.path) + ":" + diag.line +
+      (diag.col ? ":" + diag.col : "") + "</span> " +
+      '<span class="kind">' + escapeHtml(diag.kind) + "</span> " +
+      escapeHtml(diag.message);
+    el.onclick = () => gotoLocation(diag);
+    box.appendChild(el);
+  }
+}
+
+function gotoLocation(diag) {
+  const index = state.tabs.findIndex((t) => t.path === diag.path ||
+    t.path.endsWith("/" + diag.path) || diag.path.endsWith("/" + t.path));
+  if (index < 0) { toast("Open " + diag.path + " to jump there"); return; }
+  selectTab(index);
+  const area = $("source");
+  const lines = area.value.split("\n");
+  let offset = 0;
+  for (let i = 0; i < Math.min(diag.line - 1, lines.length); i++) offset += lines[i].length + 1;
+  offset += Math.max(0, (diag.col || 1) - 1);
+  area.focus();
+  area.setSelectionRange(offset, offset);
+  const lineHeight = parseFloat(getComputedStyle(area).lineHeight) || 20;
+  $("scroll").scrollTop = Math.max(0, (diag.line - 3) * lineHeight);
+  updatePosition();
+}
+
+/* ---------- boot ---------- */
+async function boot() {
+  try {
+    state.meta = await request("/api/meta");
+    $("status-version").textContent = "Silica " + state.meta.version;
+  } catch (error) { toast("Cannot reach the Silica runner: " + error.message); }
+  await loadFiles();
+
+  const first = state.files[0];
+  if (first) await openFile(first.path);
+  else { $("source").value = ""; }
+
+  $("source").addEventListener("input", onInput);
+  $("source").addEventListener("keyup", updatePosition);
+  $("source").addEventListener("click", updatePosition);
+  $("source").addEventListener("scroll", syncScroll);
+  $("scroll").addEventListener("scroll", syncScroll);
+  $("source").addEventListener("keydown", (event) => {
+    if (event.key === "Tab") {
+      event.preventDefault();
+      const area = event.target;
+      const start = area.selectionStart;
+      area.setRangeText("    ", start, area.selectionEnd, "end");
+      onInput();
+    }
+  });
+
+  $("run").onclick = run;
+  $("stop").onclick = stop;
+  $("new-file").onclick = newFile;
+  $("menu").onclick = () => $("sidebar").classList.toggle("open");
+  $("collapse").onclick = () => $("output").classList.toggle("collapsed");
+  $("theme").onclick = () => {
+    const html = document.documentElement;
+    const next = html.dataset.theme === "dark" ? "light" : "dark";
+    html.dataset.theme = next;
+    try { localStorage.setItem("silica-theme", next); } catch (e) {}
+  };
+  try {
+    const saved = localStorage.getItem("silica-theme");
+    if (saved) document.documentElement.dataset.theme = saved;
+  } catch (e) {}
+
+  document.querySelectorAll(".chip").forEach((chip) => {
+    chip.onclick = () => setPanel(chip.dataset.panel);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    const mod = event.ctrlKey || event.metaKey;
+    if (!mod) return;
+    if (event.key === "s") { event.preventDefault(); save(); }
+    if (event.key === "Enter") { event.preventDefault(); run(); }
+    if (event.key === "n") { event.preventDefault(); newFile(); }
+    if (event.key === "b") { event.preventDefault(); $("sidebar").classList.toggle("open"); }
+  });
+
+  window.addEventListener("beforeunload", (event) => {
+    if (state.tabs.some((t) => t.dirty)) { event.preventDefault(); event.returnValue = ""; }
+  });
+
+  syncScroll();
+  updatePosition();
+}
+
+boot();
+</script>
+</body>
+</html>
