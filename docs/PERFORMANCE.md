@@ -1,8 +1,10 @@
 # Silica Performance — measured, not claimed
 
-Silica's v0.8.0 engine is written in Python (the VM is unchanged since 0.1.0, which is what the numbers below measure). Every Silica instruction costs one
+Silica's engine is written in Python (the VM is unchanged since 0.1.0, which is
+what the numbers below measure). Every Silica instruction costs one
 Python-level dispatch step, so the honest headline is: **this implementation is
-slower than CPython, by roughly 25×–85× on the workloads below.**
+slower than CPython, by roughly 47×–111× on the workloads below**, measured on
+2026-10-28 with Silica 0.9.0.
 
 That is expected, and it is measured rather than assumed. The numbers exist to
 be a baseline for the Rust port (Milestone E/F), not a marketing claim. Silica
@@ -20,26 +22,33 @@ Python function performing the same work with the same algorithm, takes the best
 of N runs, checks that both produce the expected result, and prints a ratio
 (`silica time / python time`; above 1.00× means Silica is slower).
 
-## One real run
+## The current run
 
-Recorded on the development sandbox used to build this release:
+Recorded on 2026-10-28 with `python3 benchmarks/bench.py --runs 3`:
 
 | | |
 |---|---|
 | Host | Linux, x86_64 |
 | Python | CPython 3.12.13 |
-| Silica | 0.1.0, bytecode VM (Python reference engine) |
-| Runs | best of 2 |
+| Silica | 0.9.0, bytecode VM (Python reference engine) |
+| Runs | best of 3 |
 
 | Workload | Silica | CPython | Ratio |
 |---|---|---|---|
-| arithmetic loop, 1e6 iterations | 14628.7 ms | 270.1 ms | 54.2× slower |
-| recursion, `fib(24)` (≈150k calls) | 1861.2 ms | 22.1 ms | 84.4× slower |
-| collections: 200k `push` + iterate + sort | 2977.9 ms | 118.4 ms | 25.2× slower |
-| strings: 20k-element `join` + `split` | 215.0 ms | 3.3 ms | 66.1× slower |
+| arithmetic loop, 1e6 iterations | 15155.8 ms | 323.4 ms | 46.9× slower |
+| recursion, `fib(24)` (≈150k calls) | 1945.0 ms | 17.5 ms | 111.1× slower |
+| collections: 200k `push` + iterate + sort | 3098.0 ms | 56.6 ms | 54.8× slower |
+| strings: 20k-element `join` + `split` | 183.1 ms | 3.7 ms | 49.5× slower |
 
 Absolute times vary with the machine; the ratio is the useful figure. Re-run the
 script on your own hardware before quoting a number.
+
+### Historical runs — superseded, do not quote
+
+Earlier tables in this file recorded 25×–85× and then 41×–93× on the same four
+workloads, with Silica 0.1.0/0.8.0 and different CPython builds. They are kept
+only to show the trend; every one of them has been replaced by the table above,
+and none of them should be quoted as the current figure.
 
 ## What the numbers mean
 
