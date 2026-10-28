@@ -78,12 +78,26 @@ virtualized lists, 3D transforms and shared-element transitions.
 Self-hosting: see `docs/BOOTSTRAP.md` for the staged plan. Silica does not
 compile itself today.
 
-## Known limitations in v0.8.0
+## Milestone G — loop control · **done (0.9.0)**
+
+* `break` and `continue` for `tant` and `per`, compiled to jumps: no new opcode,
+  no change to the `.sbc` format.
+* Loop-frame stack in the compiler; the `per` iterator is popped on `break`, so
+  the verifier's stack-depth analysis still holds.
+* `loop_depth` in the checker: a jump outside a loop, or one that tries to cross
+  a function boundary, is a compile-time error with a hint.
+* 34 tests, an example, a spec section, grammar rules and editor highlighting.
+
+Not done: labelled jumps, `else` on loops, and `break` out of a `call { ... }`
+builder block (rejected by design).
+
+## Known limitations in v0.9.0
 
 * No generics: `List`/`Map` elements check as `Any`.
 * No first-class functions, closures, methods or user-defined types.
 * No exceptions; errors are runtime aborts plus `ret`-based conventions.
 * `per` loop variables are immutable.
+* No labelled `break`/`continue`: they always target the innermost loop.
 * No negative indexing, no element assignment (`xs[i] = v`); use `push`.
 * The REPL compiles each entry from scratch (fine for interactive use, not a
   fast edit-compile loop).
