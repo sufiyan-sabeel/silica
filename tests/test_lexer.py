@@ -64,10 +64,12 @@ class LexerTests(unittest.TestCase):
             tokenize("let a = 1\nlet b = @")
         self.assertEqual((ctx.exception.line, ctx.exception.col), (2, 9))
 
-    def test_single_quotes_are_rejected_with_hint(self):
-        with self.assertRaises(LexError) as ctx:
-            tokenize("sprint('hi')")
-        self.assertIn("double quotes", ctx.exception.hint)
+    def test_single_quotes_are_a_delimiter(self):
+        # 0.9.0: single quotes used to be rejected with a hint; they are now a
+        # real delimiter, and `tests/test_string_delimiters.py` covers all four
+        tokens, _ = tokenize("sprint('hi')")
+        self.assertEqual(tokens[2].kind, "string")
+        self.assertEqual(tokens[2].value, "hi")
 
     def test_unterminated_string(self):
         with self.assertRaises(LexError):
