@@ -50,3 +50,68 @@ jobs:
           python -m silica fmt --check examples/*.sc tests/silica/*.sc benchmarks/silica/*.sc
       - name: Version
         run: python -m silica --version
+
+  # Packaging is validated on every push so a broken wheel is caught here rather
+  # than at tag time. This job never publishes anything — publishing lives only in
+  # release.yml, which is triggered by a tag.
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build the wheel and sdist
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build
+          python -m build
+
+      - name: Inspect the archives
+        run: |
+          python - <<'PY'
+          import glob, tarfile, zipfile
+          wheel = glob.glob("dist/*.whl")[0]
+          sdist = glob.glob("dist/*.tar.gz")[0]
+          bad = []
+          with zipfile.ZipFile(wheel) as z:
+              names = z.namelist()
+          with tarfile.open(sdist) as t:
+              names += t.getnames()
+          # egg-info is *expected* inside an sdist: setuptools generates it as part
+          # of the sdist build. It must not appear in the wheel, and it must never
+          # appear in the repository — that is what .gitignore is for.
+          with zipfile.ZipFile(wheel) as z:
+              wheel_names = z.namelist()
+          for name in wheel_names:
+              if "__pycache__" in name or name.endswith(".pyc") \
+                      or "egg-info" in name or name.endswith(".sbc"):
+                  bad.append("wheel: " + name)
+          with tarfile.open(sdist) as t:
+              sdist_names = t.getnames()
+          for name in sdist_names:
+              if "__pycache__" in name or name.endswith(".pyc") \
+                      or "/.git/" in name or name.endswith(".sbc"):
+                  bad.append("sdist: " + name)
+          if bad:
+              raise SystemExit("unwanted files in the archives: %s" % bad[:10])
+          required = ["silica/ide/app.html", "silica/__init__.py", "silica/cli.py"]
+          missing = [r for r in required if r not in names]
+          if missing:
+              raise SystemExit("missing runtime files: %s" % missing)
+          licences = [n for n in names if n.endswith("licenses/LICENSE") or n.endswith("LICENSE")]
+          if not licences:
+              raise SystemExit("no LICENSE in the wheel")
+          print("archives clean:", len(names), "entries")
+          PY
+
+      - name: Install the wheel into a clean environment and run a script
+        run: |
+          python -m venv /tmp/pkg
+          /tmp/pkg/bin/pip install --quiet dist/*.whl
+          /tmp/pkg/bin/silica --version
+          cd /tmp
+          printf 'sfn main() {\n    sprint("packaged ok")\n}\n' > pkg.sc
+          /tmp/pkg/bin/silica pkg.sc
+          /tmp/pkg/bin/python -c "import os, silica.ide; p=os.path.join(os.path.dirname(silica.ide.__file__), 'app.html'); assert os.path.getsize(p) > 1000; print('ide asset ok')"
