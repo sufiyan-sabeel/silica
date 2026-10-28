@@ -140,9 +140,30 @@ launcher in `~/.local/bin` (or `$PREFIX/bin` on Termux). No `sudo` unless you se
 `SILICA_SYSTEM=1`.
 
 ```bash
-SILICA_VERSION=0.7.0 sh install.sh   # roll back to a previous release
+SILICA_VERSION=0.9.0 sh install.sh   # upgrade or pin to a version
+SILICA_VERSION=0.8.0 sh install.sh   # roll back
 sh uninstall.sh                      # remove only what it installed
 ```
+
+### The package
+
+Silica is a Python package: distribution name **`silica-lang`**, import name
+`silica`, version `0.9.0`, Python **3.9+**, and **no runtime dependencies** — the
+language, CLI, standard library, TUI and IDE are pure standard library.
+
+It is distributed as **versioned GitHub Release assets** (wheel, sdist,
+`SHA256SUMS.txt`). It is *not* on GitHub Packages, because GitHub Packages has no
+Python registry — its registries are npm, RubyGems, Maven, Gradle, NuGet and
+containers. Nothing here is published to a package registry, and this README does
+not claim otherwise.
+
+```bash
+pip install dist/silica_lang-0.9.0-py3-none-any.whl   # a downloaded asset
+silica --version                                       # -> silica 0.9.0
+```
+
+See [`docs/PACKAGING.md`](docs/PACKAGING.md) for the wheel contents, the release
+pipeline and the Dependabot setup.
 
 From a checkout instead:
 
@@ -277,7 +298,7 @@ silica/gui/        desktop windows on tkinter
 silica/ide/        Script Mode IDE: workspace, runner, HTTP API, editor page
 tests/             671 tests
 examples/          runnable .sc programs
-docs/              language spec, bytecode, security, audit, IDE, UI, voice
+docs/              language spec, bytecode, security, audit, IDE, UI, voice, packaging
 benchmarks/        benchmarks against CPython
 ```
 
@@ -299,6 +320,10 @@ python3 -m silica fmt --check examples/*.sc  # formatting must be canonical
 
 Please keep the honesty rule: if something is not implemented or not tested on a
 platform, say so in the docs rather than describing it as working.
+
+Dependabot opens weekly pull requests for GitHub Actions and for the development
+dependencies. They are merged only with CI green; the review checklist is in
+[`docs/PACKAGING.md`](docs/PACKAGING.md).
 
 ---
 
