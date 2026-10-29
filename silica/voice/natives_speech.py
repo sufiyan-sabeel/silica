@@ -138,6 +138,35 @@ def _voices(ctx, args):
     return rows
 
 
+def _record(ctx, args):
+    from .. import voice
+    seconds = args[0] if args else 5
+    path = _need_string("voice.record", args[1]) if len(args) > 1 else None
+    try:
+        return voice.record(seconds=seconds, path=path)
+    except Exception as exc:  # noqa: BLE001
+        _fail("voice.record: %s" % exc)
+
+
+def _listen(ctx, args):
+    from .. import voice
+    seconds = args[0] if args else 5
+    options = _options(args, 1, "voice.listen")
+    try:
+        return voice.listen(seconds=seconds,
+                            language=options.get("language"),
+                            engine=options.get("engine"),
+                            model=options.get("model"),
+                            path=options.get("path"))
+    except Exception as exc:  # noqa: BLE001
+        _fail("voice.listen: %s" % exc)
+
+
+def _platform(ctx, args):
+    from .. import voice
+    return voice.platform()
+
+
 def _licence(ctx, args):
     """Licence details for one voice, or for the default when no name is given."""
     from .. import voice
@@ -171,6 +200,9 @@ FUNCTIONS = (
      SPEECH_LISTEN, 0),
     ("voices", [], "List", _voices, 0, 0, None, None),
     ("licence", ["String"], "Map", _licence, 0, 1, None, None),
+    ("platform", [], "Map", _platform, 0, 0, None, None),
+    ("record", ["Int", "String"], "String", _record, 0, 2, SPEECH_LISTEN, None),
+    ("listen", ["Int", "Map"], "Map", _listen, 0, 2, SPEECH_LISTEN, None),
     ("languages", [], "Map", _languages, 0, 0, None, None),
     ("status", [], "Map", _status, 0, 0, None, None),
 )
