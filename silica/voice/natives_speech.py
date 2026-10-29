@@ -125,8 +125,24 @@ def _voices(ctx, args):
             "language": entry["language"],
             "label": entry["label"],
             "installed": entry["installed"],
+            # licence travel with the voice so a caller cannot pick one without
+            # being able to see what it is licensed under
+            "licence": entry["licence"],
+            "licence_url": entry["licence_url"],
+            "licence_verified": entry["licence_verified"],
+            "commercial_use": entry["commercial_use"],
+            "attribution_required": entry["attribution_required"],
+            # "" rather than Unit: Silica code can then use len(...) > 0
+            "licence_risk": entry["licence_risk"] or "",
         })
     return rows
+
+
+def _licence(ctx, args):
+    """Licence details for one voice, or for the default when no name is given."""
+    from .. import voice
+    name = _need_string("voice.licence", args[0]) if args else None
+    return voice.licence(name)
 
 
 def _languages(ctx, args):
@@ -154,6 +170,7 @@ FUNCTIONS = (
     ("transcribe", ["String", "Map"], "Map", _transcribe, 1, 2,
      SPEECH_LISTEN, 0),
     ("voices", [], "List", _voices, 0, 0, None, None),
+    ("licence", ["String"], "Map", _licence, 0, 1, None, None),
     ("languages", [], "Map", _languages, 0, 0, None, None),
     ("status", [], "Map", _status, 0, 0, None, None),
 )
