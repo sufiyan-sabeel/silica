@@ -32,7 +32,9 @@ silica run examples/tui_demo.sc --allow-tui
 | Real keyboard input, arrow-key focus | Works; tested through a pseudo-terminal |
 | Resizing | Works; `KEY_RESIZE` becomes the `"resize"` event |
 | Clean shutdown and terminal restore | Works; tested — the alternate screen is entered and left |
-| Colour | Uses curses colours when the terminal reports them |
+| Colour | **Works** — hex theme colours mapped to the terminal's palette, verified by reading SGR escapes from a pty |
+| Mouse | **Works** — click to focus, click to activate, verified with a real SGR mouse event |
+| Arrow keys | **Works** — including on terminals whose terminfo has no arrow capabilities (decoded by hand) |
 | GUI (windows) | **Not implemented.** See `docs/GUI.md` for why |
 
 ---
@@ -76,9 +78,56 @@ key.
 | Terminal resized | `"resize"` |
 | Ctrl-C, Ctrl-D | `"ctrl-c"`, `"ctrl-d"` |
 
-Arrow keys move focus between focusable widgets (buttons, fields, lists).
-Typing into a focused field appends; backspace deletes. `tui.selected(app)`
-returns the focused widget's text, or a field's current value.
+### Focus
+
+Focus has exactly one source of truth: the app's focus index, resolved by
+`tui.focus(app)`. A widget never decides for itself whether it is focused — an
+earlier version kept a per-widget flag that nothing set, so the marker never
+moved.
+
+* **up / down** move through focusable widgets (buttons, fields, lists,
+  checkboxes); containers are skipped
+* **left / right** are reserved for horizontal selectors
+* focus wraps at both ends
+* a disabled widget is skipped and drawn greyed
+* **enter / space** activate the focused widget once — `tui.pressed(app)`
+  returns the label and clears it, so one keypress cannot fire twice
+* typing appends to a focused field; backspace deletes; delete clears
+
+Arrow keys are decoded from their escape sequence by hand. curses only translates
+them when the terminal's terminfo declares the capability, and on a minimal
+terminfo it returns `ESC`, `[`, `B` as three keys — which silently broke arrow
+navigation. The TUI now reads the sequence itself, so arrows work either way.
+
+### Mouse
+
+Where the terminal reports mouse events, **clicking a widget focuses it**, and
+clicking a button activates it. If the terminal refuses mouse reporting,
+`app.mouse` stays false and nothing else changes. There is no hover, no drag and
+no wheel handling.
+
+---
+
+## The calculator example
+
+`examples/tui_calculator.sc` is a working demonstration: two numeric fields, four
+operation buttons, a result panel, input validation and division-by-zero
+handling.
+
+```bash
+silica run examples/tui_calculator.sc --allow-tui
+```
+
+| Key | Action |
+|---|---|
+| Tab / up / down | move focus between the fields and the buttons |
+| typing, backspace | edit the focused field |
+| enter / space | run the focused operation |
+| escape | clear both fields |
+| q | quit |
+
+The arithmetic lives in `compute(...)`, apart from rendering and event handling,
+so it can be tested without a terminal.
 
 ---
 
@@ -125,15 +174,44 @@ Content that does not fit is clipped, never wrapped over the edge.
 
 ## Theming
 
-Semantic tokens, mapped per backend:
+The theme holds hex colours. Rendering emits a *style token* per segment and the
+driver maps tokens to curses colour pairs at paint time, so a theme change is
+visible on the next frame.
 
 ```silica
-tui.theme(app, {"accent": "magenta", "text": "white"})
+tui.theme(app, {"accent": "#45C6B0", "error": "#F87171"})
 ```
 
-Tokens: `background`, `surface`, `text`, `text_muted`, `accent`, `border`,
-`error`, `success`, `focus`. `tui.tokens(app)` reads them back. A terminal
-without colour support simply gets default attributes — nothing fails.
+The default is a dark palette:
+
+| Token | Colour | Used for |
+|---|---|---|
+| `background` | `#0B0D10` | the page behind widgets |
+| `surface` | `#15191E` | widget fill |
+| `border` | `#262C36` | panel borders and dividers |
+| `text` | `#F3F4F6` | body text |
+| `text_muted` | `#9CA3AF` | secondary text, disabled widgets |
+| `accent` | `#45C6B0` | titles, focus |
+| `error` | `#F87171` | errors |
+| `success` | `#4ADE80` | success |
+| `warning` | `#FBBF24` | warnings |
+
+Named colours (`"cyan"`, `"red"`, …) are still accepted, so an older theme keeps
+working.
+
+### Colour fallback
+
+`tui.colour_mode(app)` reports what the terminal supports:
+
+| Mode | When | Behaviour |
+|---|---|---|
+| `256` | `COLORS >= 256` | nearest colour in the xterm-256 cube and grey ramp |
+| `basic` | 8 or 16 colours | nearest of the eight ANSI colours |
+| `none` | no colour support | default attributes; the layout is identical |
+
+Mapping is nearest-colour, so `#45C6B0` becomes index 79 on a 256-colour
+terminal and green on an 8-colour one. Nothing is hard-coded: every colour goes
+through the theme.
 
 ---
 
