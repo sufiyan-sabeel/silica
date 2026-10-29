@@ -303,6 +303,15 @@ to real functions. Drawing to the screen needs the `tui.run` capability
 | `tui.row` | () -> Any | children side by side, equal widths |
 | `tui.run` | (Any, String?) -> Unit | loop until the quit key (default `q`) |
 | `tui.selected` | (Any) -> String | the focused widget's text or value |
+| `tui.checkbox` | (String) -> Any | a toggle with a label; focusable |
+| `tui.lib.widgets.checkbox` | (String) -> Any | a toggle with a label; focusable |
+| `tui.press` | (Any) -> String | activate the focused widget once; returns its label |
+| `tui.pressed` | (Any) -> String | consume the last activation, so one keypress fires once |
+| `tui.focus` | (Any) -> String | the label of the focused widget |
+| `tui.focus_next` | (Any, Int?) -> String | move focus forward or back; returns the new label |
+| `tui.disable` | (Any) -> Unit | make a widget unfocusable and greyed |
+| `tui.enable` | (Any) -> Unit | undo tui.disable |
+| `tui.colour_mode` | (Any) -> String | "256", "basic" or "none" for this terminal |
 | `tui.set_text` | (Any, String) -> Unit | set a widget's text or field value |
 | `tui.size` | (Any) -> Map | {width, height} of the terminal |
 | `tui.spacer` | (Int?) -> Any | vertical gap, default 1 |
