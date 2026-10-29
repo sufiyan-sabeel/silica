@@ -58,16 +58,19 @@ FS_WRITE = "fs.write"
 FS_LIST = "fs.list"
 SPEECH_SPEAK = "speech.speak"
 SPEECH_LISTEN = "speech.listen"
+# Downloading or deleting a voice model reaches the network and the disk, which
+# is a different act from speaking, so it gets its own capability.
+SPEECH_MODELS = "speech.models"
 TUI_RUN = "tui.run"
 GUI_RUN = "gui.run"
 
-KNOWN = (FS_READ, FS_WRITE, FS_LIST, SPEECH_SPEAK, SPEECH_LISTEN,
+KNOWN = (FS_READ, FS_WRITE, FS_LIST, SPEECH_SPEAK, SPEECH_LISTEN, SPEECH_MODELS,
          TUI_RUN, GUI_RUN)
 
 # which native argument holds the path, per capability, is declared on the
 # native itself; this table is only used for diagnostics and config parsing.
 # Capabilities that grant a whole facility rather than a directory of files.
-_UNSCOPED = (TUI_RUN, GUI_RUN)
+_UNSCOPED = (TUI_RUN, GUI_RUN, SPEECH_MODELS)
 
 _TITLES = {
     FS_READ: "read files",
@@ -75,6 +78,7 @@ _TITLES = {
     FS_LIST: "list directories",
     SPEECH_SPEAK: "synthesise and play speech",
     SPEECH_LISTEN: "read audio and transcribe it",
+    SPEECH_MODELS: "download or delete voice models",
     TUI_RUN: "draw to the terminal and read keys",
     GUI_RUN: "open windows and run an event loop",
 }
@@ -85,6 +89,7 @@ _FLAGS = {
     FS_LIST: "--allow-fs-list",
     SPEECH_SPEAK: "--allow-speech-speak",
     SPEECH_LISTEN: "--allow-speech-listen",
+    SPEECH_MODELS: "--allow-speech-models",
     TUI_RUN: "--allow-tui",
     GUI_RUN: "--allow-gui",
 }
