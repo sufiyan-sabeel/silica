@@ -74,8 +74,14 @@ directory the installer creates, so `uninstall.sh` cleans them up too.
 
 ## Using it from Silica
 
+There are two namespaces and they are the same code: **`voice`** is the preferred
+name, **`speech`** stays fully supported for programs written against 0.4.0.
+Neither is deprecated. `voice.speak` and `speech.speak` are literally the same
+function object, so there is one implementation, one registry and one set of
+permission requirements — a test asserts that identity.
+
 ```silica
-use speech
+use voice
 
 sfn main() {
     # say something out loud (needs a system player)
@@ -97,6 +103,67 @@ Run with the capabilities it needs:
 ```bash
 silica run hello.sc --allow-speech-speak out --allow-speech-listen out
 ```
+
+The capability names did not change with the namespace: `speech.speak` and
+`speech.listen` still guard both `voice.*` and `speech.*`, because the grant is
+on the capability, not on the spelling.
+
+---
+
+## Licensing — read this before shipping anything
+
+Every voice is trained on a dataset whose licence governs redistribution and
+commercial use. Those licences differ sharply, and **two of the voices this
+project used to offer are non-commercial**. Nothing below is inferred: each entry
+was read from the voice's own model card.
+
+| Voice | Licence | Commercial use | Verified |
+|---|---|---|---|
+| `en_GB-alba-medium` | CC-BY-4.0 | **yes** (attribution) | yes |
+| `te_IN-padmavathi-medium` | CC-BY-4.0 | **yes** (attribution) | yes |
+| `bn_BD-google-medium` | CC-BY-SA-4.0 | **yes** (attribution + share-alike) | yes |
+| `mr_IN-google-medium` | CC-BY-SA-4.0 | **yes** (attribution + share-alike) | yes |
+| `hi_IN-pratham-medium` | CC-BY-NC-SA-4.0 | **no — non-commercial** | yes |
+| `hi_IN-priyamvada-medium` | CC-BY-NC-SA-4.0 | **no — non-commercial** | yes |
+| `en_US-lessac-medium` | Blizzard 2013 | unknown | **no** |
+| `en_US-amy-medium` | "see model card" (mimic3) | unknown | **no** |
+| `ml_IN-meera-medium` | "see model card" (Kaggle) | unknown | **no** |
+| `hi_IN-rohan-medium` | IITM IndicTTS | unknown | **no** |
+| `te_IN-maya-medium` | IITM IndicTTS | unknown | **no** |
+
+Only **four** voices have a licence that is verified and permits commercial use.
+
+The API exposes this rather than hiding it:
+
+```silica
+use voice
+
+sfn main() {
+    let entry = voice.licence("hi_IN-pratham-medium")
+    sprint(entry["id"])          # CC-BY-NC-SA-4.0
+    sprint(str(entry["commercial"]))   # nein
+
+    # licence_risk is "" when the voice is safe to ship
+    per row in voice.voices() {
+        si len(row["licence_risk"]) > 0 {
+            sprint(row["name"] + ": " + row["licence_risk"])
+        }
+    }
+}
+```
+
+`voice.licence(name)` returns `id`, `url`, `verified`, `commercial`,
+`attribution` and `share_alike`. An unknown voice reports `id = "unknown"` and
+`verified = false` — it is never given a convenient default.
+
+**The default voice is still `en_US-lessac-medium`, whose licence is unverified.**
+That was kept for compatibility with 0.4.0 programs, not because it is safe. If
+you are building something you intend to distribute, choose one of the four
+verified voices above, or set `SILICA_VOICE=en_GB-alba-medium`.
+
+The non-commercial voices are not blocked: personal and research use is exactly
+what those licences permit, and Silica cannot know your use. They are marked, and
+you are expected to read the marking.
 
 ### The functions
 
@@ -220,6 +287,9 @@ silica voice info file.wav            # duration, rate, level, silence
   partial output.
 * **No voice cloning, no emotion control**, and `length_scale`/`noise_scale` are
   the only prosody knobs.
+* **Five of the eleven voices have an unverified licence**, and two are
+  non-commercial. See the licensing section.
+* **The default voice is one of the unverified ones**, kept for compatibility.
 
 ---
 
