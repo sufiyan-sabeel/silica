@@ -114,6 +114,80 @@ def _t_table(ctx, args):
     return _register(ctx, ctx.next_handle(), node)
 
 
+def _t_progress(ctx, args):
+    node = Node("progress")
+    node.props["value"] = _need_int("tui.progress", args[0]) if args else 0
+    node.props["max"] = _need_int("tui.progress", args[1]) if len(args) > 1 else 100
+    if node.props["max"] <= 0:
+        _fail("tui.progress: max must be greater than zero")
+    return _register(ctx, ctx.next_handle(), node)
+
+
+def _t_spinner(ctx, args):
+    text = _need_string("tui.spinner", args[0]) if args else "working"
+    return _register(ctx, ctx.next_handle(), Node("spinner", text))
+
+
+def _t_status(ctx, args):
+    text = _need_string("tui.status", args[0])
+    node = Node("status", text)
+    if len(args) > 1:
+        level = _need_string("tui.status", args[1])
+        if level not in ("info", "success", "warning", "error"):
+            _fail("tui.status: level must be info, success, warning or error",
+                  hint="got %r" % level)
+        node.props["level"] = level
+    else:
+        node.props["level"] = "info"
+    return _register(ctx, ctx.next_handle(), node)
+
+
+def _t_radio(ctx, args):
+    items = args[0]
+    if not isinstance(items, list):
+        _fail("tui.radio expects a List, got %s" % type_name(items))
+    if not items:
+        _fail("tui.radio needs at least one option")
+    node = Node("radio")
+    node.items = [str(item) for item in items]
+    node.props["selected"] = 0
+    return _register(ctx, ctx.next_handle(), node)
+
+
+def _t_textarea(ctx, args):
+    text = _need_string("tui.textarea", args[0]) if args else ""
+    node = Node("textarea")
+    node.value = text
+    return _register(ctx, ctx.next_handle(), node)
+
+
+def _t_set_progress(ctx, args):
+    node = _node(None, args[0], ctx)
+    if node.kind != "progress":
+        _fail("tui.set_progress expects a progress widget, got %s" % node.kind)
+    node.props["value"] = _need_int("tui.set_progress", args[1])
+    return None
+
+
+def _t_select(ctx, args):
+    node = _node(None, args[0], ctx)
+    if node.kind not in ("radio", "list"):
+        _fail("tui.select expects a radio or list, got %s" % node.kind)
+    index = _need_int("tui.select", args[1])
+    if index < 0 or index >= len(node.items):
+        _fail("tui.select: index %d is out of range (0..%d)"
+              % (index, len(node.items) - 1))
+    node.props["selected"] = index
+    return node.items[index]
+
+
+def _t_selected_index(ctx, args):
+    node = _node(None, args[0], ctx)
+    if node.kind not in ("radio", "list"):
+        _fail("tui.selected_index expects a radio or list, got %s" % node.kind)
+    return int(node.props.get("selected", 0))
+
+
 def _t_spacer(ctx, args):
     node = Node("spacer")
     node.props["height"] = _need_int("tui.spacer", args[0]) if args else 1
@@ -221,7 +295,7 @@ def _t_selected(ctx, args):
 def _t_set_text(ctx, args):
     node = _node(None, args[0], ctx)
     value = _need_string("tui.set_text", args[1])
-    if node.kind == "input":
+    if node.kind in ("input", "textarea"):
         node.value = value
     else:
         node.text = value
@@ -230,9 +304,9 @@ def _t_set_text(ctx, args):
 
 def _t_value(ctx, args):
     node = _node(None, args[0], ctx)
-    if node.kind == "input":
+    if node.kind in ("input", "textarea"):
         return node.value
-    return node.text
+    return node.label() if node.kind == "radio" else node.text
 
 
 def _t_theme(ctx, args):
@@ -269,6 +343,14 @@ WIDGETS = (
     ("list", ["List"], "Any", _t_list, 1, 1, None, None),
     ("table", ["List"], "Any", _t_table, 1, 1, None, None),
     ("spacer", ["Int"], "Any", _t_spacer, 0, 1, None, None),
+    ("progress", ["Int", "Int"], "Any", _t_progress, 0, 2, None, None),
+    ("spinner", ["String"], "Any", _t_spinner, 0, 1, None, None),
+    ("status", ["String", "String"], "Any", _t_status, 1, 2, None, None),
+    ("radio", ["List"], "Any", _t_radio, 1, 1, None, None),
+    ("textarea", ["String"], "Any", _t_textarea, 0, 1, None, None),
+    ("set_progress", ["Any", "Int"], "Unit", _t_set_progress, 2, 2, None, None),
+    ("select", ["Any", "Int"], "String", _t_select, 2, 2, None, None),
+    ("selected_index", ["Any"], "Int", _t_selected_index, 1, 1, None, None),
     ("row", [], "Any", _container("row"), 0, 0, None, None),
     ("column", [], "Any", _container("column"), 0, 0, None, None),
 )
