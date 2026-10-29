@@ -85,6 +85,17 @@ def __getattr__(name):
     raise AttributeError(name)
 
 
+def licence(name=None):
+    """The licence recorded for a voice (the default voice when none is given).
+
+    Always a dict, never None: `verified` says whether the terms were actually
+    read, and `commercial` is False for non-commercial voices. Callers can
+    therefore refuse a voice without having to know which ones are risky.
+    """
+    catalogue = _catalogue()
+    return catalogue.licence(name or catalogue.DEFAULT_VOICE)
+
+
 def available():
     """Which half of the feature works here."""
     return {"tts": _piper().available(), "stt": _whisper().available()}
