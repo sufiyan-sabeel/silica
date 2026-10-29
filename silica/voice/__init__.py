@@ -65,6 +65,11 @@ def _audio():
     return audio
 
 
+def _engines():
+    from . import engines
+    return engines
+
+
 def __getattr__(name):
     """Expose the submodules and their error types without importing them eagerly."""
     if name in ("audio", "catalogue", "espeak", "piper", "whisper"):
@@ -97,8 +102,16 @@ def licence(name=None):
 
 
 def available():
-    """Which half of the feature works here."""
-    return {"tts": _piper().available(), "stt": _whisper().available()}
+    """Which half of the feature works here, according to the engine layer."""
+    engines = _engines()
+    result = {"tts": False, "stt": False}
+    for kind, select in (("tts", engines.select_tts), ("stt", engines.select_stt)):
+        try:
+            select()
+            result[kind] = True
+        except engines.EngineError:
+            result[kind] = False
+    return result
 
 
 def status():
@@ -108,6 +121,7 @@ def status():
         "tts": _piper().describe(),
         "stt": _whisper().describe(),
         "espeak": _espeak().describe(),
+        "engines": _engines().report(),
         "voices_installed": catalogue.installed(),
         "voices_dir": catalogue.voices_dir(),
         "default_voice": catalogue.default_installed() or catalogue.DEFAULT_VOICE,
@@ -128,34 +142,35 @@ def install(name=None):
     return catalogue.download(name or catalogue.DEFAULT_VOICE)
 
 
-def synthesize(text, out=None, voice=None, length_scale=None, noise_scale=None):
+def synthesize(text, out=None, voice=None, length_scale=None, noise_scale=None,
+               engine=None):
     """Render `text` to speech.
 
     With `out`, writes a WAV there and returns the path. Without it, returns
     (samples, rate) so the caller can play or process the audio.
     """
-    catalogue = _catalogue()
     piper = _piper()
+    engines = _engines()
     if not isinstance(text, str):
         raise piper.TTSError("synthesize expects a String, got %s" % type(text).__name__)
     if not text.strip():
         raise piper.TTSError("nothing to say: the text is empty")
 
-    if not piper.available():
-        detail = piper.describe()
-        raise piper.TTSError(
-            "text to speech is unavailable: onnxruntime=%r, espeak=%r"
-            % (detail.get("onnxruntime"), detail.get("espeak")))
+    try:
+        chosen = engines.select_tts(preferred=engine)
+    except engines.EngineError as exc:
+        raise piper.TTSError("text to speech is unavailable: %s" % exc)
 
-    name = voice or catalogue.default_installed()
-    if name is None:
-        raise catalogue.VoiceError(
-            "no voice is installed yet. Install one with:\n"
-            "    silica voice install %s" % catalogue.DEFAULT_VOICE)
-    _name, path = catalogue.resolve(name)
-    model = piper.load_voice(path, name=name)
-    samples, rate = model.synthesize(text, length_scale=length_scale,
-                                     noise_scale=noise_scale)
+    try:
+        samples, rate = chosen.synthesize(
+            text, voice=voice, length_scale=length_scale, noise_scale=noise_scale)
+    except engines.EngineError as exc:
+        # the piper engine raises for a missing voice; keep that error type so
+        # callers that catch VoiceError keep working
+        catalogue = _catalogue()
+        if "no voice is installed" in str(exc):
+            raise catalogue.VoiceError(str(exc))
+        raise piper.TTSError(str(exc))
     if out is None:
         return samples, rate
     _audio().write_wav(out, samples, rate)
@@ -211,11 +226,18 @@ def speak(text, out=None, voice=None, player=None):
             "seconds": round(len(samples) / float(rate), 3)}
 
 
-def transcribe(path, model=None, language=None):
+def transcribe(path, model=None, language=None, engine=None):
     """Turn an audio file into text. Returns dict(text, language, segments…)."""
     import os
 
-    catalogue = _catalogue()
-    return _whisper().transcribe(
-        path, size=model, language=language,
-        model_dir=os.path.join(catalogue.home(), "whisper"))
+    whisper = _whisper()
+    engines = _engines()
+    try:
+        chosen = engines.select_stt(preferred=engine)
+    except engines.EngineError as exc:
+        raise whisper.STTError("speech to text is unavailable: %s" % exc)
+    try:
+        return chosen.transcribe(path, language=language, model=model)
+    except engines.EngineError as exc:
+        raise whisper.STTError(str(exc))
+
