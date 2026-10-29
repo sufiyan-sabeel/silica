@@ -370,8 +370,16 @@ runtime, nothing uploaded. The full guide is `docs/VOICE.md`.
 | `speech.save` | `(String, String, Map?) -> Unit` | `speech.speak` | Synthesise and write a 16-bit mono WAV. The path must be inside a granted `speech.speak` root. |
 | `speech.transcribe` | `(String, Map?) -> Map` | `speech.listen` | Read an audio file and transcribe it. Returns `{text, language, seconds}`. The path must be inside a granted `speech.listen` root. |
 | `speech.voices` | `() -> List` | none | Every known voice with `name`, `language`, `label`, `installed`. |
+| `speech.licence` | (String?) -> Map | the licence recorded for a voice: id, url, verified, commercial, attribution |
 | `speech.languages` | `() -> Map` | none | `speaking`, `speaking_missing`, `listening` — what can be said, what cannot, and what can be heard. |
 | `speech.status` | `() -> Map` | none | `can_speak`, `can_listen`, `voices_installed`, `default_voice`, `voices_dir`. |
+| `voice.speak` | `(String, Map?) -> Unit` | `voice.speak` | Synthesise and play through the system player (`paplay`, `aplay`, `play`, `afplay`, `termux-media-player`). Errors if none is available — use `voice.save` then. |
+| `voice.save` | `(String, String, Map?) -> Unit` | `voice.speak` | Synthesise and write a 16-bit mono WAV. The path must be inside a granted `voice.speak` root. |
+| `voice.transcribe` | `(String, Map?) -> Map` | `voice.listen` | Read an audio file and transcribe it. Returns `{text, language, seconds}`. The path must be inside a granted `voice.listen` root. |
+| `voice.voices` | `() -> List` | none | Every known voice with `name`, `language`, `label`, `installed`. |
+| `voice.licence` | (String?) -> Map | the licence recorded for a voice: id, url, verified, commercial, attribution |
+| `voice.languages` | `() -> Map` | none | `speaking`, `speaking_missing`, `listening` — what can be said, what cannot, and what can be heard. |
+| `voice.status` | `() -> Map` | none | `can_speak`, `can_listen`, `voices_installed`, `default_voice`, `voices_dir`. |
 
 Options for `speak`/`save`: `{voice: "hi_IN-pratham-medium", length_scale: 1.1,
 noise_scale: 0.6}`. `length_scale` > 1 speaks more slowly. For `transcribe`:
