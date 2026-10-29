@@ -110,6 +110,61 @@ on the capability, not on the spelling.
 
 ---
 
+## Engines
+
+Speech out and speech in each sit behind an interface, so the engine can be
+swapped without touching the API:
+
+| Direction | Engines | Selected by |
+|---|---|---|
+| speech out | `piper` (default), `sherpa` | `SILICA_VOICE_TTS` |
+| speech in | `whisper` (default), `sherpa` | `SILICA_VOICE_STT` |
+
+```bash
+SILICA_VOICE_TTS=auto      # default: piper, falling back to sherpa
+SILICA_VOICE_STT=sherpa    # force one engine
+```
+
+`auto` prefers the engines Silica has shipped and tested — Piper and Whisper —
+and only falls back when they cannot run. That keeps existing behaviour identical
+while making the alternative reachable.
+
+`voice.status()["engines"]` reports every engine and, when one is unavailable,
+the reason. Nothing is guessed:
+
+```
+tts  piper   available=False  needs onnxruntime=... and espeak-ng available=False
+tts  sherpa  available=False  sherpa-onnx is not installed. Install it with: pip install sherpa-onnx
+```
+
+### The sherpa-onnx engine
+
+Optional and opt-in; it is not a dependency of Silica. It exists because Piper's
+and Whisper's wheels are glibc-only and do not install on Termux, where
+sherpa-onnx publishes builds.
+
+```bash
+pip install sherpa-onnx numpy
+
+export SILICA_SHERPA_TTS_MODEL=/path/to/vits-piper-voice   # model.onnx, tokens.txt, espeak-ng-data/
+export SILICA_SHERPA_ASR_MODEL=/path/to/whisper-model      # encoder/decoder .onnx + tokens
+export SILICA_VOICE_TTS=sherpa SILICA_VOICE_STT=sherpa
+```
+
+Two things this engine will tell you rather than let you discover:
+
+* **sherpa-onnx 2.x cannot run Piper-style voices.** It ignores `data_dir` and
+  wants phoneme code points from an external phonemizer. Pin `sherpa-onnx<2`
+  (1.13.x) for Piper voices; the engine refuses on 2.x with that explanation.
+* **Nothing is downloaded.** The model directories must already exist. That is
+  the offline guarantee, and an engine that fetched its own models would break it.
+
+Measured on Linux x86_64 with sherpa-onnx 1.13.8 and a Piper `lessac` int8 voice:
+synthesis RTF 0.99, transcription RTF 0.42, peak RSS 438 MB. **Android and Termux
+remain untested** — see `docs/VOICE.md` limits.
+
+---
+
 ## Licensing — read this before shipping anything
 
 Every voice is trained on a dataset whose licence governs redistribution and
