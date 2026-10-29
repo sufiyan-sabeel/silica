@@ -288,8 +288,11 @@ class InstallPathTests(unittest.TestCase):
                     mock.patch.object(catalogue.urllib.request, "urlopen", fake_urlopen):
                 catalogue.download("en_GB-alba-medium")
             files = sorted(os.listdir(directory))
-        self.assertEqual(files, ["en_GB-alba-medium.onnx",
-                                 "en_GB-alba-medium.onnx.json"])
+        # two voice files, plus the manifest that records the checksum
+        self.assertIn("en_GB-alba-medium.onnx", files)
+        self.assertIn("en_GB-alba-medium.onnx.json", files)
+        self.assertIn("manifest.json", files)
+        self.assertEqual(len([f for f in files if f.startswith("en_GB-alba")]), 2)
 
 
 class HonestErrorTests(unittest.TestCase):
