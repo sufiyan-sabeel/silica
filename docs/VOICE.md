@@ -165,6 +165,67 @@ remain untested** — see `docs/VOICE.md` limits.
 
 ---
 
+## Managing models
+
+Voices are files, and the API treats them that way — you can see what you have,
+check it has not rotted, and remove it.
+
+```silica
+use voice
+
+sfn main() {
+    per model in voice.models() {
+        sprint(model["name"] + "  " + model["licence"] + "  " + str(model["bytes"]))
+    }
+
+    let disk = voice.storage()
+    sprint(str(disk["model_megabytes"]) + " MB of voices")
+
+    let check = voice.verify("en_GB-alba-medium")
+    sprint(str(check["verified"]))
+}
+```
+
+| Function | What it does | Capability |
+|---|---|---|
+| `voice.models()` | installed models with size, checksum and licence | none |
+| `voice.storage()` | bytes used, split into models and bookkeeping | none |
+| `voice.verify(name)` | re-hash and compare with the checksum recorded at download | none |
+| `voice.set_voice(name)` | choose the voice later calls use; `""` clears it | none |
+| `voice.current_voice()` | which voice a call without a name would use | none |
+| `voice.download_model(name)` | fetch a voice | **`speech.models`** |
+| `voice.delete_model(name)` | remove a voice, returning bytes freed | **`speech.models`** |
+
+Downloading and deleting get their own capability because they reach the network
+and the disk — a different act from speaking, and one that should be asked for:
+
+```bash
+silica run manage.sc --allow-speech-models
+```
+
+**Nothing downloads by itself.** There is no automatic fetch anywhere in Silica;
+`download_model` runs only because a program called it.
+
+### Checksums
+
+Every download records the file's SHA-256 and size in
+`$SILICA_HOME/voices/manifest.json`. `voice.verify(name)` re-hashes the file and
+compares. A voice installed before the manifest existed reports
+`verified: false` with the reason `no checksum was recorded for this voice` —
+rather than pretending it is fine.
+
+### Choosing a voice
+
+`voice.set_voice(name)` persists to `$SILICA_HOME/voices/selection`, so it
+survives between runs. Precedence when a call does not name a voice:
+
+1. an explicit argument
+2. `SILICA_VOICE`
+3. the saved selection
+4. whatever is installed
+
+---
+
 ## Playback and recording
 
 Playback and the microphone belong to the operating system, so one module decides
