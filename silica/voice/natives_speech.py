@@ -25,7 +25,7 @@ in the CLI: `silica voice install <name>`.
 
 import os
 
-from ..capabilities import SPEECH_LISTEN, SPEECH_SPEAK
+from ..capabilities import SPEECH_LISTEN, SPEECH_MODELS, SPEECH_SPEAK
 from ..errors import SilicaRuntimeError
 from ..natives import type_name
 
@@ -167,6 +167,51 @@ def _platform(ctx, args):
     return voice.platform()
 
 
+def _models(ctx, args):
+    from .. import voice
+    return voice.models()
+
+
+def _storage(ctx, args):
+    from .. import voice
+    return voice.storage()
+
+
+def _verify(ctx, args):
+    from .. import voice
+    name = _need_string("voice.verify", args[0])
+    return voice.verify(name)
+
+
+def _set_voice(ctx, args):
+    from .. import voice
+    name = _need_string("voice.set_voice", args[0]) if args else ""
+    return voice.set_voice(name or None) or ""
+
+
+def _current_voice(ctx, args):
+    from .. import voice
+    return voice.current_voice()
+
+
+def _download_model(ctx, args):
+    from .. import voice
+    name = _need_string("voice.download_model", args[0])
+    try:
+        return voice.download_model(name)
+    except Exception as exc:  # noqa: BLE001
+        _fail("voice.download_model: %s" % exc)
+
+
+def _delete_model(ctx, args):
+    from .. import voice
+    name = _need_string("voice.delete_model", args[0])
+    try:
+        return voice.delete_model(name)
+    except Exception as exc:  # noqa: BLE001
+        _fail("voice.delete_model: %s" % exc)
+
+
 def _licence(ctx, args):
     """Licence details for one voice, or for the default when no name is given."""
     from .. import voice
@@ -203,6 +248,14 @@ FUNCTIONS = (
     ("platform", [], "Map", _platform, 0, 0, None, None),
     ("record", ["Int", "String"], "String", _record, 0, 2, SPEECH_LISTEN, None),
     ("listen", ["Int", "Map"], "Map", _listen, 0, 2, SPEECH_LISTEN, None),
+    ("models", [], "List", _models, 0, 0, None, None),
+    ("storage", [], "Map", _storage, 0, 0, None, None),
+    ("verify", ["String"], "Map", _verify, 1, 1, None, None),
+    ("set_voice", ["String"], "String", _set_voice, 0, 1, None, None),
+    ("current_voice", [], "String", _current_voice, 0, 0, None, None),
+    # downloading and deleting reach the network and the disk
+    ("download_model", ["String"], "Map", _download_model, 1, 1, SPEECH_MODELS, None),
+    ("delete_model", ["String"], "Map", _delete_model, 1, 1, SPEECH_MODELS, None),
     ("languages", [], "Map", _languages, 0, 0, None, None),
     ("status", [], "Map", _status, 0, 0, None, None),
 )
