@@ -47,6 +47,20 @@ silica run examples/gui_demo.sc --allow-gui
 
 ---
 
+## Backend status
+
+| Backend | Status |
+|---|---|
+| tkinter (desktop) | **Implemented and tested** on Linux with a virtual display |
+| Android native | **Not implemented.** No Android UI toolkit is reachable from a Termux Python process; a real backend would need an Android app hosting the runtime |
+| Web (browser) | Implemented separately as the Script Mode IDE (`docs/IDE.md`), not as a `gui` backend |
+
+The shared layer is the widget tree, the theme tokens and the layout rules; the
+tkinter backend only paints them. A second backend would implement the same
+small interface (`build`, `run`, `close`) without touching the model.
+
+---
+
 ## Why `gui` and not `ui`
 
 The brief's example used `ui.app(...)` for a desktop application. `ui` was
