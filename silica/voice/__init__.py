@@ -168,6 +168,65 @@ def voices():
     return _catalogue().catalogue()
 
 
+def models():
+    """Installed models, with licence, size and the checksum recorded at download."""
+    return _catalogue().models()
+
+
+def storage():
+    """Disk used by voices, so deleting one is an informed choice."""
+    return _catalogue().storage()
+
+
+def verify(name):
+    """Re-hash an installed voice and compare with the recorded checksum."""
+    return _catalogue().verify(name)
+
+
+def set_voice(name=None):
+    """Choose the voice later calls use. Persisted; None clears the choice.
+
+    Order of precedence when a call does not name a voice:
+    explicit argument, SILICA_VOICE, this selection, then whatever is installed.
+    """
+    return _catalogue().set_selected(name)
+
+
+def current_voice():
+    """Which voice a call without a name would use right now.
+
+    Same precedence as `catalogue.resolve`: SILICA_VOICE, then the persisted
+    selection, then whatever is installed.
+    """
+    import os as _os
+    catalogue = _catalogue()
+    return (_os.environ.get("SILICA_VOICE") or catalogue.selected()
+            or catalogue.default_installed() or catalogue.DEFAULT_VOICE)
+
+
+def download_model(name):
+    """Fetch a voice model. Only ever runs because someone asked it to.
+
+    There is no automatic download anywhere in Silica: a program that silently
+    reached the network would break the offline guarantee this feature is for.
+    """
+    import os as _os
+    catalogue = _catalogue()
+    path = catalogue.download(name)
+    entry = catalogue.licence(name)
+    return {"name": name, "path": path,
+            "bytes": _os.path.getsize(path) if _os.path.exists(path) else 0,
+            "licence": entry["id"],
+            "commercial_use": entry["commercial"],
+            "licence_verified": entry["verified"],
+            "licence_risk": catalogue.licence_risk(name) or ""}
+
+
+def delete_model(name):
+    """Remove an installed voice. Returns the bytes freed."""
+    return {"name": name, "freed_bytes": _catalogue().delete(name)}
+
+
 def languages():
     return _catalogue().languages()
 
