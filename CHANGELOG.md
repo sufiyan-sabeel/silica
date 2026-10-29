@@ -5,6 +5,45 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## [Unreleased] — Phase 3
+
+### Added — platform audio
+- **`silica/voice/platform_audio.py`**: one place decides which program plays
+  audio and which records it, by detecting what is actually on `PATH`.
+  Playback: `termux-media-player`, `paplay`, `aplay`, `afplay`, `play`.
+  Recording: `arecord`, `rec`, `termux-microphone-record`, `ffmpeg`.
+- **Termux detection** from `TERMUX_VERSION`, `$PREFIX` or the Termux data
+  directory — not from `platform.system()`, which says Linux on desktops too.
+- **`voice.record(seconds, path)`** and **`voice.listen(seconds, options)`**, both
+  gated on the `speech.listen` capability. Recording never starts by itself.
+- **`voice.platform()`** reports the tools found and the reason when there are
+  none.
+- **Termux recording is converted, not faked**: `termux-microphone-record` writes
+  M4A/3GP, so capture is followed by an `ffmpeg` conversion to 16-bit PCM WAV. If
+  ffmpeg is absent the error says so instead of returning an unreadable file.
+- **`speak()` now uses the same detection** instead of keeping its own copy of the
+  player list — two lists that could disagree was the drift the engine layer
+  exists to prevent.
+
+### Fixed
+- **`voice install` wrote the model as `<name>.onnx.onnx`.** The download appended
+  `.onnx` to a path that already ended in `.onnx`, so `is_installed()` never found
+  what had just been downloaded and no installed voice was ever usable through the
+  catalogue. Present since 0.4.0. Found by actually installing four voices.
+- A test now asserts `voice install` writes exactly two files, with the right
+  names.
+
+### Voices installed and verified
+- The four voices with verified, commercially usable licences are installed and
+  synthesising: `en_GB-alba-medium` (CC-BY-4.0), `te_IN-padmavathi-medium`
+  (CC-BY-4.0), `bn_BD-google-medium` and `mr_IN-google-medium` (CC-BY-SA-4.0).
+
+### Tests
+- 21 tests in `tests/test_voice_platform.py`: Termux detection, tool preference
+  order, recording to WAV, the compressed-then-convert path, missing-ffmpeg and
+  missing-recorder messages, failing recorders, playback, and the capability
+  gates on both namespaces.
+
 ## [Unreleased] — Phase 2
 
 ### Added — speech engine layer
