@@ -249,6 +249,49 @@ class CapabilityTests(unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE_NUMPY, "numpy is needed to reach the engines")
+class InstallPathTests(unittest.TestCase):
+    """`voice install` must write the filename that `is_installed` looks for."""
+
+    def test_the_model_lands_at_the_path_is_installed_checks(self):
+        from silica.voice import catalogue
+        expected = catalogue.model_path("en_GB-alba-medium")
+        self.assertTrue(expected.endswith("en_GB-alba-medium.onnx"),
+                        "model_path must end in .onnx exactly once: %s" % expected)
+        self.assertNotIn(".onnx.onnx", expected)
+
+    def test_download_writes_exactly_two_files(self):
+        """A download produces <name>.onnx and <name>.onnx.json, nothing else."""
+        import tempfile
+        from unittest import mock
+        from silica.voice import catalogue
+
+        with tempfile.TemporaryDirectory() as directory:
+            written = []
+
+            class FakeResponse:
+                def __init__(self, payload):
+                    self.payload = payload
+                def read(self, size=-1):
+                    data, self.payload = self.payload, b""
+                    return data
+                def __enter__(self):
+                    return self
+                def __exit__(self, *a):
+                    return False
+
+            def fake_urlopen(url, timeout=None):
+                written.append(url)
+                # the downloader rejects anything under 1 KB as truncated
+                return FakeResponse(b"x" * 2048)
+
+            with mock.patch.object(catalogue, "voices_dir", return_value=directory), \
+                    mock.patch.object(catalogue.urllib.request, "urlopen", fake_urlopen):
+                catalogue.download("en_GB-alba-medium")
+            files = sorted(os.listdir(directory))
+        self.assertEqual(files, ["en_GB-alba-medium.onnx",
+                                 "en_GB-alba-medium.onnx.json"])
+
+
 class HonestErrorTests(unittest.TestCase):
     """When an engine is missing, say which one and how to install it."""
 
