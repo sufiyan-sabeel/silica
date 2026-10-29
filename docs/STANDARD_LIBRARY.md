@@ -303,6 +303,22 @@ to real functions. Drawing to the screen needs the `tui.run` capability
 | `tui.row` | () -> Any | children side by side, equal widths |
 | `tui.run` | (Any, String?) -> Unit | loop until the quit key (default `q`) |
 | `tui.selected` | (Any) -> String | the focused widget's text or value |
+| `tui.progress` | (Int, Int?) -> Any | a bar; value and maximum (default 100) |
+| `tui.lib.widgets.progress` | (Int, Int?) -> Any | a bar; value and maximum (default 100) |
+| `tui.spinner` | (String?) -> Any | a one-line activity indicator with a label |
+| `tui.lib.widgets.spinner` | (String?) -> Any | a one-line activity indicator with a label |
+| `tui.status` | (String, String?) -> Any | a message with a level: info, success, warning, error |
+| `tui.lib.widgets.status` | (String, String?) -> Any | a message with a level: info, success, warning, error |
+| `tui.radio` | (List) -> Any | a group of options; left/right change the choice |
+| `tui.lib.widgets.radio` | (List) -> Any | a group of options; left/right change the choice |
+| `tui.textarea` | (String?) -> Any | multi-line editable text; Enter inserts a newline |
+| `tui.lib.widgets.textarea` | (String?) -> Any | multi-line editable text; Enter inserts a newline |
+| `tui.set_progress` | (Any, Int) -> Unit | set a progress bar's value |
+| `tui.lib.widgets.set_progress` | (Any, Int) -> Unit | set a progress bar's value |
+| `tui.select` | (Any, Int) -> String | choose a radio option; returns its label |
+| `tui.lib.widgets.select` | (Any, Int) -> String | choose a radio option; returns its label |
+| `tui.selected_index` | (Any) -> Int | the chosen index of a radio or list |
+| `tui.lib.widgets.selected_index` | (Any) -> Int | the chosen index of a radio or list |
 | `tui.checkbox` | (String) -> Any | a toggle with a label; focusable |
 | `tui.lib.widgets.checkbox` | (String) -> Any | a toggle with a label; focusable |
 | `tui.press` | (Any) -> String | activate the focused widget once; returns its label |
