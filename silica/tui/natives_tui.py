@@ -164,6 +164,48 @@ def _t_close(ctx, args):
     return None
 
 
+def _t_pressed(ctx, args):
+    """Consume the last activation: one keypress activates exactly once."""
+    app = _app(ctx, "tui.pressed", args[0])
+    return app.take_pressed()
+
+
+def _t_press(ctx, args):
+    app = _app(ctx, "tui.press", args[0])
+    return app.press()
+
+
+def _t_focus(ctx, args):
+    app = _app(ctx, "tui.focus", args[0])
+    node = app.focused()
+    return node.label() if node is not None else ""
+
+
+def _t_focus_next(ctx, args):
+    app = _app(ctx, "tui.focus_next", args[0])
+    step = _need_int("tui.focus_next", args[1]) if len(args) > 1 else 1
+    app.focus_next(step)
+    node = app.focused()
+    return node.label() if node is not None else ""
+
+
+def _t_disable(ctx, args):
+    node = _node(None, args[0], ctx)
+    node.props["disabled"] = True
+    return None
+
+
+def _t_enable(ctx, args):
+    node = _node(None, args[0], ctx)
+    node.props.pop("disabled", None)
+    return None
+
+
+def _t_colour_mode(ctx, args):
+    app = _app(ctx, "tui.colour_mode", args[0])
+    return app._colour_mode
+
+
 def _t_selected(ctx, args):
     app = _app(ctx, "tui.selected", args[0])
     node = app.focused()
@@ -222,6 +264,7 @@ WIDGETS = (
     ("button", ["String"], "Any", _widget("button"), 1, 1, None, None),
     # `input` is a reserved Silica keyword, so the editable field is `field`
     ("field", ["String"], "Any", _widget("input"), 0, 1, None, None),
+    ("checkbox", ["String"], "Any", _widget("checkbox"), 1, 1, None, None),
     ("divider", [], "Any", _container("divider"), 0, 0, None, None),
     ("list", ["List"], "Any", _t_list, 1, 1, None, None),
     ("table", ["List"], "Any", _t_table, 1, 1, None, None),
@@ -249,6 +292,13 @@ RUNTIME = (
     ("poll", ["Any"], "String", _t_poll, 1, 1, TUI_RUN, None),
     ("run", ["Any", "String"], "Unit", _t_run, 1, 2, TUI_RUN, None),
     ("close", ["Any"], "Unit", _t_close, 1, 1, None, None),
+    ("press", ["Any"], "String", _t_press, 1, 1, None, None),
+    ("pressed", ["Any"], "String", _t_pressed, 1, 1, None, None),
+    ("focus", ["Any"], "String", _t_focus, 1, 1, None, None),
+    ("focus_next", ["Any", "Int"], "String", _t_focus_next, 1, 2, None, None),
+    ("disable", ["Any"], "Unit", _t_disable, 1, 1, None, None),
+    ("enable", ["Any"], "Unit", _t_enable, 1, 1, None, None),
+    ("colour_mode", ["Any"], "String", _t_colour_mode, 1, 1, None, None),
     ("selected", ["Any"], "String", _t_selected, 1, 1, None, None),
     ("set_text", ["Any", "String"], "Unit", _t_set_text, 2, 2, None, None),
     ("value", ["Any"], "String", _t_value, 1, 1, None, None),
