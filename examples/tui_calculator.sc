@@ -29,20 +29,40 @@ sfn compute(left: String, right: String, op: String) -> String {
     ret "unknown operation"
 }
 
+sfn is_digit(ch: String) -> Bool {
+    ret string.contains("0123456789", ch)
+}
+
 sfn is_number(text: String) -> Bool {
-    let trimmed: String = string.trim(text)
-    si len(trimmed) == 0 {
+    let t: String = string.trim(text)
+    si len(t) == 0 {
         ret nein
     }
-    let dot: Bool = string.contains(trimmed, ".")
-    let digits: Int = len(string.replace(string.replace(trimmed, ".", ""), "-", ""))
-    si digits == 0 {
+    let i: Int = 0
+    let dots: Int = 0
+    let digits: Int = 0
+    si t[0] == "-" {
+        i = 1
+    }
+    si i == len(t) {
         ret nein
     }
-    si string.contains(trimmed, " ") {
-        ret nein
+    tant i < len(t) {
+        let ch: String = t[i]
+        si ch == "." {
+            dots = dots + 1
+            si dots > 1 {
+                ret nein
+            }
+        } sino {
+            si non is_digit(ch) {
+                ret nein
+            }
+            digits = digits + 1
+        }
+        i = i + 1
     }
-    ret oui
+    ret digits > 0
 }
 
 sfn main() {
