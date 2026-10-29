@@ -27,6 +27,7 @@ first-class functions, and calling one from inside a native would mean
 re-entering the VM mid-instruction.
 """
 
+import atexit
 import os
 import sys
 
@@ -79,6 +80,23 @@ STYLES = {
 
 class TUIError(RuntimeError):
     pass
+
+
+# Every application whose terminal is currently open. Restored on interpreter
+# exit, including the uncaught-exception path — otherwise a runtime error inside
+# a TUI leaves the user's terminal in curses mode with no echo and no cursor.
+_OPEN_APPS = []
+
+
+def _restore_all():
+    for app in list(_OPEN_APPS):
+        try:
+            _close(app)
+        except Exception:  # pragma: no cover - best effort during shutdown
+            pass
+
+
+atexit.register(_restore_all)
 
 
 def parse_colour(value):
@@ -179,15 +197,19 @@ class Node:
                 yield node
 
     def focusable(self):
-        if self.kind in ("button", "input", "list", "checkbox"):
+        if self.kind in ("button", "input", "list", "checkbox", "radio",
+                         "textarea"):
             return not self.props.get("disabled")
         return False
 
     def label(self):
-        if self.kind == "input":
+        if self.kind in ("input", "textarea"):
             return self.value
-        if self.kind == "list":
-            return self.items[0] if self.items else ""
+        if self.kind in ("list", "radio"):
+            if not self.items:
+                return ""
+            index = max(0, min(int(self.props.get("selected", 0)), len(self.items) - 1))
+            return self.items[index]
         return self.text
 
 
@@ -272,10 +294,55 @@ class App:
 
     # -- layout --------------------------------------------------------------
     def height_of(self, node):
-        if node.kind in ("text", "heading", "button", "input", "divider", "checkbox"):
+        if node.kind in ("text", "heading", "button", "input", "divider",
+                         "checkbox", "progress", "spinner", "status", "radio"):
+            if node.kind == "radio":
+                return max(1, len(node.items))
             return 1
+        if node.kind == "textarea":
+            return max(1, len((node.value or "").split("\n")))
         if node.kind == "spacer":
             return max(0, int(node.props.get("height", 1)))
+        if node.kind == "progress":
+            maximum = float(node.props.get("max", 100) or 100)
+            value = float(node.props.get("value", 0))
+            ratio = 0.0 if maximum <= 0 else max(0.0, min(1.0, value / maximum))
+            width_used = max(1, width - 6)
+            filled = int(round(ratio * width_used))
+            style = "success" if ratio >= 1.0 else "accent"
+            bar = "\u2588" * filled + "\u2591" * (width_used - filled)
+            self._put(canvas, x, y, bar, width_used, style)
+            self._put(canvas, x + width_used, y,
+                      " %3d%%" % int(round(ratio * 100)), width - width_used, "muted")
+            return
+        if node.kind == "spinner":
+            frames = "|/-\\"
+            frame = frames[int(node.props.get("frame", 0)) % len(frames)]
+            self._put(canvas, x, y, "%s %s" % (frame, node.text), width, "accent")
+            return
+        if node.kind == "status":
+            level = node.props.get("level", "info")
+            style = {"info": "accent", "success": "success", "warning": "warning",
+                     "error": "error"}.get(level, "accent")
+            mark = {"info": "i", "success": "+", "warning": "!", "error": "x"}.get(level, "i")
+            self._put(canvas, x, y, "[%s] %s" % (mark, node.text), width, style)
+            return
+        if node.kind == "radio":
+            focused = node is focus
+            chosen = int(node.props.get("selected", 0))
+            for index, item in enumerate(node.items[:height]):
+                mark = "(o)" if index == chosen else "( )"
+                style = "button_focus" if (focused and index == chosen) else "text"
+                self._put(canvas, x, y + index, " %s %s" % (mark, item), width, style)
+            return
+        if node.kind == "textarea":
+            focused = node is focus
+            style = "field_focus" if focused else "field"
+            lines = (node.value or "").split("\n")
+            for index, line in enumerate(lines[:height]):
+                prefix = "\u2588 " if (focused and index == 0) else "  "
+                self._put(canvas, x, y + index, prefix + line, width, style)
+            return
         if node.kind == "list":
             return max(1, min(len(node.items), int(node.props.get("height",
                                                                   len(node.items)))))
@@ -358,6 +425,46 @@ class App:
             text = "%s %s" % ("\u2588" if focused else " ", shown)
             self._put(canvas, x, y, text, width, style)
             return
+        if node.kind == "progress":
+            maximum = float(node.props.get("max", 100) or 100)
+            value = float(node.props.get("value", 0))
+            ratio = 0.0 if maximum <= 0 else max(0.0, min(1.0, value / maximum))
+            width_used = max(1, width - 6)
+            filled = int(round(ratio * width_used))
+            style = "success" if ratio >= 1.0 else "accent"
+            bar = "\u2588" * filled + "\u2591" * (width_used - filled)
+            self._put(canvas, x, y, bar, width_used, style)
+            self._put(canvas, x + width_used, y,
+                      " %3d%%" % int(round(ratio * 100)), width - width_used, "muted")
+            return
+        if node.kind == "spinner":
+            frames = "|/-\\"
+            frame = frames[int(node.props.get("frame", 0)) % len(frames)]
+            self._put(canvas, x, y, "%s %s" % (frame, node.text), width, "accent")
+            return
+        if node.kind == "status":
+            level = node.props.get("level", "info")
+            style = {"info": "accent", "success": "success", "warning": "warning",
+                     "error": "error"}.get(level, "accent")
+            mark = {"info": "i", "success": "+", "warning": "!", "error": "x"}.get(level, "i")
+            self._put(canvas, x, y, "[%s] %s" % (mark, node.text), width, style)
+            return
+        if node.kind == "radio":
+            focused = node is focus
+            chosen = int(node.props.get("selected", 0))
+            for index, item in enumerate(node.items[:height]):
+                mark = "(o)" if index == chosen else "( )"
+                style = "button_focus" if (focused and index == chosen) else "text"
+                self._put(canvas, x, y + index, " %s %s" % (mark, item), width, style)
+            return
+        if node.kind == "textarea":
+            focused = node is focus
+            style = "field_focus" if focused else "field"
+            lines = (node.value or "").split("\n")
+            for index, line in enumerate(lines[:height]):
+                prefix = "\u2588 " if (focused and index == 0) else "  "
+                self._put(canvas, x, y + index, prefix + line, width, style)
+            return
         if node.kind == "list":
             focused = node is focus
             visible = node.items[node.scroll:node.scroll + height]
@@ -438,6 +545,32 @@ class _Palette:
         self.pairs = {}
         self.next_pair = 1
         self.index_cache = {}
+        # A terminal that lets us redefine palette entries can show the theme's
+        # exact colours instead of the nearest neighbour in the standard cube.
+        self.exact = False
+        self.exact_slots = {}
+        self.next_slot = 16
+        if self.mode == "256":
+            try:
+                self.exact = bool(curses.can_change_color())
+            except Exception:  # pragma: no cover
+                self.exact = False
+
+    def exact_index(self, rgb):
+        """Define a palette slot holding this exact colour, if the terminal allows."""
+        if rgb in self.exact_slots:
+            return self.exact_slots[rgb]
+        if not self.exact or self.next_slot >= 256:
+            return None
+        slot = self.next_slot
+        try:
+            self.curses.init_color(slot, *(int(round(c * 1000 / 255)) for c in rgb))
+        except Exception:  # pragma: no cover - terminal refused
+            self.exact = False
+            return None
+        self.exact_slots[rgb] = slot
+        self.next_slot += 1
+        return slot
 
     def index(self, rgb):
         if rgb is None:
@@ -445,6 +578,10 @@ class _Palette:
         if rgb in self.index_cache:
             return self.index_cache[rgb]
         if self.mode == "256":
+            exact = self.exact_index(rgb)
+            if exact is not None:
+                self.index_cache[rgb] = exact
+                return exact
             value = nearest_256(rgb)
         elif self.mode == "basic":
             value = nearest_basic(rgb)
@@ -499,6 +636,8 @@ def _open(app):
     except Exception as exc:
         raise TUIError("cannot initialise the terminal: %s" % exc)
     app._screen = screen
+    if app not in _OPEN_APPS:
+        _OPEN_APPS.append(app)
     app._palette = _Palette(app, curses)
     app._colour_mode = app._palette.mode
     return screen
@@ -520,6 +659,8 @@ def _close(app):
     finally:
         app._screen = None
         app.closed = True
+        if app in _OPEN_APPS:
+            _OPEN_APPS.remove(app)
 
 
 def render(app):
@@ -689,10 +830,22 @@ def poll(app, timeout=None):
         elif name == "down":
             app.focus_next(1)
         elif name in ("enter", "space"):
-            app.press()
+            node = app.focused()
+            if name == "enter" and node is not None and node.kind == "textarea":
+                node.value = (node.value or "") + "\n"
+            else:
+                app.press()
+        elif name in ("left", "right"):
+            node = app.focused()
+            if node is not None and node.kind == "radio" and node.items:
+                chosen = int(node.props.get("selected", 0))
+                step = -1 if name == "left" else 1
+                node.props["selected"] = (chosen + step) % len(node.items)
         elif name == "backspace":
             node = app.focused()
-            if node is not None and node.kind == "input":
+            if node is not None and node.kind == "textarea":
+                node.value = (node.value or "")[:-1]
+            elif node is not None and node.kind == "input":
                 node.value = node.value[:-1]
         elif name == "delete":
             node = app.focused()
