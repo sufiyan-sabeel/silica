@@ -5,6 +5,47 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## [Unreleased]
+
+Voice licensing audit and the `voice` namespace. No version bump: this is work
+towards a future release and 0.9.1 stays a bug-fix release.
+
+### Added
+- **`use voice`** — the preferred namespace for speech. `use speech` remains fully
+  supported and is not deprecated. Both names resolve to the **same `Native`
+  objects**: one implementation, one registry, one set of capability
+  requirements. A test asserts the identity, so the two cannot drift apart.
+- **`voice.licence(name)`** / **`speech.licence(name)`** — the licence recorded for
+  a voice: `id`, `url`, `verified`, `commercial`, `attribution`, `share_alike`.
+  An unknown voice reports `id = "unknown"`, `verified = false`.
+- **Licence metadata for every voice in the catalogue**, read from each voice's
+  own model card. `voices()` now returns `licence`, `licence_url`,
+  `licence_verified`, `commercial_use`, `attribution_required` and
+  `licence_risk` alongside the existing fields.
+- **`catalogue.commercially_safe()`** — the voices whose licence is verified and
+  permits commercial use.
+
+### Found
+- **Two voices are non-commercial.** `hi_IN-pratham-medium` and
+  `hi_IN-priyamvada-medium` are **CC-BY-NC-SA-4.0**. They were offered with no
+  indication of that, which is the sort of thing a licence audit exists to catch.
+  They remain available — personal and research use is what the licence permits —
+  but they are now marked, and `licence_risk` says so.
+- **Five more voices have unverified licences**: `en_US-lessac-medium` (Blizzard
+  2013, page unreachable), `en_US-amy-medium` and `ml_IN-meera-medium` ("see model
+  card"), `hi_IN-rohan-medium` and `te_IN-maya-medium` (IITM IndicTTS PDF).
+- Only **four of eleven** voices have a verified, commercially usable licence:
+  `en_GB-alba-medium`, `te_IN-padmavathi-medium`, `bn_BD-google-medium`,
+  `mr_IN-google-medium`.
+- **The default voice, `en_US-lessac-medium`, is one of the unverified ones.** It
+  was left as the default for compatibility with 0.4.0 programs, not because it
+  is safe; the documentation says so plainly.
+
+### Tests
+- 18 tests in `tests/test_voice_licence.py`, including namespace parity (same
+  objects, same capabilities, identical output through both names) and the
+  licence audit itself.
+
 ## [0.9.0] — 2026-10-28
 
 Loop control: `break` and `continue`.
