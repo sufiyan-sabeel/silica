@@ -42,6 +42,116 @@ VOICES = {
                             "mr/mr_IN/google/medium"),
 }
 
+
+# --- licensing -------------------------------------------------------------
+#
+# Every voice is trained on a dataset whose licence governs redistribution and
+# commercial use. Those licences differ sharply, and two of the voices this
+# project previously offered are **non-commercial**. Nothing here is inferred:
+# each entry was read from the voice's own MODEL_CARD in rhasspy/piper-voices.
+#
+# "unverified" means the model card points somewhere we could not confirm — a
+# dead link, a Kaggle page, or a licence PDF. An unverified voice is still
+# usable, but a caller cannot assume it is safe to ship commercially.
+#
+# name -> dict(id, url, commercial, attribution, share_alike, verified)
+LICENCES = {
+    "en_GB-alba-medium": {
+        "id": "CC-BY-4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/",
+        "commercial": True, "attribution": True, "share_alike": False,
+        "verified": True,
+    },
+    "te_IN-padmavathi-medium": {
+        "id": "CC-BY-4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/",
+        "commercial": True, "attribution": True, "share_alike": False,
+        "verified": True,
+    },
+    "bn_BD-google-medium": {
+        "id": "CC-BY-SA-4.0",
+        "url": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "commercial": True, "attribution": True, "share_alike": True,
+        "verified": True,
+    },
+    "mr_IN-google-medium": {
+        "id": "CC-BY-SA-4.0",
+        "url": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "commercial": True, "attribution": True, "share_alike": True,
+        "verified": True,
+    },
+    # NonCommercial: usable for personal and research work, not for products.
+    "hi_IN-pratham-medium": {
+        "id": "CC-BY-NC-SA-4.0",
+        "url": "http://creativecommons.org/licenses/by-nc-sa/4.0/",
+        "commercial": False, "attribution": True, "share_alike": True,
+        "verified": True,
+    },
+    "hi_IN-priyamvada-medium": {
+        "id": "CC-BY-NC-SA-4.0",
+        "url": "http://creativecommons.org/licenses/by-nc-sa/4.0/",
+        "commercial": False, "attribution": True, "share_alike": True,
+        "verified": True,
+    },
+    # Pointed at a licence we could not read.
+    "en_US-lessac-medium": {
+        "id": "Blizzard2013",
+        "url": "https://www.cstr.ed.ac.uk/projects/blizzard/2013/lessac_blizzard2013/license.html",
+        "commercial": None, "attribution": None, "share_alike": None,
+        "verified": False,
+    },
+    "en_US-amy-medium": {
+        "id": "See-model-card",
+        "url": "https://github.com/MycroftAI/mimic3-voices",
+        "commercial": None, "attribution": None, "share_alike": None,
+        "verified": False,
+    },
+    "ml_IN-meera-medium": {
+        "id": "See-model-card",
+        "url": "https://www.kaggle.com/code/mpwolke/indictts-malayalam-speech-corpus",
+        "commercial": None, "attribution": None, "share_alike": None,
+        "verified": False,
+    },
+    "hi_IN-rohan-medium": {
+        "id": "IITM-IndicTTS",
+        "url": "https://www.iitm.ac.in/donlab/indictts/downloads/license.pdf",
+        "commercial": None, "attribution": None, "share_alike": None,
+        "verified": False,
+    },
+    "te_IN-maya-medium": {
+        "id": "IITM-IndicTTS",
+        "url": "https://www.iitm.ac.in/donlab/indictts/downloads/license.pdf",
+        "commercial": None, "attribution": None, "share_alike": None,
+        "verified": False,
+    },
+}
+
+UNKNOWN_LICENCE = {
+    "id": "unknown", "url": None, "commercial": None, "attribution": None,
+    "share_alike": None, "verified": False,
+}
+
+
+def licence(name):
+    """The licence recorded for a voice. Never None, so callers can rely on it."""
+    return dict(LICENCES.get(name, UNKNOWN_LICENCE))
+
+
+def licence_risk(name):
+    """None when the licence is verified and commercial, else a short reason."""
+    entry = licence(name)
+    if not entry["verified"]:
+        return "licence not verified"
+    if entry["commercial"] is False:
+        return "licence is non-commercial"
+    return None
+
+
+def commercially_safe():
+    """Voices whose licence is verified and allows commercial use."""
+    return sorted(n for n in VOICES if licence_risk(n) is None)
+
+
 DEFAULT_VOICE = "en_US-lessac-medium"
 
 # Languages where Piper has no voice at all, and why it is worth saying so.
@@ -105,6 +215,7 @@ def catalogue():
     rows = []
     for name in sorted(VOICES):
         code, label, quality, _path = VOICES[name]
+        entry = licence(name)
         rows.append({
             "name": name,
             "language": code,
@@ -112,6 +223,12 @@ def catalogue():
             "quality": quality,
             "installed": is_installed(name),
             "path": model_path(name) if is_installed(name) else None,
+            "licence": entry["id"],
+            "licence_url": entry["url"],
+            "licence_verified": entry["verified"],
+            "commercial_use": entry["commercial"],
+            "attribution_required": entry["attribution"],
+            "licence_risk": licence_risk(name),
         })
     return rows
 
