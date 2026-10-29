@@ -378,6 +378,12 @@ runtime, nothing uploaded. The full guide is `docs/VOICE.md`.
 | `voice.transcribe` | `(String, Map?) -> Map` | `voice.listen` | Read an audio file and transcribe it. Returns `{text, language, seconds}`. The path must be inside a granted `voice.listen` root. |
 | `voice.voices` | `() -> List` | none | Every known voice with `name`, `language`, `label`, `installed`. |
 | `voice.licence` | (String?) -> Map | the licence recorded for a voice: id, url, verified, commercial, attribution |
+| `speech.platform` | () -> Map | playback and recording tools found on this machine, and why when none |
+| `speech.record` | (Int?, String?) -> String | record N seconds to a WAV file; returns the path written |
+| `speech.listen` | (Int?, Map?) -> Map | record and transcribe in one step; needs speech.listen |
+| `voice.platform` | () -> Map | playback and recording tools found on this machine, and why when none |
+| `voice.record` | (Int?, String?) -> String | record N seconds to a WAV file; returns the path written |
+| `voice.listen` | (Int?, Map?) -> Map | record and transcribe in one step; needs speech.listen |
 | `voice.languages` | `() -> Map` | none | `speaking`, `speaking_missing`, `listening` — what can be said, what cannot, and what can be heard. |
 | `voice.status` | `() -> Map` | none | `can_speak`, `can_listen`, `voices_installed`, `default_voice`, `voices_dir`. |
 
