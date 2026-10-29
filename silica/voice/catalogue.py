@@ -279,10 +279,12 @@ def download(name, progress=None):
     directory = voices_dir()
     os.makedirs(directory, exist_ok=True)
 
-    target = model_path(name)
+    target = model_path(name)          # already ends in .onnx
     for suffix in (".onnx", ".onnx.json"):
         url = "%s/%s/%s%s" % (BASE_URL, path, name, suffix)
-        destination = target + suffix if suffix == ".onnx" else target + ".json"
+        # the model file *is* the target; appending the suffix produced
+        # "<name>.onnx.onnx", which is_installed() never found
+        destination = target if suffix == ".onnx" else target + ".json"
         partial = destination + ".part"
         if progress:
             progress("downloading %s" % os.path.basename(destination))
