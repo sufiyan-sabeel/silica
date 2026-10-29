@@ -69,7 +69,8 @@ uninstaller, and a release workflow.
 ### Security model
 
 Capability-based, least privilege by default. Seven capabilities: `fs.read`,
-`fs.write`, `fs.list`, `speech.speak`, `speech.listen`, `tui.run`, `gui.run`.
+`fs.write`, `fs.list`, `speech.speak`, `speech.listen`, `speech.models`,
+`tui.run`, `gui.run`.
 Enforcement happens at the VM's native dispatch point, before the function body
 runs, so a native cannot forget to check. Paths are resolved and containment-checked
 once, and the resolved path is what the native receives.
