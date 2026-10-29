@@ -5,6 +5,35 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## [Unreleased] — Phase 4
+
+### Added — model management
+- **`voice.models()`** — installed models with size, the checksum recorded at
+  download, and their licence.
+- **`voice.storage()`** — bytes used, split into `model_bytes` and the
+  bookkeeping files, so "what would deleting this free" has a clean answer.
+- **`voice.verify(name)`** — re-hashes a voice and compares with the recorded
+  checksum. A file that changed after download is reported as unverified.
+- **`voice.set_voice(name)` / `voice.current_voice()`** — a persisted voice
+  choice (`$SILICA_HOME/voices/selection`). Precedence: explicit argument,
+  `SILICA_VOICE`, saved selection, then whatever is installed.
+- **`voice.download_model(name)` / `voice.delete_model(name)`** — explicit model
+  management. Deleting returns the bytes freed.
+- **New capability `speech.models`** (`--allow-speech-models`) gating download
+  and delete, because they reach the network and the disk. Reading model state
+  needs no capability.
+- **A checksum manifest** (`$SILICA_HOME/voices/manifest.json`) written on every
+  download: SHA-256, size and timestamp.
+
+### Verified
+- Real round trip: `delete_model` freed exactly the bytes the storage figure
+  changed by, and a re-download then verified against its recorded checksum.
+
+### Tests
+- 21 tests in `tests/test_voice_models.py`: manifest recording, verification of
+  an untouched and a tampered file, delete accounting, refusal to delete what is
+  not installed, selection persistence and precedence, and the capability gates.
+
 ## [Unreleased] — Phase 3
 
 ### Added — platform audio
