@@ -145,6 +145,11 @@ so it can be tested without a terminal.
 | `tui.table(rows)` | rows of columns; first row is the header |
 | `tui.divider()` | rule across the width |
 | `tui.spacer(n)` | vertical gap |
+| `tui.progress(value, max)` | a filled bar with a percentage |
+| `tui.spinner(label)` | a one-line activity indicator |
+| `tui.status(text, level)` | a message styled by level: `info`, `success`, `warning`, `error` |
+| `tui.radio(options)` | a group of options; left/right change the choice |
+| `tui.textarea(text)` | multi-line editable text |
 | `tui.row()` / `tui.column()` | horizontal / vertical containers |
 | `tui.add(parent, child)` | attach a child |
 
@@ -152,8 +157,23 @@ so it can be tested without a terminal.
 That is the only place the API bends to the language.
 
 Containers that accept children: `app`, `panel`, `row`, `column`. Adding a child
-to a leaf (`text`, `button`, `field`, `divider`, `spacer`, `list`, `table`) is a
-runtime error rather than a silent no-op.
+to a leaf (`text`, `button`, `field`, `divider`, `spacer`, `list`, `table`,
+`progress`, `spinner`, `status`, `radio`, `textarea`) is a runtime error rather
+than a silent no-op.
+
+Focusable widgets: `button`, `field`, `list`, `checkbox`, `radio`, `textarea`.
+Everything else is skipped by navigation.
+
+### Widget state
+
+| Widget | States |
+|---|---|
+| button | normal, focused, pressed, disabled |
+| checkbox | checked / unchecked, focused |
+| field, textarea | empty (placeholder), focused (cursor block), filled |
+| radio | one selected option, focused |
+| progress | in progress, complete (success colour) |
+| status | info, success, warning, error |
 
 ---
 
@@ -269,6 +289,35 @@ and that a program exits on its quit key.
 
 ---
 
+## Running on Termux (Android)
+
+Pure Python and `curses`, nothing else to install:
+
+```bash
+pkg install python git
+git clone https://github.com/sufiyan-sabeel/silica
+cd silica
+python3 -m silica run examples/tui_calculator.sc --allow-tui
+```
+
+Or with the installed launcher, from a checkout:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sufiyan-sabeel/silica/main/install.sh | sh
+silica run ~/silica/examples/tui_calculator.sc --allow-tui
+```
+
+**Arrow keys need Termux's extra-keys row** — the soft keyboard has no arrow
+keys. Termux shows a two-row extra-keys bar above the keyboard; it includes
+up/down/left/right, and it can be edited in
+`~/.termux/termux.properties`. Without it, only typing, Enter and q work.
+
+**Not verified on a real device.** Everything here was tested in a Linux
+pseudo-terminal. Android terminal colour handling, soft-keyboard input and the
+extra-keys row are untested.
+
+---
+
 ## Limits
 
 * **Terminal only.** There is no GUI; see `docs/GUI.md`.
@@ -278,5 +327,10 @@ and that a program exits on its quit key.
 * **Focus is linear.** No spatial navigation or custom tab order.
 * **One application per program.** Two `tui.app` calls in one run share the
   terminal state; the second `run` will fight the first.
-* **Not tested on Termux**, though `curses` is part of Python and the code has no
-  dependency beyond it.
+* **Not tested on Termux or any Android device.**
+* **No dialogs, tabs, menus or tooltips** yet.
+* **No scrollable panel**: only `list` scrolls, via its `scroll` property.
+* **No accessibility metadata** — no roles, labels or screen-reader support.
+* **Input has no selection or cursor movement** — text is appended and deleted
+  from the end only.
+* **Password fields are not implemented.**
