@@ -52,12 +52,18 @@ class LayoutTests(unittest.TestCase):
         self.assertEqual(lines[1].strip(), "silica")
 
     def test_button_shows_a_focus_marker(self):
+        """Focus comes from the app, not from a flag on the widget."""
         button = Node("button", "Continue")
         app = app_with(button)
-        self.assertIn("[ Continue ]", app.render_lines(40, 3)[0])
-        self.assertNotIn(">", app.render_lines(40, 3)[0])
-        button.focused = True
-        self.assertIn(">", app.render_lines(40, 3)[0])
+        focused = app.render_lines(40, 3)[0]
+        self.assertIn("Continue", focused)
+        self.assertIn("\u25b8", focused)      # the focused widget is marked
+        other = Node("button", "Other")
+        app.add(other)
+        app.focus_next()
+        lines = app.render_lines(40, 4)
+        self.assertNotIn("\u25b8", lines[0])  # the first button lost focus
+        self.assertIn("\u25b8", lines[1])
 
     def test_list_renders_every_item(self):
         node = Node("list")
