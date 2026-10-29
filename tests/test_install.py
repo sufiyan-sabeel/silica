@@ -321,10 +321,15 @@ class PackagingTests(unittest.TestCase):
                                               pyproject_text(), _re.M | _re.S).group(0)))
         root = os.path.join(ROOT, "silica")
         found = {"silica"}
-        for entry in sorted(os.listdir(root)):
-            if os.path.isdir(os.path.join(root, entry)) and os.path.exists(
-                    os.path.join(root, entry, "__init__.py")):
-                found.add("silica." + entry)
+        # walk the whole tree: a nested subpackage (silica.voice.engines) is just
+        # as invisible to setuptools when undeclared, and one level of os.listdir
+        # did not catch it
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [d for d in dirnames if d != "__pycache__"]
+            if "__init__.py" not in filenames:
+                continue
+            relative = os.path.relpath(dirpath, ROOT).replace(os.sep, ".")
+            found.add(relative)
         self.assertEqual(found - declared, set(),
                          "these subpackages are missing from pyproject `packages`")
 
