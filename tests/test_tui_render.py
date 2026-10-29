@@ -245,6 +245,31 @@ class CalculatorTests(unittest.TestCase):
     def test_an_unknown_operation_is_reported(self):
         self.assertEqual(self.compute("1", "2", "POWER"), "unknown operation")
 
+    def test_input_validation_rejects_junk(self):
+        """A non-numeric entry used to pass validation and then abort float()."""
+        cases = {"12": True, "-3": True, "2.5": True, "-.5": True, "0": True,
+                 "": False, "abc": False, "1 2": False, "-": False,
+                 "1.2.3": False, "1e5": False}
+        source = open(CALCULATOR, encoding="utf-8").read().split("sfn main()")[0]
+        program = source + "\nsfn main() {\n"
+        for text in cases:
+            program += '    sprint(str(is_number("%s")) + "\\n")\n' % text
+        program += "}\n"
+        result = self.run_source(program)
+        self.assertNotIsInstance(result, Exception, result)
+        answers = [line.strip() for line in result.splitlines() if line.strip()]
+        self.assertEqual(answers, ["oui" if ok else "nein" for ok in cases.values()])
+
+    def test_a_rejected_entry_never_reaches_float(self):
+        """The guard must run before float(), which aborts on junk."""
+        source = open(CALCULATOR, encoding="utf-8").read().split("sfn main()")[0]
+        program = source + (
+            "\nsfn main() {\n"
+            '    si is_number("abc") { sprint("would call float") }\n'
+            '    sino { sprint("guarded") }\n'
+            "}\n")
+        self.assertEqual(self.run_source(program).strip(), "guarded")
+
     def test_the_example_compiles(self):
         completed = subprocess.run(
             [sys.executable, "-m", "silica", "check", CALCULATOR],
