@@ -481,7 +481,7 @@ def _c_sum(ctx, args):
 def _build():
     mods = {"core": {}, "math": {}, "string": {}, "collections": {},
             "fs": {}, "gui": {}, "gui.lib.widgets": {}, "gui.lib.layout": {},
-            "gui.lib.theme": {}, "json": {}, "speech": {}, "tui": {},
+            "gui.lib.theme": {}, "json": {}, "speech": {}, "voice": {}, "tui": {},
             "tui.lib.widgets": {}, "tui.lib.layout": {}, "tui.lib.style": {},
             "ui": {}, "ui.state": {},
             "ui.lib.widgets": {}, "ui.lib.theme": {}, "ui.lib.colors": {},
@@ -557,10 +557,15 @@ def _build():
                 max_args=max_args, requires=requires, path_arg=path_arg)
 
     from .voice.natives_speech import FUNCTIONS as _SPEECH
+    # `voice` is the preferred namespace; `speech` stays for compatibility.
+    # The natives are built once and the very same objects are aliased into
+    # `voice`, so there is one implementation, one registry and one set of
+    # capability requirements — not two copies that could drift apart.
     for (name, params, ret, fn, min_args, max_args,
          requires, path_arg) in _SPEECH:
         add("speech", name, params, ret, fn, min_args=min_args,
             max_args=max_args, requires=requires, path_arg=path_arg)
+    mods["voice"].update(mods["speech"])
 
     from .ui.natives_ui import FUNCTIONS as _UI
     for (module, name, params, ret, fn, min_args, max_args,
