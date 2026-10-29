@@ -12,7 +12,10 @@ the two directions are not symmetric. Anything that claims otherwise would be
 the sort of thing this project keeps trying not to do.
 """
 
+import hashlib
+import json
 import os
+import time
 import urllib.error
 import urllib.request
 
@@ -188,6 +191,45 @@ def voices_dir():
     return path
 
 
+MANIFEST = "manifest.json"
+
+
+def manifest_path():
+    return os.path.join(voices_dir(), MANIFEST)
+
+
+def _read_manifest():
+    try:
+        with open(manifest_path(), encoding="utf-8") as handle:
+            data = json.load(handle)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _write_manifest(data):
+    target = manifest_path()
+    partial = target + ".part"
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    with open(partial, "w", encoding="utf-8") as handle:
+        json.dump(data, handle, indent=1, sort_keys=True)
+    os.replace(partial, target)
+
+
+def sha256_of(path):
+    """Hash a file, streaming, so a 74 MB voice does not land in memory."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def manifest():
+    """What was recorded when each voice was downloaded."""
+    return _read_manifest()
+
+
 def model_path(name):
     return os.path.join(voices_dir(), name + ".onnx")
 
@@ -208,6 +250,30 @@ def installed():
             if is_installed(name):
                 names.append(name)
     return names
+
+
+def models():
+    """Installed models with their licence, size and recorded checksum."""
+    recorded = _read_manifest()
+    rows = []
+    for name in installed():
+        code, label, quality, _path = VOICES[name]
+        entry = licence(name)
+        model = model_path(name)
+        rows.append({
+            "name": name,
+            "language": code,
+            "label": label,
+            "quality": quality,
+            "path": model,
+            "bytes": os.path.getsize(model) if os.path.exists(model) else 0,
+            "sha256": (recorded.get(name) or {}).get("sha256"),
+            "downloaded_at": (recorded.get(name) or {}).get("downloaded_at"),
+            "licence": entry["id"],
+            "licence_verified": entry["verified"],
+            "commercial_use": entry["commercial"],
+        })
+    return rows
 
 
 def catalogue():
@@ -233,6 +299,69 @@ def catalogue():
     return rows
 
 
+def delete(name):
+    """Remove an installed voice and its manifest entry. Returns bytes freed."""
+    if name not in VOICES:
+        raise VoiceError(
+            "unknown voice %r. Known voices: %s" % (name, ", ".join(sorted(VOICES))))
+    if not is_installed(name):
+        raise VoiceError("voice %r is not installed, so there is nothing to delete"
+                         % name)
+    freed = 0
+    for path in (model_path(name), model_path(name) + ".json"):
+        if os.path.exists(path):
+            freed += os.path.getsize(path)
+            os.unlink(path)
+    data = _read_manifest()
+    if name in data:
+        del data[name]
+        _write_manifest(data)
+    return freed
+
+
+def verify(name):
+    """Re-hash an installed voice and compare with what was recorded."""
+    if not is_installed(name):
+        return {"name": name, "installed": False, "verified": False,
+                "reason": "not installed"}
+    recorded = _read_manifest().get(name)
+    actual = sha256_of(model_path(name))
+    if not recorded:
+        return {"name": name, "installed": True, "verified": False,
+                "sha256": actual,
+                "reason": "no checksum was recorded for this voice"}
+    ok = recorded.get("sha256") == actual
+    return {"name": name, "installed": True, "verified": ok,
+            "sha256": actual, "recorded": recorded.get("sha256"),
+            "reason": None if ok else "the file has changed since it was downloaded"}
+
+
+def storage():
+    """How much disk the voices take, so deleting one is an informed choice."""
+    total = 0
+    model_bytes = 0
+    files = []
+    directory = voices_dir()
+    # bookkeeping files are ours, not the user's models; count them separately so
+    # "how much would deleting this voice free" has a clean answer
+    bookkeeping = {MANIFEST, SELECTION, MANIFEST + ".part"}
+    if os.path.isdir(directory):
+        for entry in sorted(os.listdir(directory)):
+            path = os.path.join(directory, entry)
+            if not os.path.isfile(path):
+                continue
+            size = os.path.getsize(path)
+            total += size
+            if entry not in bookkeeping:
+                model_bytes += size
+            files.append({"name": entry, "bytes": size,
+                          "bookkeeping": entry in bookkeeping})
+    return {"directory": directory, "bytes": total, "model_bytes": model_bytes,
+            "megabytes": round(total / (1024.0 * 1024.0), 1),
+            "model_megabytes": round(model_bytes / (1024.0 * 1024.0), 1),
+            "files": files, "voices": installed()}
+
+
 def languages():
     """Speaking coverage, and what is missing, stated as data rather than prose."""
     available = {}
@@ -245,9 +374,46 @@ def languages():
     }
 
 
+SELECTION = "selection"
+
+
+def selection_path():
+    return os.path.join(voices_dir(), SELECTION)
+
+
+def selected():
+    """The voice chosen with set_voice, if any. Not validated here."""
+    try:
+        with open(selection_path(), encoding="utf-8") as handle:
+            name = handle.read().strip()
+        return name or None
+    except OSError:
+        return None
+
+
+def set_selected(name):
+    """Remember a voice for later runs. Pass None or "" to clear it."""
+    target = selection_path()
+    if not name:
+        if os.path.exists(target):
+            os.unlink(target)
+        return None
+    if name not in VOICES:
+        raise VoiceError(
+            "unknown voice %r. Known voices: %s" % (name, ", ".join(sorted(VOICES))))
+    if not is_installed(name):
+        raise VoiceError("voice %r is not installed. Install it with:\n"
+                         "    silica voice install %s" % (name, name))
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    with open(target, "w", encoding="utf-8") as handle:
+        handle.write(name + "\n")
+    return name
+
+
 def resolve(name=None):
     """Turn a voice name into a path, preferring an installed voice."""
-    name = name or os.environ.get("SILICA_VOICE") or DEFAULT_VOICE
+    name = (name or os.environ.get("SILICA_VOICE") or selected()
+            or DEFAULT_VOICE)
     if is_installed(name):
         return name, model_path(name)
     if name not in VOICES:
@@ -307,4 +473,13 @@ def download(name, progress=None):
         os.replace(partial, destination)
         if os.path.getsize(destination) < 1024:
             raise VoiceError("downloaded %s looks truncated" % destination)
+
+    # record what was downloaded, so corruption can be detected later
+    data = _read_manifest()
+    data[name] = {
+        "sha256": sha256_of(target),
+        "bytes": os.path.getsize(target),
+        "downloaded_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+    _write_manifest(data)
     return target
