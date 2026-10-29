@@ -384,6 +384,20 @@ runtime, nothing uploaded. The full guide is `docs/VOICE.md`.
 | `voice.platform` | () -> Map | playback and recording tools found on this machine, and why when none |
 | `voice.record` | (Int?, String?) -> String | record N seconds to a WAV file; returns the path written |
 | `voice.listen` | (Int?, Map?) -> Map | record and transcribe in one step; needs speech.listen |
+| `speech.models` | () -> List | installed models: size, checksum recorded at download, licence |
+| `speech.storage` | () -> Map | disk used by voices: model_bytes, megabytes, files |
+| `speech.verify` | (String) -> Map | re-hash a voice and compare with the recorded checksum |
+| `speech.set_voice` | (String?) -> String | choose the voice later calls use; empty clears it |
+| `speech.current_voice` | () -> String | which voice a call without a name would use |
+| `speech.download_model` | (String) -> Map | download a voice; needs speech.models |
+| `speech.delete_model` | (String) -> Map | delete a voice, returning the bytes freed; needs speech.models |
+| `voice.models` | () -> List | installed models: size, checksum recorded at download, licence |
+| `voice.storage` | () -> Map | disk used by voices: model_bytes, megabytes, files |
+| `voice.verify` | (String) -> Map | re-hash a voice and compare with the recorded checksum |
+| `voice.set_voice` | (String?) -> String | choose the voice later calls use; empty clears it |
+| `voice.current_voice` | () -> String | which voice a call without a name would use |
+| `voice.download_model` | (String) -> Map | download a voice; needs speech.models |
+| `voice.delete_model` | (String) -> Map | delete a voice, returning the bytes freed; needs speech.models |
 | `voice.languages` | `() -> Map` | none | `speaking`, `speaking_missing`, `listening` — what can be said, what cannot, and what can be heard. |
 | `voice.status` | `() -> Map` | none | `can_speak`, `can_listen`, `voices_installed`, `default_voice`, `voices_dir`. |
 
