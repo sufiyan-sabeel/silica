@@ -72,7 +72,8 @@ def _engines():
 
 def __getattr__(name):
     """Expose the submodules and their error types without importing them eagerly."""
-    if name in ("audio", "catalogue", "espeak", "piper", "whisper"):
+    if name in ("audio", "catalogue", "espeak", "piper", "whisper",
+                "platform_audio"):
         import importlib
         return importlib.import_module("." + name, __name__)
     aliases = {
@@ -99,6 +100,41 @@ def licence(name=None):
     """
     catalogue = _catalogue()
     return catalogue.licence(name or catalogue.DEFAULT_VOICE)
+
+
+def platform():
+    """What this machine can play and record with, and why when it cannot."""
+    return _platform_audio().describe()
+
+
+def record(seconds=5, path=None):
+    """Record audio to a WAV file. Returns the path written.
+
+    Recording is never automatic: something has to call this. The microphone is
+    the user's, and a library that starts listening on its own is not one to
+    trust.
+    """
+    import os as _os
+    import tempfile as _tempfile
+    platform_audio = _platform_audio()
+    if path is None:
+        handle = _tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        handle.close()
+        path = handle.name
+    return platform_audio.record(seconds, path)
+
+
+def listen(seconds=5, language=None, engine=None, model=None, path=None):
+    """Record and transcribe in one step. Returns the transcription dict."""
+    spoken = record(seconds=seconds, path=path)
+    result = transcribe(spoken, model=model, language=language, engine=engine)
+    result["audio"] = spoken
+    return result
+
+
+def _platform_audio():
+    from . import platform_audio
+    return platform_audio
 
 
 def available():
@@ -188,19 +224,22 @@ def speak(text, out=None, voice=None, player=None):
         samples, rate = audio.read_wav(written)
 
     import os
-    import shutil
     import subprocess
     import tempfile
 
-    command = player
-    if command is None:
-        for candidate in (("paplay",), ("aplay", "-q"), ("play", "-q"),
-                          ("afplay",), ("termux-media-player", "play")):
-            if shutil.which(candidate[0]):
-                command = candidate
-                break
+    platform_audio = _platform_audio()
+
+    # One place knows about audio players: platform_audio. This used to keep its
+    # own copy of the list, which is how the two drift apart.
+    if player is None:
+        name, binary, extra = platform_audio.playback_tool()
+        command = [binary] + list(extra) if binary else None
+    else:
+        name = player[0] if isinstance(player, (list, tuple)) else str(player)
+        command = list(player) if isinstance(player, (list, tuple)) else [player]
+
     played = False
-    detail = "no audio player found (paplay, aplay, play, afplay, termux-media-player)"
+    detail = platform_audio.describe()["playback_reason"] or "no audio player found"
     if command:
         path = written
         temporary = None
@@ -213,10 +252,10 @@ def speak(text, out=None, voice=None, player=None):
         try:
             completed = subprocess.run(list(command) + [path],
                                        stdout=subprocess.PIPE,
-                                       stderr=subprocess.PIPE, timeout=120)
+                                       stderr=subprocess.PIPE, timeout=300)
             played = completed.returncode == 0
-            detail = "played with %s" % command[0] if played else (
-                "%s exited %d" % (command[0], completed.returncode))
+            detail = ("played with %s" % name if played
+                      else "%s exited %d" % (name, completed.returncode))
         except (OSError, subprocess.SubprocessError) as exc:
             detail = "player failed: %s" % exc
         finally:
