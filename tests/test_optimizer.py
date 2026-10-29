@@ -184,8 +184,8 @@ class RegressionTests(unittest.TestCase):
             if not name.endswith(".sc"):
                 continue
             if name in ("calculator.sc", "fs_demo.sc", "tui_demo.sc",
-                        "gui_demo.sc", "ui_tasks.sc", "ui_hello.sc",
-                        "ui_animate.sc"):
+                        "tui_calculator.sc", "gui_demo.sc", "ui_tasks.sc",
+                        "ui_hello.sc", "ui_animate.sc"):
                 continue  # these need stdin, capabilities or a display
             with self.subTest(example=name):
                 completed = subprocess.run(
