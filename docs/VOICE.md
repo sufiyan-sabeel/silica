@@ -165,6 +165,65 @@ remain untested** — see `docs/VOICE.md` limits.
 
 ---
 
+## Playback and recording
+
+Playback and the microphone belong to the operating system, so one module decides
+which program to use — by looking, never by assuming:
+
+```silica
+use voice
+
+sfn main() {
+    # what this machine can actually do
+    let here = voice.platform()
+    sprint(here["playback"])        # e.g. "paplay", or unit
+    sprint(here["recording"])       # e.g. "arecord", or unit
+
+    # record three seconds, then transcribe
+    let heard = voice.listen(3, {language: "en"})
+    sprint(heard["text"])
+}
+```
+
+```bash
+silica run listen.sc --allow-speech-listen /tmp --allow-speech-speak /tmp
+```
+
+`voice.record(seconds, path)` captures a WAV and returns the path;
+`voice.listen(seconds, options)` records and transcribes in one step. Recording
+never starts on its own — something has to call it, and it needs the
+`speech.listen` capability.
+
+### What gets detected
+
+| | Order tried |
+|---|---|
+| playback | `termux-media-player`, `paplay`, `aplay`, `afplay`, `play` (sox) |
+| recording | `arecord`, `rec`, `termux-microphone-record`, `ffmpeg` |
+
+Termux is recognised from `TERMUX_VERSION`, a `$PREFIX` containing `com.termux`, or
+the Termux data directory — **not** from `platform.system()` saying Linux, which
+would be true of any desktop.
+
+### The Termux microphone caveat
+
+`termux-microphone-record` writes M4A/3GP, and every speech model Silica can drive
+wants 16-bit PCM WAV. So recording on Termux is two steps: capture, then convert
+with `ffmpeg`. If ffmpeg is missing, `voice.record` says so rather than handing
+back a file nothing can read:
+
+```
+termux-microphone-record records in a compressed format and ffmpeg is not
+installed to convert it to WAV
+```
+
+Install it with `pkg install ffmpeg`.
+
+**None of the recording path has been tested on a device.** It is tested with
+stand-in binaries that behave like the real ones; see the limits below.
+
+---
+
 ## Licensing — read this before shipping anything
 
 Every voice is trained on a dataset whose licence governs redistribution and
@@ -335,7 +394,10 @@ silica voice info file.wav            # duration, rate, level, silence
   phones do not have it. `SILICA_WHISPER_MODEL=base` for better accuracy.
 * **16-bit PCM WAV only** for input. MP3 and M4A would need PyAV, whose file
   path is version-sensitive; WAV avoids that dependency entirely.
-* **Termux is untested on a device.**
+* **Termux is untested on a device.** Detection and command construction are
+  covered by tests with stand-in binaries; nothing here has run on Android.
+* **Microphone capture is untested on every platform.** No microphone exists in
+  the environment this was built in.
 * **Playback needs a system player.** `speech.speak` errors clearly if none of
   `paplay`, `aplay`, `play`, `afplay` or `termux-media-player` is present.
 * **No streaming.** Synthesis and transcription are whole-utterance; there is no
