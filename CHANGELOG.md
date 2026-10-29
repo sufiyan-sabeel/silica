@@ -5,6 +5,41 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## [Unreleased] — Phase 2
+
+### Added — speech engine layer
+- **`silica/voice/engines/`**: speech out and speech in each behind an interface
+  (`TTSEngine.synthesize`, `STTEngine.transcribe`), with adapters for Piper,
+  faster-whisper and sherpa-onnx. The voice layer now selects an engine instead
+  of calling a module directly.
+- **Selection is explicit**: `SILICA_VOICE_TTS` and `SILICA_VOICE_STT` take
+  `piper|sherpa|auto` and `whisper|sherpa|auto`. `auto` prefers the engines this
+  project has shipped and tested, so existing behaviour is unchanged.
+- **`voice.status()["engines"]`** reports every engine with the reason it is
+  unavailable.
+- **The sherpa-onnx adapter** is optional and opt-in, configured by
+  `SILICA_SHERPA_TTS_MODEL` / `SILICA_SHERPA_ASR_MODEL`. It encodes two Phase 0
+  findings: sherpa-onnx 2.x cannot run Piper-style voices (it ignores `data_dir`
+  and needs an external phonemizer), and no model is ever downloaded.
+
+### Verified against real models
+- The sherpa adapter was run end to end with a Piper `lessac` int8 voice and
+  Whisper `tiny.en`: synthesis to WAV, then transcription back through the same
+  engine layer. Recorded on Linux x86_64 only.
+
+### Fixed
+- **`silica.voice.engines` was missing from `pyproject` `packages`**, so a built
+  wheel shipped without the engine layer and would fail on import. Found by
+  building the wheel and listing its contents.
+- **The packaging guard only walked one directory level**, so a nested
+  subpackage slipped past it. It now walks the whole tree.
+
+### Tests
+- 24 tests in `tests/test_voice_engines.py`: registry, selection order,
+  environment overrides, unknown-engine refusal, every-unavailable reporting,
+  error types preserved for callers, and the sherpa adapter's own configuration
+  messages.
+
 ## [Unreleased]
 
 Voice licensing audit and the `voice` namespace. No version bump: this is work
