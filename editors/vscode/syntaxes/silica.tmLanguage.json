@@ -163,7 +163,7 @@
       "patterns": [
         {
           "name": "constant.language.boolean.silica",
-          "match": "\\b(oui|nein)\\b"
+          "match": "\\b(oui|nein|struct)\\b"
         }
       ]
     },
