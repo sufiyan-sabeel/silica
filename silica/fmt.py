@@ -124,7 +124,8 @@ class Printer:
             self.write("}")
         elif isinstance(node, ast.MemberAssignStmt):
             self.write("%s.%s = %s"
-                       % (node.target, node.field, self.expr(node.value, 0)))
+                       % (node.target, ".".join(node.path),
+                          self.expr(node.value, 0)))
         elif isinstance(node, ast.FinStmt):
             self.write("fin")
         else:  # pragma: no cover
