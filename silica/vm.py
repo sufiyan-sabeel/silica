@@ -19,6 +19,7 @@ from .bytecode import (OPS, decode, verify_chunk)
 from .capabilities import CapabilitySet
 from .errors import SilicaError, SilicaRuntimeError
 from .natives import (Iterator, MODULES, format_value, get_native, i64, type_name)
+from .objects import Instance, equal as objects_equal
 
 
 class Context:
@@ -283,6 +284,64 @@ class VM:
                             err.filename = self.filename
                         raise
                     stack.append(result)
+                elif op == 0x26:  # NEW
+                    name_idx, argc = operands
+                    type_name_ = constants[name_idx]
+                    info = chunk.type(type_name_)
+                    if info is None:      # pragma: no cover - verifier blocks this
+                        self._raise(fn, offset, "unknown type '%s'" % type_name_)
+                    args = stack[-argc:] if argc else []
+                    if argc:
+                        del stack[-argc:]
+                    stack.append(Instance(type_name_, info.fields, args, info.is_struct))
+                elif op == 0x27:  # GET_FIELD
+                    name_idx = operands[0]
+                    target = stack.pop()
+                    stack.append(self._field(target, constants[name_idx], fn, offset))
+                elif op == 0x28:  # SET_FIELD
+                    name_idx = operands[0]
+                    value = stack.pop()
+                    target = stack.pop()
+                    field_name = constants[name_idx]
+                    if not isinstance(target, Instance):
+                        self._raise(fn, offset,
+                                    "cannot set field '%s' on a %s"
+                                    % (field_name, type_name(target)))
+                    if field_name not in target.fields:
+                        self._raise(fn, offset, "%s has no field '%s'"
+                                    % (target.type_name, field_name))
+                    target.set(field_name, value)
+                elif op == 0x29:  # CALL_METHOD
+                    name_idx, argc = operands
+                    method_name = constants[name_idx]
+                    args = stack[-argc:] if argc else []
+                    if argc:
+                        del stack[-argc:]
+                    receiver = stack.pop()
+                    if not isinstance(receiver, Instance):
+                        self._raise(fn, offset, "cannot call method '%s' on a %s"
+                                    % (method_name, type_name(receiver)))
+                    info = chunk.type(receiver.type_name)
+                    entry = info.method(method_name) if info else None
+                    if entry is None:
+                        self._raise(fn, offset, "%s has no method '%s'"
+                                    % (receiver.type_name, method_name),
+                                    hint="declare it with 'sfn %s(...)' inside the class"
+                                         % method_name)
+                    _, arity, target_index = entry
+                    if argc != arity:
+                        self._raise(fn, offset,
+                                    "%s.%s expects %d argument(s) but got %d"
+                                    % (receiver.type_name, method_name, arity, argc))
+                    callee = functions[target_index]
+                    if len(frames) >= self.max_frames:
+                        self._raise(fn, offset,
+                                    "call stack overflow at depth %d" % len(frames))
+                    locals_ = [receiver] + list(args)
+                    locals_ += [None] * (callee.n_locals - len(locals_))
+                    frame.ip = ip
+                    frames.append(Frame(callee, target_index, locals_))
+                    break
                 elif op == 0x1B:  # RET
                     value = stack.pop()
                     frames.pop()
@@ -403,8 +462,20 @@ class VM:
         return math.fmod(float(a), float(b))
 
     def _equal(self, a, b):
+        if isinstance(a, Instance) or isinstance(b, Instance):
+            return objects_equal(a, b)
         from .natives import _value_eq
         return _value_eq(a, b)
+
+    def _field(self, target, field_name, fn, offset):
+        if not isinstance(target, Instance):
+            self._raise(fn, offset, "cannot read field '%s' of a %s"
+                        % (field_name, type_name(target)))
+        if field_name not in target.fields:
+            self._raise(fn, offset, "%s has no field '%s'"
+                        % (target.type_name, field_name),
+                        hint="fields are declared as 'name: Type' in the type body")
+        return target.fields[field_name]
 
     def _order(self, a, b, fn, offset, op):
         if isinstance(a, str) and isinstance(b, str):

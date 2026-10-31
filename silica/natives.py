@@ -17,6 +17,7 @@ error on a mismatch.
 import math as _math
 
 from .errors import SilicaRuntimeError
+from .objects import Instance, equal as objects_equal, render as objects_render
 
 I64_MIN = -(2 ** 63)
 I64_MAX = 2 ** 63 - 1
@@ -31,6 +32,8 @@ def i64(value):
 
 
 def type_name(value):
+    if isinstance(value, Instance):
+        return value.type_name
     if value is None:
         return "Unit"
     if isinstance(value, bool):
@@ -63,6 +66,8 @@ def format_float(value):
 
 def format_value(value):
     """How `sprint` / `dit` render a value (see docs/LANGUAGE_SPEC.md)."""
+    if isinstance(value, Instance):
+        return objects_render(value, format_value)
     if value is None:
         return "unit"
     if isinstance(value, bool):

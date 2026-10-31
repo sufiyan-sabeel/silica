@@ -26,6 +26,10 @@ KEYWORDS = {
     "fin",      # optional explicit end-of-block marker
     "halt",     # terminate the program
     # declarations
+    "struct",   # a value type: named fields, structural equality
+    "class",    # an object type: fields + methods, identity equality
+    "private",  # a field or method visible only inside its own type
+    "static",   # a method with no `self`, called as Type.name(...)
     "sfn",      # function declaration
     "ret",      # return
     "use",      # import a standard-library module

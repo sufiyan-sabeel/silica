@@ -11,10 +11,10 @@ import os
 
 from . import ast
 from . import optimizer
-from .bytecode import (Chunk, Function, MAX_STACK, OPS, OPERANDS, constant_key,
-                       encode, verify_function, write_varint)
+from .bytecode import (Chunk, Function, MAX_STACK, OPS, OPERANDS, TypeInfo,
+                       constant_key, encode, verify_function, write_varint)
 from .errors import CompileError
-from .natives import get_constant, get_native, module_exists
+from .natives import PLANNED_MODULES, get_constant, get_native, module_exists
 
 VARINT_MAX = (1 << 63) - 1
 
@@ -160,10 +160,11 @@ class Emitter:
 
 class Compiler:
     def __init__(self, program, filename="<source>", functions=None, globals_=None,
-                 pre_globals=None, pre_index=None):
+                 pre_globals=None, pre_index=None, types=None):
         self.program = program
         self.filename = filename
         self.func_infos = functions or {}
+        self.type_infos = types or {}          # checker TypeInfo by name
         self.global_infos = globals_ or {}
         self.chunk = Chunk()
         self.const_index = {}
@@ -193,11 +194,35 @@ class Compiler:
     def compile(self):
         stmts = self.program.stmts
 
-        # 1. function indices (forward references are allowed)
+        # 1. function indices (forward references are allowed). Methods are
+        #    functions too: `Type.method` is the name they are registered under,
+        #    so a static call is an ordinary CALL and a method call dispatches
+        #    through the type table.
         for stmt in stmts:
             if isinstance(stmt, ast.FuncDecl):
                 self.func_index[stmt.name] = len(self.func_index)
                 self.chunk.functions.append(Function(stmt.name))
+        for stmt in stmts:
+            for method in getattr(stmt, "methods", []) or []:
+                qualified = "%s.%s" % (stmt.name, method.name)
+                self.func_index[qualified] = len(self.func_index)
+                self.chunk.functions.append(Function(qualified))
+
+        # 1b. the type table the verifier and VM need
+        for stmt in stmts:
+            if not isinstance(stmt, (ast.StructDecl, ast.ClassDecl)):
+                continue
+            info = self.type_infos.get(stmt.name)
+            methods = []
+            for method in getattr(stmt, "methods", []) or []:
+                qualified = "%s.%s" % (stmt.name, method.name)
+                # the type table records the number of *explicit* arguments:
+                # the receiver is implicit in a CALL_METHOD, so it is not counted
+                methods.append((method.name, len(method.params),
+                                self.func_index[qualified]))
+            self.chunk.types.append(TypeInfo(
+                stmt.name, isinstance(stmt, ast.StructDecl),
+                [field.name for field in stmt.fields], methods))
 
         # 2. globals (any carried in from a previous REPL entry come first, so
         #    slot numbers stay stable across entries)
@@ -223,6 +248,11 @@ class Compiler:
             if isinstance(stmt, ast.FuncDecl):
                 index = self.func_index[stmt.name]
                 self.chunk.functions[index] = self.compile_function(stmt)
+            elif isinstance(stmt, ast.ClassDecl):
+                for method in stmt.methods:
+                    qualified = "%s.%s" % (stmt.name, method.name)
+                    self.chunk.functions[self.func_index[qualified]] = \
+                        self.compile_method(stmt.name, method)
 
         # 5. declare max_stack from the emitted code (verifier analysis), so the
         #    header never under-declares the stack the code needs
@@ -259,6 +289,22 @@ class Compiler:
             emitter.emit("RET", line=decl.line)
         return self.finish(emitter, decl.name, len(decl.params), ret_type)
 
+    def compile_method(self, type_name, decl):
+        info = self.type_infos.get(type_name)
+        method_info = info.methods[decl.name] if info else None
+        ret_type = method_info.ret if method_info else (decl.ret_type or "Unit")
+        qualified = "%s.%s" % (type_name, decl.name)
+        emitter = Emitter(self, qualified, ret_type)
+        if not decl.is_static:
+            emitter.declare("self", decl.line, decl.col)     # slot 0
+        for entry in decl.params:
+            emitter.declare(entry[0], entry[2], entry[3])
+        self.compile_block(emitter, decl.body, new_scope=False)
+        emitter.emit("UNIT", line=decl.line)
+        emitter.emit("RET", line=decl.line)
+        arity = len(decl.params) + (0 if decl.is_static else 1)
+        return self.finish(emitter, qualified, arity, ret_type)
+
     def finish(self, emitter, name, arity, ret_type):
         code, lines = emitter.assemble()
         # max_stack is filled in by the post-pass in compile(): the analysis
@@ -282,6 +328,12 @@ class Compiler:
             slot = emitter.declare(stmt.name, stmt.line, stmt.col)
             emitter.emit("STORE_LOCAL", slot, line=line)
         elif isinstance(stmt, ast.AssignStmt):
+            if stmt.target is not None:
+                self.compile_expr(emitter, stmt.target.obj)
+                self.compile_expr(emitter, stmt.value)
+                emitter.emit("SET_FIELD", self.intern_string(stmt.target.name),
+                             line=line)
+                return
             self.compile_expr(emitter, stmt.value)
             target = emitter.resolve(stmt.name)
             if target is None:
@@ -471,7 +523,17 @@ class Compiler:
         elif isinstance(expr, ast.Binary):
             self.compile_binary(emitter, expr)
         elif isinstance(expr, ast.Call):
-            self.compile_call(emitter, expr)
+            callee = expr.callee
+            if isinstance(callee, ast.Ident) and callee.name in self.type_infos:
+                info = self.type_infos[callee.name]
+                for arg in expr.args:
+                    self.compile_expr(emitter, arg)
+                emitter.emit("NEW", self.intern_string(info.name),
+                             len(info.field_order), line=expr.line)
+            elif isinstance(callee, ast.Member) and self._is_member_call(emitter, callee):
+                self.compile_type_call(emitter, expr, callee)
+            else:
+                self.compile_call(emitter, expr)
         elif isinstance(expr, ast.Member):
             self.compile_member(emitter, expr)
         elif isinstance(expr, ast.ListLit):
@@ -556,16 +618,71 @@ class Compiler:
             return
         raise CompileError("cannot compile call", line, expr.col, self.filename)
 
+    def _is_module_path(self, node):
+        """True when `node` is a module name or a dotted path rooted at one."""
+        if isinstance(node, ast.Ident):
+            return module_exists(node.name) or node.name in PLANNED_MODULES
+        if isinstance(node, ast.Member):
+            return self._is_module_path(node.obj)
+        return False
+
+    def _is_member_call(self, emitter, callee):
+        """True when `obj.name(...)` is a type member or an instance method.
+
+        A module call (`colour.parse(...)`) is left to the native path: the
+        object is an identifier that is neither a declared type nor a variable in
+        scope. Anything else with a member callee is a method or a field.
+        """
+        obj = callee.obj
+        if self._is_module_path(obj):
+            return False                     # a module member: the native path
+        if isinstance(obj, ast.Ident):
+            if obj.name in self.type_infos:
+                return True
+            return emitter.resolve(obj.name) is not None
+        return True
+
+    def compile_type_call(self, emitter, expr, callee):
+        """A call whose callee names a type (construction) or a method."""
+        line = expr.line
+        obj = callee.obj
+        if isinstance(obj, ast.Ident) and obj.name in self.type_infos:
+            info = self.type_infos[obj.name]
+            method_info = info.methods.get(callee.name)
+            if method_info is not None and method_info.is_static:
+                for arg in expr.args:
+                    self.compile_expr(emitter, arg)
+                qualified = "%s.%s" % (obj.name, callee.name)
+                emitter.emit("CALL", self.func_index[qualified], len(expr.args),
+                             line=line)
+                return True
+        # an instance method: receiver first, then arguments
+        self.compile_expr(emitter, obj)
+        for arg in expr.args:
+            self.compile_expr(emitter, arg)
+        emitter.emit("CALL_METHOD", self.intern_string(callee.name),
+                     len(expr.args), line=line)
+        return True
+
     def compile_member(self, emitter, expr):
-        if not isinstance(expr.obj, ast.Ident):
-            raise CompileError("only module members are supported",
+        obj = expr.obj
+        if isinstance(obj, ast.Ident) and obj.name in self.type_infos:
+            raise CompileError("%s.%s is a type member; call it or read a field"
+                               % (obj.name, expr.name),
                                expr.line, expr.col, self.filename)
-        module = expr.obj.name
-        found, value = get_constant(module, expr.name)
-        if not found:
-            raise CompileError("unknown constant '%s.%s'" % (module, expr.name),
-                               expr.line, expr.col, self.filename)
-        emitter.emit("CONST", self.intern(float(value)), line=expr.line)
+        if self._is_module_path(obj) or (
+                isinstance(obj, ast.Ident) and emitter.resolve(obj.name) is None):
+            # a module constant, e.g. math.pi
+            module = obj.name
+            found, value = get_constant(module, expr.name)
+            if not found:
+                raise CompileError("unknown constant '%s.%s'" % (module, expr.name),
+                                   expr.line, expr.col, self.filename)
+            emitter.emit("CONST", self.intern(float(value)), line=expr.line)
+            return
+        # an instance field
+        self.compile_expr(emitter, obj)
+        emitter.emit("GET_FIELD", self.intern_string(expr.name), line=expr.line)
 
 
 def compile_program(program, filename="<source>", functions=None, globals_=None):

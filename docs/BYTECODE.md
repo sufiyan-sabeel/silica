@@ -122,6 +122,10 @@ instruction boundaries.
 | `0x23` | `ITER_NEXT` | target | branch (see below) |
 | `0x24` | `HALT_OK` | - | 0 -> 0 (terminal) |
 | `0x25` | `HALT_POP` | - | 1 -> 0 (terminal) |
+| `0x26` | `NEW` | type name const, field count | argc -> 1 |
+| `0x27` | `GET_FIELD` | field name const | 1 -> 1 |
+| `0x28` | `SET_FIELD` | field name const | 2 -> 0 |
+| `0x29` | `CALL_METHOD` | method name const, argc | argc + 1 -> 1 |
 
 `CALL_NATIVE` refers to its module and function by **string constants**, not by
 index into a runtime table, so a native is resolved by name at load time and an
@@ -146,6 +150,11 @@ The verifier (`silica/bytecode.py`) rejects a chunk when any of these fail:
 **Function**
 * `local_count < arity`, or either exceeds 4096
 * code does not end in `RET` / `HALT_OK` / `HALT_POP`
+* `NEW` names a type that is not in the type table, or passes a field count that
+  does not match that type
+* `CALL_METHOD` names a method no type declares, or passes an argument count that
+  no declaration accepts
+* `GET_FIELD` / `SET_FIELD` name a field no declared type has
 * unknown opcode, truncated operand, malformed varint
 
 **Operands**
@@ -178,3 +187,30 @@ generation and writes the real peak into the function header.
   recompile.
 * A `.sbc` file is tied to the engine that produced it, not to the source: always
   recompile after upgrading when the major version changes.
+
+## 8. Format 1.1 — declared types (Phase 2)
+
+Version 1.1 appends a **type table** to the payload, after the entry point:
+
+```
+varint  type_count
+  type * {
+    varint name length + name
+    u8     kind (1 = struct, 0 = class)
+    varint field_count;  field * { varint name length + name }   // declaration order
+    varint method_count; method * {
+      varint name length + name
+      varint arity            // explicit arguments; the receiver is implicit
+      varint function_index   // the compiled method body
+    }
+  }
+```
+
+The table is what makes the four new opcodes verifiable: `NEW` can be checked
+against a declared field count, `CALL_METHOD` against declared arities, and
+`GET_FIELD`/`SET_FIELD` against declared field names, all before execution.
+
+**Compatibility.** A reader accepts any `1.x`, and the table is read only when
+`minor >= 1`, so **a 1.0 file still loads and runs unchanged** — proven by a test
+that ships a hand-built 1.0 payload. Files written by 1.1 are not readable by a
+0.9.1 engine, which is the expected direction for an additive change.

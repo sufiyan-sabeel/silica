@@ -51,7 +51,26 @@ class Printer:
             self.write("%s %s%s = %s" % (keyword, node.name, ann,
                                          self.expr(node.init, 0)))
         elif isinstance(node, ast.AssignStmt):
-            self.write("%s = %s" % (node.name, self.expr(node.value, 0)))
+            target = node.target if node.target is not None else node.name
+            if not isinstance(target, str):
+                target = self.expr(target, 0)
+            self.write("%s = %s" % (target, self.expr(node.value, 0)))
+        elif isinstance(node, ast.StructDecl):
+            self.write("struct %s {" % node.name)
+            self.depth += 1
+            for field in node.fields:
+                self.field(field)
+            self.depth -= 1
+            self.write("}")
+        elif isinstance(node, ast.ClassDecl):
+            self.write("class %s {" % node.name)
+            self.depth += 1
+            for field in node.fields:
+                self.field(field)
+            for method in node.methods:
+                self.method(method)
+            self.depth -= 1
+            self.write("}")
         elif isinstance(node, ast.ExprStmt):
             self.write(self.expr(node.expr, 0))
         elif isinstance(node, ast.IfStmt):
@@ -119,6 +138,24 @@ class Printer:
             self.write("fin")
         else:  # pragma: no cover
             raise SilicaError("cannot format statement %r" % (node,))
+
+    def field(self, node):
+        prefix = "private " if node.is_private else ""
+        self.write("%s%s: %s" % (prefix, node.name, node.type_ann))
+
+    def method(self, node):
+        prefix = ("private " if node.is_private else "") + \
+                 ("static " if node.is_static else "")
+        params = ", ".join(
+            (name if ptype is None else "%s: %s" % (name, ptype))
+            for name, ptype, _line, _col in node.params)
+        ret = " -> %s" % node.ret_type if node.ret_type else ""
+        self.write("%ssfn %s(%s)%s {" % (prefix, node.name, params, ret))
+        self.depth += 1
+        for inner in node.body.stmts:
+            self.stmt(inner)
+        self.depth -= 1
+        self.write("}")
 
     # -- expressions ---------------------------------------------------------
     def expr(self, node, parent_prec, is_right=False):

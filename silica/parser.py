@@ -144,6 +144,10 @@ class Parser:
                 return self.parse_let()
             if kw == "sfn":
                 return self.parse_function()
+            if kw == "struct":
+                return self.parse_struct()
+            if kw == "class":
+                return self.parse_class()
             if kw == "si":
                 return self.parse_if()
             if kw == "tant":
@@ -168,7 +172,8 @@ class Parser:
                            hint="'sino' must directly follow an 'si' block")
         if tok.kind == "op" and tok.value == "{":
             self.error("unexpected block")
-        # assignment: `name = expr` (a bare identifier followed by '=')
+        # assignment: `name = expr` or `obj.field = expr`. The target is parsed
+        # as an ordinary postfix expression, so the same rule covers both.
         if tok.kind == "ident" and self.peek().kind == "op" and self.peek().value == "=":
             self.advance()
             self.advance()
@@ -176,6 +181,17 @@ class Parser:
             self.end_statement()
             return ast.AssignStmt(tok.value, value, line=tok.line, col=tok.col)
         expr = self.parse_expression()
+        if self.at_op("="):
+            self.advance()
+            value = self.parse_expression()
+            self.end_statement()
+            if isinstance(expr, ast.Ident):
+                return ast.AssignStmt(expr.name, value, line=tok.line, col=tok.col)
+            if isinstance(expr, ast.Member):
+                return ast.AssignStmt("", value, target=expr,
+                                      line=tok.line, col=tok.col)
+            self.error("cannot assign to this expression", tok,
+                       hint="only a variable or a field can be assigned")
         if self.at_op("{"):
             return self.parse_builder(expr, tok)
         if isinstance(expr, ast.Call) and self.cur.kind == "newline":
@@ -243,6 +259,76 @@ class Parser:
         body = self.parse_block()
         return ast.FuncDecl(name_tok.value, params, ret_type, body,
                             line=tok.line, col=tok.col)
+
+    def parse_struct(self):
+        tok = self.advance()                     # struct
+        name = self.expect_ident("struct name")
+        self.expect_op("{", "a struct body needs braces")
+        fields = []
+        self.skip_newlines()
+        while not self.at_op("}"):
+            if self.cur.kind == "eof":
+                self.error("unexpected end of file: missing '}'",
+                           hint="struct %s is never closed" % name.value)
+            if self.at_kw("private"):
+                self.error("a struct field cannot be private", self.peek(),
+                           hint="structs have no methods, so nothing could read it; "
+                                "use a class")
+            if self.at_kw("sfn") or self.at_kw("static"):
+                self.error("struct %s cannot declare methods" % name.value,
+                           hint="use a class if you need behaviour")
+            fields.append(self.parse_field())
+            self.skip_newlines()
+        self.advance()                           # }
+        return ast.StructDecl(name.value, fields, line=tok.line, col=tok.col)
+
+    def parse_class(self):
+        tok = self.advance()                     # class
+        name = self.expect_ident("class name")
+        self.expect_op("{", "a class body needs braces")
+        fields, methods = [], []
+        self.skip_newlines()
+        while not self.at_op("}"):
+            if self.cur.kind == "eof":
+                self.error("unexpected end of file: missing '}'",
+                           hint="class %s is never closed" % name.value)
+            private = False
+            if self.at_kw("private"):
+                private = True
+                self.advance()
+            if self.at_kw("sfn") or self.at_kw("static"):
+                methods.append(self.parse_method(private))
+            else:
+                fields.append(self.parse_field(private))
+            self.skip_newlines()
+        self.advance()                           # }
+        return ast.ClassDecl(name.value, fields, methods, line=tok.line, col=tok.col)
+
+    def parse_field(self, is_private=False):
+        """`name: Type` — a field declaration, not a binding."""
+        tok = self.cur
+        name = self.expect_ident("field name")
+        if not self.at_op(":"):
+            self.error("expected ':' after field name '%s'" % name.value,
+                       hint="a field is declared as `name: Type`")
+        self.advance()
+        type_ann = self.parse_type()
+        self.end_statement()
+        return ast.FieldDecl(name.value, type_ann, is_private,
+                             line=tok.line, col=tok.col)
+
+    def parse_method(self, is_private=False):
+        tok = self.cur
+        is_static = False
+        if self.at_kw("static"):
+            is_static = True
+            self.advance()
+        decl = self.parse_function()
+        decl.is_static = is_static
+        decl.is_private = is_private
+        decl.line = tok.line
+        decl.col = tok.col
+        return decl
 
     def parse_if(self):
         tok = self.advance()  # si
@@ -343,12 +429,15 @@ class Parser:
         return ast.Block(stmts, line=start.line, col=start.col)
 
     def parse_type(self):
+        """Any identifier is accepted here; the checker resolves it.
+
+        The parser cannot know the program's struct and class names yet (they may
+        be declared later in the file), so an unknown type is a *type* error with
+        a suggestion, not a syntax error.
+        """
         tok = self.cur
         if tok.kind != "ident":
             self.error("expected a type name but found %s" % tok.describe())
-        if tok.value not in BUILTIN_TYPES:
-            self.error("unknown type '%s'" % tok.value, tok,
-                       hint="available types: Int, Float, Bool, String, Unit, List, Map, Any")
         self.advance()
         return tok.value
 
