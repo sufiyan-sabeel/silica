@@ -5,6 +5,34 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## [0.9.3] — 2026-10-31
+
+### Fixed — field assignment through a path
+
+`b.corner.x = 10` was rejected with a misleading parse error. Assignment worked
+only one level deep; *reads* at any depth worked, which is exactly the sort of
+asymmetry that survives testing until someone uses it.
+
+Found by installing the published 0.9.2 wheel and running a nested-struct program
+against it, not by reading the source.
+
+- `MemberAssignStmt` now carries a **path** rather than a single field name, so
+  assignment works at any depth: `b.corner.x = 10`, `c.b.a.n = 99`.
+- The checker walks the path, validating each intermediate field's type and the
+  final field's value.
+- The compiler emits `GET_FIELD` for each intermediate step and `SET_FIELD` for
+  the last, so the bytecode matches the read path exactly.
+- **`const` now protects nested fields too.** `const b` followed by
+  `b.corner.x = 1` was allowed at depth; it is now refused, and the runtime
+  freezes the whole reachable struct tree rather than only the outermost value.
+- The formatter round-trips deep assignment.
+
+### Tests
+
+936 tests, 7 skipped. Six new tests for nested assignment: two and three levels,
+wrong type at depth, unknown field at depth, const protection at depth, and a
+formatter round trip.
+
 ## [0.9.2] — 2026-10-31
 
 Structs: named records with typed fields, checked before the program runs.
