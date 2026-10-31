@@ -234,6 +234,102 @@ sfn main() {
         self.assertIn("Point(x: 1, y: 2)", output)
 
 
+class NestedAssignmentTests(unittest.TestCase):
+    """Field assignment through a path, not just one level deep."""
+
+    def test_two_levels(self):
+        source = POINT + """struct Box {
+    corner: Point
+    side: Int
+}
+
+sfn main() {
+    let b = Box(corner: Point(x: 2, y: 3), side: 4)
+    b.corner.x = 10
+    sprint(b.corner.x)
+}
+"""
+        self.assertEqual(run(source).strip(), "10")
+
+    def test_three_levels(self):
+        source = """struct A {
+    n: Int
+}
+struct B {
+    a: A
+}
+struct C {
+    b: B
+}
+
+sfn main() {
+    let c = C(b: B(a: A(n: 1)))
+    c.b.a.n = 99
+    sprint(c.b.a.n)
+}
+"""
+        self.assertEqual(run(source).strip(), "99")
+
+    def test_the_wrong_type_on_a_deep_path_is_caught(self):
+        source = POINT + """struct Box {
+    corner: Point
+    side: Int
+}
+
+sfn main() {
+    let b = Box(corner: Point(x: 2, y: 3), side: 4)
+    b.corner.x = "no"
+}
+"""
+        error = run(source)
+        self.assertIn("expects Int", str(error))
+
+    def test_an_unknown_field_on_a_deep_path_is_caught(self):
+        source = POINT + """struct Box {
+    corner: Point
+    side: Int
+}
+
+sfn main() {
+    let b = Box(corner: Point(x: 2, y: 3), side: 4)
+    b.corner.nope = 1
+}
+"""
+        error = run(source)
+        self.assertIn("no field 'nope'", str(error))
+
+    def test_a_const_is_still_protected_at_depth(self):
+        source = POINT + """struct Box {
+    corner: Point
+    side: Int
+}
+
+sfn main() {
+    const b = Box(corner: Point(x: 2, y: 3), side: 4)
+    b.corner.x = 1
+}
+"""
+        error = run(source)
+        self.assertIn("constant", str(error))
+
+    def test_the_formatter_round_trips_a_deep_assignment(self):
+        from silica.fmt import format_source
+        source = POINT + """struct Box {
+    corner: Point
+    side: Int
+}
+
+sfn main() {
+    let b = Box(corner: Point(x: 2, y: 3), side: 4)
+    b.corner.x = 10
+    sprint(b.corner.x)
+}
+"""
+        formatted = format_source(source)
+        self.assertIn("b.corner.x = 10", formatted)
+        self.assertEqual(run(formatted).strip(), "10")
+
+
 class BytecodeTests(unittest.TestCase):
     def test_the_new_opcodes_are_declared_consistently(self):
         for name in ("MAKE_STRUCT", "GET_FIELD", "SET_FIELD", "FREEZE"):
