@@ -1,6 +1,6 @@
-# Silica Language Specification — v0.9.1
+# Silica Language Specification — v0.9.2
 
-This document is normative for the v0.9.1 reference implementation. Anything
+This document is normative for the v0.9.2 reference implementation. Anything
 described here is implemented and covered by tests in `tests/`; anything else is
 listed under [Not implemented yet](#not-implemented-yet).
 
@@ -364,3 +364,87 @@ the VM before a privileged function runs.
 Bytecode format version is `1.0` and is documented in `docs/BYTECODE.md`. The
 language surface is `0.x`: breaking changes are allowed before `1.0.0`, and each
 one is recorded in `CHANGELOG.md`.
+
+## Structs
+
+A struct is a named record with typed fields.
+
+```silica
+struct Point {
+    x: Int
+    y: Int
+}
+
+sfn main() {
+    let p = Point(x: 3, y: 4)
+    sprint(p.x)              # 3
+    sprint(p)                # Point(x: 3, y: 4)
+    p.x = 10                 # only if bound with `let`
+}
+```
+
+### Construction
+
+Fields may be named or positional, and named fields may be given in any order:
+
+```silica
+Point(x: 1, y: 2)
+Point(1, 2)
+Point(y: 2, x: 1)
+```
+
+Every field must be supplied exactly once. A missing field, an unknown field, a
+duplicate, or a value of the wrong type is a compile-time error that names the
+field and lists the real ones.
+
+### Field access and mutation
+
+`p.x` reads a field; `p.x = value` writes one. Both are checked at compile time
+against the declared field type.
+
+A struct bound with `let` is mutable. One bound with `const` is frozen: the
+checker rejects a direct assignment, and the runtime rejects one made through an
+alias.
+
+```silica
+const origin = Point(0, 0)
+let alias = origin
+alias.x = 1          # runtime error: cannot modify field of a constant struct
+```
+
+### Equality and display
+
+Two structs are equal when they have the same type and the same field values.
+
+```silica
+Point(1, 2) == Point(1, 2)     # oui
+Point(1, 2) == Pair(x: 1, y: 2)  # type error: different types
+```
+
+A struct never equals a `Map` with the same contents — the type is part of the
+value. `sprint` renders `Point(x: 1, y: 2)`.
+
+### Types and nesting
+
+A struct name is a type: it may be used for fields, parameters, return values and
+`let` annotations. Structs may contain other structs.
+
+```silica
+struct Rect {
+    origin: Point
+    width: Int
+    height: Int
+}
+```
+
+A struct cannot contain itself — that has no finite size. Use a `List` instead.
+
+### Limits
+
+* **No generics yet.** A `List` element is `Any`, so field access on one is
+  checked at runtime rather than compile time.
+* **No methods.** A struct holds data; functions take it as a parameter.
+* **No inheritance.** Composition is the model.
+* Structs are reference values: passing one to a function passes the same object,
+  so a `let` struct modified inside a function stays modified outside it.
+
