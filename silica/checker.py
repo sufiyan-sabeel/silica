@@ -131,6 +131,21 @@ class Checker:
         for stmt in self.program.stmts:
             if isinstance(stmt, ast.UseStmt):
                 self.check_use(stmt)
+        # register every type *name* first, so a struct may hold a type declared
+        # below it (`struct Node { next: Point }` with Point further down)
+        for stmt in self.program.stmts:
+            if isinstance(stmt, (ast.StructDecl, ast.ClassDecl)):
+                if stmt.name in self.types:
+                    self.error("type '%s' is already declared" % stmt.name, stmt,
+                               hint="struct and class names share one namespace")
+                if stmt.name in self.functions:
+                    self.error("'%s' is already a function" % stmt.name, stmt,
+                               hint="a type and a function cannot share a name")
+                if stmt.name in BUILTIN_TYPES:
+                    self.error("'%s' is a built-in type name" % stmt.name, stmt,
+                               hint="pick another name for the type")
+                self.types[stmt.name] = TypeInfo(
+                    stmt.name, "struct" if isinstance(stmt, ast.StructDecl) else "class")
         for stmt in self.program.stmts:
             if isinstance(stmt, ast.StructDecl):
                 self.declare_struct(stmt)
@@ -174,15 +189,6 @@ class Checker:
 
     def declare_struct(self, decl):
         """Register a struct, and check its fields while we are here."""
-        if decl.name in self.types:
-            self.error("struct '%s' is already declared" % decl.name, decl,
-                       hint="struct names must be unique in a file")
-        if decl.name in self.functions:
-            self.error("'%s' is already a function" % decl.name, decl,
-                       hint="a struct and a function cannot share a name")
-        if decl.name in BUILTIN_TYPES:
-            self.error("'%s' is a built-in type name" % decl.name, decl,
-                       hint="pick another name for the struct")
         fields = []
         seen = set()
         for name, type_name, line, col, _private in decl.fields:
@@ -190,31 +196,23 @@ class Checker:
                 self.error("duplicate field '%s' in struct '%s'" % (name, decl.name),
                            decl, hint="each field name may appear once")
             seen.add(name)
+            # 0.9.3 semantics: a struct may not contain itself. Checked before the
+            # "known type" test, because a two-phase declaration already knows
+            # every type name by the time fields are validated.
+            if type_name == decl.name:
+                self.error("struct '%s' cannot contain itself" % decl.name, decl,
+                           hint="a struct that holds itself has no finite size; "
+                                "use List for a sequence of them")
             if type_name not in BUILTIN_TYPES and type_name not in self.types:
-                if type_name == decl.name:
-                    self.error("struct '%s' cannot contain itself" % decl.name, decl,
-                               hint="a struct that holds itself has no finite size; "
-                                    "use List for a sequence of them")
                 self.error("unknown type '%s' for field '%s'" % (type_name, name), decl,
                            hint="known types: %s"
                                 % ", ".join(sorted(set(BUILTIN_TYPES) | set(self.types))))
             fields.append((name, type_name, line, col, _private))
-        self.types[decl.name] = TypeInfo(decl.name, "struct", fields)
+        self.types[decl.name].fields = fields
 
     def declare_class(self, decl):
         """Register a class: fields (with visibility) and method signatures."""
-        if decl.name in self.types:
-            self.error("type '%s' is already declared" % decl.name, decl,
-                       hint="struct and class names share one namespace")
-        if decl.name in self.functions:
-            self.error("'%s' is already a function" % decl.name, decl,
-                       hint="a type and a function cannot share a name")
-        if decl.name in BUILTIN_TYPES:
-            self.error("'%s' is a built-in type name" % decl.name, decl,
-                       hint="pick another name for the class")
-        # register the name first, so a method may name its own class
-        info = TypeInfo(decl.name, "class", [])
-        self.types[decl.name] = info
+        info = self.types[decl.name]
         fields = []
         seen = set()
         for name, type_name, line, col, is_private in decl.fields:
@@ -757,6 +755,16 @@ class Checker:
         self.error("unsupported expression", expr)
 
     def ident_type(self, expr):
+        if expr.name == "self" and self.current_type is None:
+            self.error("'self' is only available inside a method", expr,
+                       hint="a method binds 'self'; a plain function does not")
+        if (expr.name == "self" and self.current_func is not None
+                and getattr(self.current_func, "is_static", False)):
+            self.error("a static method cannot use 'self'", expr,
+                       hint="remove 'static', or pass the value in as a parameter")
+        if expr.name in self.types:
+            self.error("'%s' is a type, not a value" % expr.name, expr,
+                       hint="construct it with %s(...)" % expr.name)
         info = self.lookup(expr.name)
         if info is not None:
             return info.type
@@ -867,6 +875,7 @@ class Checker:
             if expr.name not in fields:
                 self.error("struct '%s' has no field '%s'" % (target, expr.name),
                            expr, hint="fields are: %s" % ", ".join(fields))
+            self.check_private_field(target, expr.name, expr)
             return fields[expr.name]
         module, member = self.resolve_member_path(expr)
         found, _value = get_constant(module, member)
@@ -878,7 +887,31 @@ class Checker:
         self.error("module '%s' has no member '%s'" % (module, member), expr,
                    hint="available: %s" % _module_members(module))
 
+    def check_private_field(self, type_name, field_name, node):
+        """A private field may only be read or written inside its own class."""
+        info = self.types.get(type_name)
+        if info is None or info.kind != "class":
+            return
+        for name, _type, _line, _col, is_private in info.fields:
+            if name == field_name and is_private:
+                if self.current_type is not info:
+                    self.error("'%s' is private to %s" % (field_name, info.name), node)
+
     def member_target_type(self, node):
+        if isinstance(node, ast.Call):
+            result = self.expr_type(node)
+            return result if result in self.types or result == ANY else None
+        if isinstance(node, ast.Ident) and node.name == "self":
+            if self.lookup("self") is None:
+                self.ident_type(node)      # raises the right diagnostic
+        if isinstance(node, ast.Index):
+            container = self.expr_type(node.target)
+            if container == "List" or container == ANY:
+                return ANY          # the element type is known at run time
+            if container == "Map":
+                return ANY
+            self.error("cannot index a %s, so it has no fields" % container, node)
+            return None
         """The type of the object a member is read from, when it is a value.
 
         Returns None for module paths (`math.pi`), which are resolved separately.

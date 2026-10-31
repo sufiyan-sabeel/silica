@@ -257,6 +257,13 @@ class Parser:
         seen = set()
         self.skip_newlines()
         while not self.at_op("}"):
+            if self.at_kw("sfn") or self.at_kw("static"):
+                self.error("struct '%s' cannot declare methods" % name_tok.value,
+                           hint="use a class if you need behaviour")
+            if self.at_kw("private"):
+                self.error("a struct field cannot be private",
+                           hint="structs have no methods, so nothing could read it; "
+                                "use a class")
             field_tok = self.expect_ident("field name")
             if field_tok.value in seen:
                 self.error("duplicate field '%s' in struct '%s'"
