@@ -18,7 +18,8 @@ import math
 from .bytecode import (OPS, decode, verify_chunk)
 from .capabilities import CapabilitySet
 from .errors import SilicaError, SilicaRuntimeError
-from .natives import (Iterator, MODULES, format_value, get_native, i64, type_name)
+from .natives import (Iterator, MODULES, StructValue, format_value, get_native,
+                      i64, type_name)
 
 
 class Context:
@@ -313,6 +314,28 @@ class VM:
                                         "map keys must be String, found %s" % type_name(key))
                         result[key] = pairs[i + 1]
                     stack.append(result)
+                elif op == 0x26:  # MAKE_STRUCT
+                    count = operands[1]
+                    descriptor = constants[operands[0]]
+                    type_name, _, field_list = descriptor.partition(":")
+                    names = field_list.split(",") if field_list else []
+                    values = stack[-count:] if count else []
+                    if count:
+                        del stack[-count:]
+                    stack.append(StructValue(type_name,
+                                             dict(zip(names, values))))
+                elif op == 0x27:  # GET_FIELD
+                    field = constants[operands[0]]
+                    target = stack.pop()
+                    stack.append(self._get_field(target, field, fn, offset))
+                elif op == 0x28:  # SET_FIELD
+                    field = constants[operands[0]]
+                    value = stack.pop()
+                    target = stack.pop()
+                    self._set_field(target, field, value, fn, offset)
+                elif op == 0x29:  # FREEZE
+                    if stack and isinstance(stack[-1], StructValue):
+                        stack[-1].frozen = True
                 elif op == 0x20:  # INDEX_GET
                     index = stack.pop()
                     target = stack.pop()
@@ -350,6 +373,38 @@ class VM:
                     self._raise(fn, offset, "unknown opcode 0x%02x" % op)
 
     # -- operators -----------------------------------------------------------
+    def _get_field(self, target, field, fn, offset):
+        if isinstance(target, StructValue):
+            if field not in target.fields:
+                self._raise(fn, offset,
+                            "struct '%s' has no field '%s'"
+                            % (target.type_name, field),
+                            hint="fields are: %s"
+                                 % ", ".join(target.fields) or "none")
+            return target.fields[field]
+        if isinstance(target, dict):
+            if field not in target:
+                self._raise(fn, offset, "map has no key '%s'" % field)
+            return target[field]
+        self._raise(fn, offset,
+                    "cannot read field '%s' of %s" % (field, type_name(target)),
+                    hint="only a struct or a Map has named fields")
+
+    def _set_field(self, target, field, value, fn, offset):
+        if not isinstance(target, StructValue):
+            self._raise(fn, offset,
+                        "cannot set field '%s' on %s" % (field, type_name(target)),
+                        hint="only a struct has assignable fields")
+        if target.frozen:
+            self._raise(fn, offset,
+                        "cannot modify field '%s' of a constant struct"
+                        % field,
+                        hint="declare it with 'let' instead of 'const'")
+        if field not in target.fields:
+            self._raise(fn, offset,
+                        "struct '%s' has no field '%s'" % (target.type_name, field))
+        target.fields[field] = value
+
     def _raise(self, fn, offset, message, hint=None):
         raise SilicaRuntimeError(message, fn.line_for(offset), 0, self.filename, hint)
 
