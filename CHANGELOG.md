@@ -5,6 +5,42 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## [Unreleased] — Phase 5
+
+### Added — offline guarantees
+- **`tools/offline_check.py`**: installs an audit hook before importing Silica,
+  then synthesises and transcribes, reporting every socket or URL event. Exits
+  non-zero if anything reaches out.
+- **`voice.check_model(name)`** — a model whose SHA-256 no longer matches the
+  manifest is **refused at load time**. A voice file goes into an inference
+  session; a silent substitution is not acceptable.
+- **CLI**: `silica voice models`, `silica voice verify`, `silica voice remove`,
+  `silica voice use`.
+
+### Fixed — a real offline violation
+- **faster-whisper opened sockets during transcription.** It asks the Hugging
+  Face Hub for a newer revision on every load, even with the model cached, so an
+  "offline" transcription was making network calls. The audit hook caught
+  `socket.getaddrinfo`, `socket.connect` and `socket.__new__` during a
+  transcription that should have touched nothing.
+  Models now load with `local_files_only=True`; a download requires
+  `SILICA_WHISPER_ALLOW_DOWNLOAD=1` and a deliberate call. Verified: the same
+  check now reports `network_events: []`.
+- **The tamper error pointed at a command that did not exist** (`silica voice
+  remove`). The subcommands were added rather than the message softened.
+
+### Verified
+- `tools/offline_check.py` with real models, both directions: zero network events,
+  synthesis 132,682 bytes, transcription round-tripped.
+- **Not verified**: a network namespace (`unshare -n`) is not permitted in this
+  environment, so "no network at the OS level" remains unproven.
+
+### Tests
+- 11 tests in `tests/test_voice_offline.py`: the read-only surface never opens a
+  URL, the Whisper loader refuses to fetch, tampering is caught, the bypass is
+  deliberate, hashing is cached, and a negative control proves the audit hook
+  actually fires.
+
 ## [Unreleased] — Phase 4
 
 ### Added — model management
