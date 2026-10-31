@@ -318,12 +318,17 @@ class VM:
                     count = operands[1]
                     descriptor = constants[operands[0]]
                     type_name, _, field_list = descriptor.partition(":")
+                    is_struct = True
+                    if field_list.endswith("#class"):
+                        # a class instance: same layout, identity equality
+                        field_list = field_list[:-len("#class")]
+                        is_struct = False
                     names = field_list.split(",") if field_list else []
                     values = stack[-count:] if count else []
                     if count:
                         del stack[-count:]
-                    stack.append(StructValue(type_name,
-                                             dict(zip(names, values))))
+                    stack.append(StructValue(type_name, dict(zip(names, values)),
+                                             is_struct=is_struct))
                 elif op == 0x27:  # GET_FIELD
                     field = constants[operands[0]]
                     target = stack.pop()

@@ -40,6 +40,25 @@ class FuncInfo:
         self.node = node
 
 
+class TypeInfo:
+    """A user-declared type. `kind` is "struct" or "class"."""
+
+    __slots__ = ("name", "kind", "fields", "methods", "type_params")
+
+    def __init__(self, name, kind, fields=None, methods=None, type_params=None):
+        self.name = name
+        self.kind = kind
+        self.fields = list(fields or [])       # (name, type, line, col)
+        self.methods = dict(methods or {})     # name -> MethodInfo
+        self.type_params = list(type_params or [])
+
+    def field_names(self):
+        return [entry[0] for entry in self.fields]
+
+    def field_types(self):
+        return {entry[0]: entry[1] for entry in self.fields}
+
+
 class Checker:
     def __init__(self, program, filename="<source>", require_main=True,
                  pre_globals=None):
@@ -51,7 +70,9 @@ class Checker:
         self.functions = {}
         self.globals = {}
         # struct name -> [(field, type, line, col)] in declaration order
-        self.structs = {}
+        # One registry for every user-declared type: structs and classes.
+        # `kind` decides equality and what the type may contain.
+        self.types = {}
         self.modules = set()
         self.scopes = []
         self.current_func = None
@@ -131,7 +152,7 @@ class Checker:
 
     def declare_struct(self, decl):
         """Register a struct, and check its fields while we are here."""
-        if decl.name in self.structs:
+        if decl.name in self.types:
             self.error("struct '%s' is already declared" % decl.name, decl,
                        hint="struct names must be unique in a file")
         if decl.name in self.functions:
@@ -147,27 +168,28 @@ class Checker:
                 self.error("duplicate field '%s' in struct '%s'" % (name, decl.name),
                            decl, hint="each field name may appear once")
             seen.add(name)
-            if type_name not in BUILTIN_TYPES and type_name not in self.structs:
+            if type_name not in BUILTIN_TYPES and type_name not in self.types:
                 if type_name == decl.name:
                     self.error("struct '%s' cannot contain itself" % decl.name, decl,
                                hint="a struct that holds itself has no finite size; "
                                     "use List for a sequence of them")
                 self.error("unknown type '%s' for field '%s'" % (type_name, name), decl,
                            hint="known types: %s"
-                                % ", ".join(sorted(set(BUILTIN_TYPES) | set(self.structs))))
+                                % ", ".join(sorted(set(BUILTIN_TYPES) | set(self.types))))
             fields.append((name, type_name, line, col))
-        self.structs[decl.name] = fields
+        self.types[decl.name] = TypeInfo(decl.name, "struct", fields)
 
     def check_type_name(self, type_name, node, what="type"):
         """A declared type must be a built-in or a struct declared in this file."""
-        if type_name in BUILTIN_TYPES or type_name in self.structs:
+        if type_name in BUILTIN_TYPES or type_name in self.types:
             return
         self.error("unknown %s '%s'" % (what, type_name), node,
                    hint="known types: %s"
-                        % ", ".join(sorted(set(BUILTIN_TYPES) | set(self.structs))))
+                        % ", ".join(sorted(set(BUILTIN_TYPES) | set(self.types))))
 
     def struct_fields(self, type_name):
-        return self.structs.get(type_name)
+        info = self.types.get(type_name)
+        return info.fields if info is not None else None
 
     def check_struct_literal(self, expr):
         """Type-check `Point(x: 1, y: 2)` and return the struct's type."""
@@ -176,8 +198,8 @@ class Checker:
             if expr.name in self.functions:
                 self.error("'%s' is a function, not a struct" % expr.name, expr)
             self.error("unknown struct '%s'" % expr.name, expr,
-                       hint=("known structs: %s" % ", ".join(sorted(self.structs))
-                             if self.structs else
+                       hint=("known structs: %s" % ", ".join(sorted(self.types))
+                             if self.types else
                              "declare one with 'struct Name { field: Type }'"))
         order = [f[0] for f in fields]
         types = {f[0]: f[1] for f in fields}
@@ -295,7 +317,7 @@ class Checker:
                        "collections, fs, json")
 
     def declare_function(self, decl):
-        if decl.name in self.structs:
+        if decl.name in self.types:
             self.error("'%s' is already a struct" % decl.name, decl,
                        hint="a struct and a function cannot share a name")
         if decl.name in self.functions:
@@ -739,8 +761,9 @@ class Checker:
         if target == ANY:
             return ANY
         if target is not None:
-            fields = {f[0]: f[1] for f in self.structs.get(target, [])}
-            if target not in self.structs:
+            info = self.types.get(target)
+            fields = info.field_types() if info is not None else {}
+            if target not in self.types:
                 self.error("cannot read field '%s' of %s" % (expr.name, target), expr,
                            hint="only a struct has named fields")
             if expr.name not in fields:
@@ -769,7 +792,7 @@ class Checker:
             if info.type == ANY:
                 # an untyped List element: the runtime knows, the checker does not
                 return ANY
-            if info.type not in self.structs:
+            if info.type not in self.types:
                 self.error("'%s' is %s, not a struct, so it has no fields"
                            % (node.name, info.type), node,
                            hint="only a struct has named fields; a Map uses "
