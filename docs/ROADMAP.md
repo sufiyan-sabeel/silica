@@ -78,7 +78,7 @@ virtualized lists, 3D transforms and shared-element transitions.
 Self-hosting: see `docs/BOOTSTRAP.md` for the staged plan. Silica does not
 compile itself today.
 
-## Milestone G — loop control · **done (0.9.0)**
+## Milestone G — loop control · **done (0.9.1)**
 
 * `break` and `continue` for `tant` and `per`, compiled to jumps: no new opcode,
   no change to the `.sbc` format.
@@ -91,7 +91,7 @@ compile itself today.
 Not done: labelled jumps, `else` on loops, and `break` out of a `call { ... }`
 builder block (rejected by design).
 
-## Known limitations in v0.9.0
+## Known limitations in v0.9.1
 
 * No generics: `List`/`Map` elements check as `Any`.
 * No first-class functions, closures, methods or user-defined types.
