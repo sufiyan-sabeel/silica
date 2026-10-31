@@ -64,3 +64,8 @@ class TTS(TTSEngine):
     def voices(self):
         from .. import catalogue
         return sorted(catalogue.VOICES)
+
+    def supports_cloning(self):
+        # Piper voices are single-speaker; the multi-speaker ones take a speaker
+        # id, which is picking a trained voice, not cloning a person.
+        return False
