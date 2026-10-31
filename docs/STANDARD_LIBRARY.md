@@ -567,3 +567,43 @@ stdin; it cannot open a file. Privileged operations are named capabilities
 
 There is no network, process, environment or arbitrary host-execution
 capability. `silica capabilities` prints the effective set.
+
+## colours
+
+`use colors` — perceptual colour, palettes and accessibility. Colours are Maps of
+`{r, g, b, a}` in 0..1; everything else is computed from those four numbers.
+Manipulation happens in OKLab/OKLCH, which is perceptually uniform, so equal
+steps look equal.
+
+| `colors.parse` | (String) -> Map | parse #hex, rgb(), hsl(), oklch(), oklab() or a CSS name |
+| `colors.rgb` | (Float, Float, Float, Float?) -> Map | sRGB colour from 0..1 components |
+| `colors.oklch` | (Float, Float, Float, Float?) -> Map | perceptual colour; gamut-mapped, not clipped |
+| `colors.oklab` | (Float, Float, Float, Float?) -> Map | OKLab colour; gamut-mapped, not clipped |
+| `colors.hsl` | (Float, Float, Float) -> Map | hue in degrees, saturation and lightness in 0..1 |
+| `colors.describe` | (Any) -> Map | hex, rgb, oklab, oklch, hsl, luminance and gamut status |
+| `colors.hex` | (Any) -> String | the colour as #rrggbb (or #rrggbbaa when translucent) |
+| `colors.css` | (Any, String?) -> String | CSS string in oklch (default), oklab, srgb or hex |
+| `colors.to_p3` | (Any) -> Map | Display P3 components; not HDR |
+| `colors.from_p3` | (Any) -> Map | Display P3 to sRGB; may land outside the sRGB gamut |
+| `colors.in_gamut` | (Any) -> Bool | whether the colour fits in sRGB |
+| `colors.to_gamut` | (Any) -> Map | map into sRGB by reducing chroma at fixed lightness and hue |
+| `colors.lighten` | (Any, Float) -> Map | raise perceptual lightness by 0..1 |
+| `colors.darken` | (Any, Float) -> Map | lower perceptual lightness by 0..1 |
+| `colors.with_lightness` | (Any, Float) -> Map | set OKLab lightness outright |
+| `colors.with_chroma` | (Any, Float) -> Map | set OKLCH chroma |
+| `colors.with_hue` | (Any, Float) -> Map | set OKLCH hue in degrees |
+| `colors.mix` | (Any, Any, Float?) -> Map | interpolate in OKLab; weight defaults to 0.5 |
+| `colors.gradient` | (Any, Any, Int?) -> List | even perceptual steps between two colours |
+| `colors.composite` | (Any, Any) -> Map | alpha-composite the first over the second |
+| `colors.contrast` | (Any, Any) -> Float | WCAG contrast ratio, 1.0 to 21.0 |
+| `colors.passes` | (Any, Any, String?, Bool?) -> Map | WCAG AA/AAA verdict for normal or large text |
+| `colors.best_foreground` | (Any) -> Map | the most readable of black or white on a background |
+| `colors.luminance` | (Any) -> Float | WCAG relative luminance |
+| `colors.palette` | (Any, List?) -> Map | shade scale keyed "50".."950" |
+| `colors.theme` | (Any, Bool?) -> Map | semantic tokens; second argument true for dark |
+| `colors.audit` | (Map) -> Map | WCAG checks for a theme's text/background pairs |
+| `colors.css_theme` | (Map) -> String | CSS custom properties for a theme |
+| `colors.css_scale` | (String, Map) -> String | CSS custom properties for a named scale |
+
+See `docs/COLOR.md` for the reference values, the gamut mapping algorithm and
+what is deliberately not supported (HDR).
