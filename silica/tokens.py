@@ -31,12 +31,13 @@ KEYWORDS = {
     "use",      # import a standard-library module
     "let",      # mutable binding
     "const",    # immutable binding
+    "struct",   # named record with typed fields
 }
 
 # Keywords that introduce a statement at the start of a line.
 STATEMENT_KEYWORDS = {
     "sprint", "dit", "input", "si", "sino", "tant", "per", "sfn", "ret",
-    "use", "let", "const", "halt", "fin", "break", "continue",
+    "use", "let", "const", "halt", "fin", "break", "continue", "struct",
 }
 
 BUILTIN_TYPES = {"Int", "Float", "Bool", "String", "Unit", "List", "Map", "Any"}
