@@ -302,8 +302,10 @@ class Compiler:
             kind, idx = target
             emitter.emit("LOAD_LOCAL" if kind == "local" else "LOAD_GLOBAL",
                          idx, line=line)
+            for field in stmt.path[:-1]:
+                emitter.emit("GET_FIELD", self.intern_string(field), line=line)
             self.compile_expr(emitter, stmt.value)
-            emitter.emit("SET_FIELD", self.intern_string(stmt.field), line=line)
+            emitter.emit("SET_FIELD", self.intern_string(stmt.path[-1]), line=line)
         elif isinstance(stmt, ast.AssignStmt):
             self.compile_expr(emitter, stmt.value)
             target = emitter.resolve(stmt.name)
