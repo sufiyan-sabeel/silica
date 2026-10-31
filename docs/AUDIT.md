@@ -27,7 +27,7 @@ Re-run on 2026-10-28 for this release. The first version of this audit recorded
 
 | | |
 |---|---|
-| Version | 0.9.0 |
+| Version | 0.9.1 |
 | Implementation | Python 3.9+, ~10,700 lines in `silica/`, ~5,900 lines of tests |
 | Test count | 671 |
 | Bytecode format | `.sbc` 1.0, versioned, verified on load |
@@ -81,7 +81,7 @@ once, and the resolved path is what the native receives.
 
 ```
 $ python3 benchmarks/bench.py --runs 3
-host: Linux x86_64 · python 3.12.13 · silica 0.9.0 · best of 3
+host: Linux x86_64 · python 3.12.13 · silica 0.9.1 · best of 3
 workload                                       silica     python      ratio  check
 arithmetic loop (1e6 iterations)             15155.8ms     323.4ms     46.87x  ok
 recursion (fib 24)                            1945.0ms      17.5ms    111.06x  ok
