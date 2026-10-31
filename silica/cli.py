@@ -498,6 +498,10 @@ VOICE_USAGE = """usage: silica voice <subcommand>
   silica voice languages            what can be spoken and heard
   silica voice status               which engines are present
   silica voice install [name]       download a voice into the cache
+  silica voice models               installed models: size, licence, checksum
+  silica voice verify <name>        re-hash a model and compare
+  silica voice remove <name>        delete an installed model
+  silica voice use [name]           show or set the default voice
   silica voice speak "text" [opts]  synthesise and play
   silica voice transcribe <file>    transcribe a WAV
   silica voice info <file.wav>      duration, rate and level of a WAV
@@ -555,6 +559,60 @@ def cmd_voice(args):
         sys.stdout.write("voices dir  : %s\n" % info["voices_dir"])
         sys.stdout.write("installed   : %s\n" % (", ".join(info["voices_installed"]) or "none"))
         sys.stdout.write("default     : %s\n" % info["default_voice"])
+        return 0
+
+    if sub == "models":
+        rows = voice.models()
+        if not rows:
+            sys.stdout.write("no models installed\n")
+            return 0
+        sys.stdout.write("%-26s %-8s %-14s %8s  %s\n"
+                         % ("voice", "lang", "licence", "size", "checksum"))
+        for row in rows:
+            sys.stdout.write("%-26s %-8s %-14s %7.1fM  %s\n" % (
+                row["name"], row["language"], row["licence"],
+                row["bytes"] / (1024.0 * 1024.0),
+                (row["sha256"] or "not recorded")[:16]))
+        storage = voice.storage()
+        sys.stdout.write("\n%.1f MB of models in %s\n"
+                         % (storage["model_megabytes"], storage["directory"]))
+        return 0
+
+    if sub == "verify":
+        if not rest:
+            sys.stderr.write("usage: silica voice verify <name>\n")
+            return 2
+        result = voice.verify(rest[0])
+        sys.stdout.write("%s: %s\n" % (
+            result["name"], "ok" if result["verified"] else "NOT VERIFIED"))
+        if not result["verified"]:
+            sys.stdout.write("  %s\n" % result.get("reason"))
+            return 1
+        return 0
+
+    if sub in ("remove", "delete", "uninstall"):
+        if not rest:
+            sys.stderr.write("usage: silica voice remove <name>\n")
+            return 2
+        try:
+            freed = voice.delete_model(rest[0])["freed_bytes"]
+        except Exception as exc:  # noqa: BLE001
+            sys.stderr.write("%s\n" % exc)
+            return 1
+        sys.stdout.write("removed %s, freed %.1f MB\n"
+                         % (rest[0], freed / (1024.0 * 1024.0)))
+        return 0
+
+    if sub == "use":
+        if not rest:
+            sys.stdout.write("%s\n" % voice.current_voice())
+            return 0
+        try:
+            voice.set_voice(rest[0] if rest[0] != "default" else None)
+        except Exception as exc:  # noqa: BLE001
+            sys.stderr.write("%s\n" % exc)
+            return 1
+        sys.stdout.write("default voice: %s\n" % voice.current_voice())
         return 0
 
     if sub == "install":
