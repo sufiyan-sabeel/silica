@@ -163,6 +163,11 @@ class Compiler:
                  pre_globals=None, pre_index=None):
         self.program = program
         self.filename = filename
+        # struct name -> [field names] in declaration order
+        self.structs = {}
+        for stmt in getattr(program, "stmts", []):
+            if isinstance(stmt, ast.StructDecl):
+                self.structs[stmt.name] = [f[0] for f in stmt.fields]
         self.func_infos = functions or {}
         self.global_infos = globals_ or {}
         self.chunk = Chunk()
@@ -277,10 +282,28 @@ class Compiler:
 
     def compile_stmt(self, emitter, stmt):
         line = getattr(stmt, "line", 0)
+        if isinstance(stmt, ast.StructDecl):
+            return          # a type declaration produces no code
         if isinstance(stmt, ast.LetStmt):
             self.compile_expr(emitter, stmt.init)
+            if stmt.is_const:
+                # a constant struct may not have its fields reassigned, even
+                # through an alias, so the value is frozen where it is created
+                emitter.emit("FREEZE", line=line)
             slot = emitter.declare(stmt.name, stmt.line, stmt.col)
             emitter.emit("STORE_LOCAL", slot, line=line)
+        elif isinstance(stmt, ast.MemberAssignStmt):
+            # the struct goes on the stack first, then the value: SET_FIELD pops
+            # the value and then the target
+            target = emitter.resolve(stmt.target)
+            if target is None:
+                raise CompileError("unknown name '%s'" % stmt.target,
+                                   line, stmt.col, self.filename)
+            kind, idx = target
+            emitter.emit("LOAD_LOCAL" if kind == "local" else "LOAD_GLOBAL",
+                         idx, line=line)
+            self.compile_expr(emitter, stmt.value)
+            emitter.emit("SET_FIELD", self.intern_string(stmt.field), line=line)
         elif isinstance(stmt, ast.AssignStmt):
             self.compile_expr(emitter, stmt.value)
             target = emitter.resolve(stmt.name)
@@ -478,6 +501,19 @@ class Compiler:
             for item in expr.items:
                 self.compile_expr(emitter, item)
             emitter.emit("MAKE_LIST", len(expr.items), line=line)
+        elif isinstance(expr, ast.StructLit):
+            order = self.structs.get(expr.name)
+            if order is None:
+                raise CompileError("unknown struct '%s'" % expr.name,
+                                   expr.line, expr.col, self.filename)
+            by_name = {}
+            for index, (name, value, _line, _col) in enumerate(expr.args):
+                by_name[name if name else order[index]] = value
+            for field in order:
+                self.compile_expr(emitter, by_name[field])
+            descriptor = "%s:%s" % (expr.name, ",".join(order))
+            emitter.emit("MAKE_STRUCT", self.intern_string(descriptor),
+                         len(order), line=line)
         elif isinstance(expr, ast.MapLit):
             for key, value in expr.pairs:
                 self.compile_expr(emitter, key)
@@ -558,14 +594,18 @@ class Compiler:
 
     def compile_member(self, emitter, expr):
         if not isinstance(expr.obj, ast.Ident):
-            raise CompileError("only module members are supported",
-                               expr.line, expr.col, self.filename)
+            # `l.end.x`: a field of a field, not a module path
+            self.compile_expr(emitter, expr.obj)
+            emitter.emit("GET_FIELD", self.intern_string(expr.name), line=expr.line)
+            return
         module = expr.obj.name
         found, value = get_constant(module, expr.name)
-        if not found:
-            raise CompileError("unknown constant '%s.%s'" % (module, expr.name),
-                               expr.line, expr.col, self.filename)
-        emitter.emit("CONST", self.intern(float(value)), line=expr.line)
+        if found:
+            emitter.emit("CONST", self.intern(float(value)), line=expr.line)
+            return
+        # not a module constant: `p.x` is a field read
+        self.compile_expr(emitter, expr.obj)
+        emitter.emit("GET_FIELD", self.intern_string(expr.name), line=expr.line)
 
 
 def compile_program(program, filename="<source>", functions=None, globals_=None):
