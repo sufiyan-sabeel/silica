@@ -86,9 +86,9 @@ class StructLit(Node):
 
 @dataclass
 class MemberAssignStmt(Node):
-    """`p.x = 5` — assigning to a struct field."""
+    """`p.x = 5` or `a.b.c = 5` — assigning to a field through a path."""
     target: str
-    field: str
+    path: list
     value: Node
     line: int = 0
     col: int = 0
