@@ -59,6 +59,14 @@ class TTSEngine:
         """Voice names this engine can use, or [] when it has no catalogue."""
         return []
 
+    def supports_cloning(self):
+        """True only if this engine can synthesise from a reference recording.
+
+        A multi-speaker model taking a speaker *id* is not cloning, and must not
+        report True.
+        """
+        return False
+
     def close(self):
         """Release anything held. Must be safe to call twice."""
         return None
