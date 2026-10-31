@@ -5,6 +5,43 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## [Unreleased] — Phase 6
+
+### Added — voice profiles and consent
+- **`voice.create_profile(name, reference, options)`** — stores a reference
+  recording and a consent record under `$SILICA_HOME/voice-profiles/<name>/`.
+  Refuses without a consent statement, without a named speaker, and rejects a
+  token like `"yes"` as too short to mean anything.
+- **`voice.profiles()` / `voice.profile(name)` / `voice.verify_profile(name)`** —
+  metadata, and detection of a changed recording.
+- **`voice.delete_profile(name)`** — removes the profile *and* the recording,
+  reporting bytes freed.
+- **`voice.cloning_engines()`** — which engines can clone, and the reason for each
+  one that cannot.
+- **`synthesize(..., profile=...)`** — refuses unless a cloning engine exists,
+  naming every engine's reason. It never substitutes a different voice.
+
+### Deliberately not shipped
+- **No cloning engine.** Piper cannot clone (speaker *id* is not cloning), and
+  **XTTS-v2 is non-commercial under the Coqui Public Model License** — Coqui shut
+  down in January 2024, so no commercial licence can be obtained at all. Shipping
+  it would put anyone with income in breach. sherpa-onnx ZipVoice can clone but is
+  ~605 MB, Chinese/English only, and its licence is unverified here.
+- The seam is real: setting `SILICA_SHERPA_ZIPVOICE_MODEL` makes the sherpa engine
+  report `supports_cloning() == True`, and a test covers that.
+
+### Fixed
+- The internal profile module was renamed to `profile_store` after the public
+  `profiles()` function shadowed it — `voice.profiles()` returned a module and
+  could not be called.
+
+### Tests
+- 21 tests in `tests/test_voice_profiles.py`: consent enforced (empty, whitespace,
+  token, unnamed speaker), unsafe names refused, metadata recorded, verification of
+  a tampered recording, deletion removing the audio, everything staying inside the
+  profiles directory, cloning refusing rather than substituting, and the capability
+  gates.
+
 ## [Unreleased] — Phase 5
 
 ### Added — offline guarantees
