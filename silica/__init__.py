@@ -6,7 +6,7 @@ library. See docs/LANGUAGE_SPEC.md for the language and docs/BYTECODE.md for
 the `.sbc` format.
 """
 
-__version__ = "0.9.1"
+__version__ = "0.9.2"
 __all__ = ["__version__", "run_source", "compile_source", "check_source"]
 
 
