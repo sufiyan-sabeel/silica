@@ -61,6 +61,39 @@ def format_float(value):
     return text
 
 
+class StructValue:
+    """A struct instance at runtime.
+
+    Not a dict: `Point(x: 1, y: 2)` and `{"x": 1, "y": 2}` must not compare equal,
+    and the type name is part of the value. `frozen` is set for a struct bound
+    with `const`, so an alias cannot be used to modify a constant.
+    """
+
+    __slots__ = ("type_name", "fields", "frozen")
+
+    def __init__(self, type_name, fields, frozen=False):
+        self.type_name = type_name
+        self.fields = fields
+        self.frozen = frozen
+
+    def __eq__(self, other):
+        if not isinstance(other, StructValue):
+            return NotImplemented
+        return (self.type_name == other.type_name
+                and self.fields == other.fields)
+
+    def __ne__(self, other):
+        result = self.__eq__(other)
+        return result if result is NotImplemented else not result
+
+    def __repr__(self):
+        inner = ", ".join("%s: %s" % (name, _format_inner(value))
+                          for name, value in self.fields.items())
+        return "%s(%s)" % (self.type_name, inner)
+
+    __str__ = __repr__
+
+
 def format_value(value):
     """How `sprint` / `dit` render a value (see docs/LANGUAGE_SPEC.md)."""
     if value is None:
@@ -80,6 +113,8 @@ def format_value(value):
         for k, v in value.items():
             parts.append("%s: %s" % (_format_inner(k), _format_inner(v)))
         return "{" + ", ".join(parts) + "}"
+    if isinstance(value, StructValue):
+        return repr(value)
     if isinstance(value, Iterator):
         return "<iterator>"
     return str(value)
