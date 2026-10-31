@@ -336,6 +336,53 @@ def verify(name):
             "reason": None if ok else "the file has changed since it was downloaded"}
 
 
+_HASH_CACHE = {}
+
+
+def cached_sha256(path):
+    """Hash a file once per (path, size, mtime); loading a voice re-checks it."""
+    try:
+        stat = os.stat(path)
+    except OSError:
+        return None
+    key = (path, stat.st_size, int(stat.st_mtime))
+    if key not in _HASH_CACHE:
+        _HASH_CACHE[key] = sha256_of(path)
+    return _HASH_CACHE[key]
+
+
+def check_model(name):
+    """Refuse a model whose contents changed since it was downloaded.
+
+    A voice file is code-adjacent data: it is loaded into an inference session.
+    If a recorded checksum exists and the file no longer matches, that is either
+    corruption or tampering, and neither should be loaded quietly.
+
+    Returns None when the model is fine or when nothing was recorded. Raises
+    VoiceError on a mismatch. `SILICA_VOICE_SKIP_VERIFY=1` bypasses the check for
+    someone who knows what they are doing.
+    """
+    if os.environ.get("SILICA_VOICE_SKIP_VERIFY") == "1":
+        return None
+    recorded = _read_manifest().get(name)
+    if not recorded or not recorded.get("sha256"):
+        return None
+    actual = cached_sha256(model_path(name))
+    if actual is None:
+        return None
+    if actual != recorded["sha256"]:
+        raise VoiceError(
+            "the voice model %r does not match the checksum recorded when it was "
+            "downloaded.\n"
+            "  recorded: %s\n  on disk : %s\n"
+            "Refusing to load it. Re-download it with:\n"
+            "    silica voice install %s\n"
+            "or remove it with `silica voice remove %s`."
+            % (name, recorded["sha256"][:16] + "...", actual[:16] + "...",
+               name, name))
+    return None
+
+
 def storage():
     """How much disk the voices take, so deleting one is an informed choice."""
     total = 0
