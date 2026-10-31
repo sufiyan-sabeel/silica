@@ -88,6 +88,11 @@ OPS = {
     "ITER_NEXT": 0x23,
     "HALT_OK": 0x24,
     "HALT_POP": 0x25,
+    # 0.9.2: structs
+    "MAKE_STRUCT": 0x26,     # operands: (descriptor const index, field count)
+    "GET_FIELD": 0x27,       # operand: field-name const index
+    "SET_FIELD": 0x28,       # operand: field-name const index
+    "FREEZE": 0x29,          # mark the value on top of the stack immutable
 }
 
 OP_NAMES = {code: name for name, code in OPS.items()}
@@ -106,6 +111,10 @@ OPERANDS = {
     "MAKE_LIST": ("u",),
     "MAKE_MAP": ("u",),
     "ITER_NEXT": ("j",),
+    "MAKE_STRUCT": ("u", "u"),
+    "GET_FIELD": ("u",),
+    "SET_FIELD": ("u",),
+    "FREEZE": (),
 }
 
 # (pops, pushes) for straight-line instructions
@@ -145,6 +154,10 @@ STACK_EFFECT = {
     "ITER_START": (1, 1),
     "HALT_OK": (0, 0),
     "HALT_POP": (1, 0),
+    "MAKE_STRUCT": (None, 1),    # pops n, where n is the second operand
+    "GET_FIELD": (1, 1),
+    "SET_FIELD": (2, 0),         # pops the value, then the struct
+    "FREEZE": (0, 0),            # peeks; does not change the stack
 }
 
 TERMINATORS = {"RET", "HALT_OK", "HALT_POP"}
@@ -679,6 +692,8 @@ def verify_function(chunk, fn, index, filename):
             pops, pushes = ins.operands[0], 1
         elif name == "MAKE_MAP":
             pops, pushes = ins.operands[0] * 2, 1
+        elif name == "MAKE_STRUCT":
+            pops, pushes = ins.operands[1], 1
         else:
             pops, pushes = STACK_EFFECT[name]
 
