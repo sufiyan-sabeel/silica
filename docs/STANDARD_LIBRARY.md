@@ -398,6 +398,18 @@ runtime, nothing uploaded. The full guide is `docs/VOICE.md`.
 | `voice.current_voice` | () -> String | which voice a call without a name would use |
 | `voice.download_model` | (String) -> Map | download a voice; needs speech.models |
 | `voice.delete_model` | (String) -> Map | delete a voice, returning the bytes freed; needs speech.models |
+| `speech.cloning_engines` | () -> Map | engines that can clone, and why the others cannot |
+| `speech.profiles` | () -> List | voice profiles on this machine: metadata only |
+| `speech.profile` | (String) -> Map | one profile's metadata |
+| `speech.verify_profile` | (String) -> Map | has the reference recording changed? |
+| `speech.create_profile` | (String, String, Map) -> Map | create a profile from a recording; needs consent, speaker and speech.models |
+| `speech.delete_profile` | (String) -> Map | delete a profile and its recording; needs speech.models |
+| `voice.cloning_engines` | () -> Map | engines that can clone, and why the others cannot |
+| `voice.profiles` | () -> List | voice profiles on this machine: metadata only |
+| `voice.profile` | (String) -> Map | one profile's metadata |
+| `voice.verify_profile` | (String) -> Map | has the reference recording changed? |
+| `voice.create_profile` | (String, String, Map) -> Map | create a profile from a recording; needs consent, speaker and speech.models |
+| `voice.delete_profile` | (String) -> Map | delete a profile and its recording; needs speech.models |
 | `voice.languages` | `() -> Map` | none | `speaking`, `speaking_missing`, `listening` — what can be said, what cannot, and what can be heard. |
 | `voice.status` | `() -> Map` | none | `can_speak`, `can_listen`, `voices_installed`, `default_voice`, `voices_dir`. |
 
