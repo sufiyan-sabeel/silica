@@ -71,6 +71,7 @@ class StructDecl(Node):
     """`struct Point { x: Int ... }` — a named record with typed fields."""
     name: str
     fields: list
+    type_params: list = field(default_factory=list)   # (name, constraint, line, col)
     line: int = 0
     col: int = 0
 
@@ -81,6 +82,7 @@ class ClassDecl(Node):
     name: str
     fields: list          # (name, type, line, col, is_private)
     methods: list         # FuncDecl nodes, in declaration order
+    type_params: list = field(default_factory=list)   # (name, constraint, line, col)
     line: int = 0
     col: int = 0
 
@@ -209,6 +211,7 @@ class FuncDecl(Node):
     params: List[tuple]   # list of (name, type_or_None)
     ret_type: Optional[str]
     body: Block
+    type_params: list = field(default_factory=list)   # (name, constraint, line, col)
     line: int = 0
     col: int = 0
 

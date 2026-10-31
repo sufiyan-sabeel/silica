@@ -10,6 +10,7 @@ compatible with every type. That is a documented limitation, not an oversight.
 from . import ast
 from .tokens import BUILTIN_TYPES
 from .errors import SilicaTypeError
+from . import types as T
 from .natives import (PLANNED_MODULES, get_constant, get_native, module_exists,
                       ui_reserved_modules)
 
@@ -31,13 +32,14 @@ class VarInfo:
 
 
 class FuncInfo:
-    __slots__ = ("name", "params", "ret", "node")
+    __slots__ = ("name", "params", "ret", "node", "type_params")
 
-    def __init__(self, name, params, ret, node):
+    def __init__(self, name, params, ret, node, type_params=None):
         self.name = name
         self.params = params      # list of (name, type)
         self.ret = ret
         self.node = node
+        self.type_params = list(type_params or [])   # (name, constraint)
 
 
 class MethodInfo:
@@ -92,6 +94,8 @@ class Checker:
         self.scopes = []
         self.current_func = None
         self.current_type = None       # the class whose method body is being checked
+        self.type_vars = {}            # type parameter -> constraint, in scope
+        self.pending_annotation = None  # declared type of the binding being checked
         # builder-block context: how deep we are inside `call { ... }` blocks and
         # inside an event body (`ui.on(...) { ... }`), both reset per function
         self.builder_depth = 0
@@ -189,6 +193,10 @@ class Checker:
 
     def declare_struct(self, decl):
         """Register a struct, and check its fields while we are here."""
+        type_params = self.type_vars_of(decl)
+        self.types[decl.name].type_params = type_params
+        outer_vars = self.type_vars
+        self.type_vars = {n: c for n, c in type_params}
         fields = []
         seen = set()
         for name, type_name, line, col, _private in decl.fields:
@@ -199,20 +207,23 @@ class Checker:
             # 0.9.3 semantics: a struct may not contain itself. Checked before the
             # "known type" test, because a two-phase declaration already knows
             # every type name by the time fields are validated.
-            if type_name == decl.name:
+            if T.base(type_name) == decl.name:
                 self.error("struct '%s' cannot contain itself" % decl.name, decl,
                            hint="a struct that holds itself has no finite size; "
                                 "use List for a sequence of them")
-            if type_name not in BUILTIN_TYPES and type_name not in self.types:
-                self.error("unknown type '%s' for field '%s'" % (type_name, name), decl,
-                           hint="known types: %s"
-                                % ", ".join(sorted(set(BUILTIN_TYPES) | set(self.types))))
+            self.check_type_name(type_name, decl,
+                                 what="type", suffix=" for field '%s'" % name)
             fields.append((name, type_name, line, col, _private))
         self.types[decl.name].fields = fields
+        self.type_vars = outer_vars
 
     def declare_class(self, decl):
         """Register a class: fields (with visibility) and method signatures."""
         info = self.types[decl.name]
+        type_params = self.type_vars_of(decl)
+        info.type_params = type_params
+        outer_vars = self.type_vars
+        self.type_vars = {n: c for n, c in type_params}
         fields = []
         seen = set()
         for name, type_name, line, col, is_private in decl.fields:
@@ -248,13 +259,18 @@ class Checker:
                 method.name, params, method.ret_type or "Unit",
                 is_static=method.is_static, is_private=method.is_private,
                 node=method)
+        self.type_vars = outer_vars
 
     def check_method(self, decl, type_info):
         """Check one method body: `self` is bound unless the method is static."""
         info = type_info.methods[decl.name]
         outer_func, outer_type = self.current_func, self.current_type
+        outer_vars = self.type_vars
         self.current_func = info
         self.current_type = type_info
+        self.type_vars = {n: c for n, c in type_info.type_params}
+        for name, constraint in self.type_vars_of(decl):
+            self.type_vars[name] = constraint
         self.push_scope()
         if not decl.is_static:
             # `self` cannot be reassigned, but its fields must be mutable; the
@@ -271,14 +287,72 @@ class Checker:
                 hint="every path must end in 'ret' (or 'halt')")
         self.pop_scope()
         self.current_func, self.current_type = outer_func, outer_type
+        self.type_vars = outer_vars
 
-    def check_type_name(self, type_name, node, what="type"):
-        """A declared type must be a built-in or a struct declared in this file."""
-        if type_name in BUILTIN_TYPES or type_name in self.types:
+    ARITY = {"List": (0, 1), "Map": (0, 2)}
+
+    def check_type_name(self, type_name, node, what="type", suffix=""):
+        """Validate a type expression: known names, arity, and type arguments."""
+        try:
+            base, arguments = T.parse(type_name)
+        except T.TypeError_ as exc:
+            self.error("malformed type '%s': %s" % (type_name, exc), node)
             return
-        self.error("unknown %s '%s'" % (what, type_name), node,
-                   hint="known types: %s"
-                        % ", ".join(sorted(set(BUILTIN_TYPES) | set(self.types))))
+        if base in self.type_vars:
+            if arguments:
+                self.error("type parameter '%s' cannot take type arguments" % base,
+                           node)
+            return
+        if base not in BUILTIN_TYPES and base not in self.types:
+            self.error("unknown %s '%s'%s" % (what, base, suffix), node,
+                       hint="known types: %s"
+                            % ", ".join(sorted(set(BUILTIN_TYPES) | set(self.types)
+                                               | set(self.type_vars))))
+        info = self.types.get(base)
+        if base in self.ARITY:
+            low, high = self.ARITY[base]
+        elif info is not None and info.type_params:
+            low, high = 0, len(info.type_params)
+        else:
+            low, high = 0, 0
+        allowed = {low, high} if low != high else {low}
+        if len(arguments) not in allowed:
+            expected = ("%d" % low if low == high else "%d or %d" % (low, high))
+            self.error("%s expects %s type argument(s), got %d%s"
+                       % (base, expected, len(arguments), suffix), node)
+        for argument in arguments:
+            self.check_type_name(T.render(argument), node, what=what, suffix=suffix)
+
+    def require_kind(self, type_name, kind, node, what):
+        """Gate an operator on a type parameter behind its constraint."""
+        if type_name not in self.type_vars:
+            return
+        constraint = self.type_vars[type_name]
+        if constraint is not None and (constraint == kind or T.satisfies(kind, constraint)):
+            return
+        if constraint is None:
+            self.error("'%s' cannot be used with a %s value: type parameter %s is "
+                       "unconstrained" % (what, type_name, type_name), node,
+                       hint="declare it as <%s: %s>" % (type_name, kind))
+        self.error("'%s' needs a %s value, but %s is only constrained to %s"
+                   % (what, kind, type_name, constraint), node,
+                   hint="declare it as <%s: %s>" % (type_name, kind))
+
+    def type_vars_of(self, decl):
+        """The type parameters a declaration introduces, validated."""
+        params = []
+        seen = set()
+        for entry in getattr(decl, "type_params", []) or []:
+            name, constraint = entry[0], entry[1]
+            if name in seen:
+                self.error("duplicate type parameter '%s'" % name, decl,
+                           hint="each type parameter may appear once")
+            seen.add(name)
+            if constraint is not None and constraint not in T.KINDS:
+                self.error("unknown constraint '%s'" % constraint, decl,
+                           hint="constraints are: %s" % ", ".join(sorted(T.KINDS)))
+            params.append((name, constraint))
+        return params
 
     def struct_fields(self, type_name):
         info = self.types.get(type_name)
@@ -296,6 +370,18 @@ class Checker:
                              "declare one with 'struct Name { field: Type }'"))
         order = [f[0] for f in fields]
         types = {f[0]: f[1] for f in fields}
+        info = self.types.get(expr.name)
+        type_params = info.type_params if info is not None else []
+        mapping = {}
+        if type_params and self.pending_annotation:
+            # `let s: Stack<String> = Stack([])` — the annotation supplies what
+            # the arguments cannot, which is the common empty-container case.
+            try:
+                if T.base(self.pending_annotation) == expr.name:
+                    T.unify(T.make(expr.name, [n for n, _c in type_params]),
+                            self.pending_annotation, mapping)
+            except T.TypeError_:
+                pass
 
         if expr.args and all(name is None for name, _v, _l, _c in expr.args) \
                 and len(expr.args) > len(order):
@@ -317,7 +403,11 @@ class Checker:
                 self.error("field '%s' is given twice" % name, value)
             supplied[name] = True
             actual = self.expr_type(value)
-            if not self.compatible(actual, types[name]):
+            if type_params:
+                if not T.unify(types[name], actual, mapping):
+                    self.error("field '%s' of %s expects %s, found %s"
+                               % (name, expr.name, types[name], actual), value)
+            elif not self.compatible(actual, types[name]):
                 self.error("field '%s' of struct '%s' expects %s, found %s"
                            % (name, expr.name, types[name], actual), value,
                            hint=self.conversion_hint(actual, types[name]))
@@ -328,7 +418,20 @@ class Checker:
                        % (expr.name, ", ".join("'%s'" % m for m in missing)), expr,
                        hint="every field must be given: %s"
                             % ", ".join("%s: %s" % (f, types[f]) for f in order))
-        return expr.name
+        if not type_params:
+            return expr.name
+        missing_params = [n for n, _c in type_params if n not in mapping]
+        if missing_params:
+            self.error("cannot infer type parameter(s) %s for %s"
+                       % (", ".join(missing_params), expr.name), expr,
+                       hint="pass a value that determines it, or annotate the binding")
+        for param_name, constraint in type_params:
+            if not T.satisfies(mapping[param_name], constraint):
+                self.error("type argument %s = %s does not satisfy %s"
+                           % (param_name, mapping[param_name], constraint), expr,
+                           hint="%s accepts %s" % (constraint,
+                                                   ", ".join(T.kinds_of(constraint))))
+        return T.make(expr.name, [mapping[n] for n, _c in type_params])
 
     def is_imported(self, module):
         """True when `module` was imported, directly or as a submodule.
@@ -417,6 +520,9 @@ class Checker:
             self.error("function '%s' is already declared" % decl.name, decl)
         if decl.name in ("sprint", "dit", "input"):
             self.error("'%s' is a reserved built-in name" % decl.name, decl)
+        type_params = self.type_vars_of(decl)
+        outer_vars = self.type_vars
+        self.type_vars = {n: c for n, c in type_params}
         params = []
         seen = set()
         for entry in decl.params:
@@ -424,13 +530,20 @@ class Checker:
             if name in seen:
                 self.error("duplicate parameter '%s' in function '%s'" % (name, decl.name), decl)
             seen.add(name)
+            if ptype is not None:
+                self.check_type_name(ptype, decl, what="type of parameter '%s'" % name)
             params.append((name, ptype or ANY))
+        if decl.ret_type is not None:
+            self.check_type_name(decl.ret_type, decl, what="return type")
+        self.type_vars = outer_vars
         ret = decl.ret_type or "Unit"
-        self.functions[decl.name] = FuncInfo(decl.name, params, ret, decl)
+        self.functions[decl.name] = FuncInfo(decl.name, params, ret, decl, type_params)
 
     def check_function(self, decl):
         info = self.functions[decl.name]
         outer = self.current_func
+        outer_vars = self.type_vars
+        self.type_vars = {n: c for n, c in info.type_params}
         outer_builder, outer_event = self.builder_depth, self.event_depth
         outer_loop = self.loop_depth
         self.builder_depth = 0
@@ -450,6 +563,7 @@ class Checker:
                 hint="every path must end in 'ret' (or 'halt'); add a 'ret' after the last block")
         self.pop_scope()
         self.current_func = outer
+        self.type_vars = outer_vars
         self.builder_depth, self.event_depth = outer_builder, outer_event
         self.loop_depth = outer_loop
 
@@ -516,12 +630,14 @@ class Checker:
             self.loop_depth -= 1
         elif isinstance(stmt, ast.ForStmt):
             iterable = self.expr_type(stmt.iterable)
-            if iterable == "List":
-                var_type = ANY
+            if T.base(iterable) == "List":
+                elements = T.args(iterable)
+                var_type = elements[0] if elements else ANY
             elif iterable == "String":
                 var_type = "String"
-            elif iterable == "Map":
-                var_type = "String"
+            elif T.base(iterable) == "Map":
+                keys = T.args(iterable)
+                var_type = keys[0] if keys else "String"
             elif iterable == ANY:
                 var_type = ANY
             else:
@@ -630,7 +746,10 @@ class Checker:
         declared = stmt.type_ann
         if declared is not None:
             self.check_type_name(declared, stmt)
+        outer_pending = self.pending_annotation
+        self.pending_annotation = declared
         actual = self.expr_type(stmt.init)
+        self.pending_annotation = outer_pending
         if declared is None:
             if actual == "Unit":
                 self.error("cannot infer a type from a Unit expression", stmt,
@@ -738,17 +857,33 @@ class Checker:
         if isinstance(expr, ast.Member):
             return self.member_type(expr)
         if isinstance(expr, ast.ListLit):
+            element_types = []
             for item in expr.items:
                 t = self.expr_type(item)
                 if t == "Unit":
                     self.error("a list element cannot be Unit", item)
+                element_types.append(t)
+            if not element_types:
+                return "List"
+            first = element_types[0]
+            if all(t == first for t in element_types) and first != ANY:
+                return T.make("List", [first])
+            # a heterogeneous literal keeps the unparameterised type
             return "List"
         if isinstance(expr, ast.MapLit):
+            value_types = []
             for key, value in expr.pairs:
                 if self.expr_type(key) != "String":
                     self.error("map keys must be String", key)
-                if self.expr_type(value) == "Unit":
+                t = self.expr_type(value)
+                if t == "Unit":
                     self.error("a map value cannot be Unit", value)
+                value_types.append(t)
+            if not value_types:
+                return "Map"
+            first = value_types[0]
+            if all(t == first for t in value_types) and first != ANY:
+                return T.make("Map", ["String", first])
             return "Map"
         if isinstance(expr, ast.Index):
             return self.index_type(expr)
@@ -794,6 +929,20 @@ class Checker:
         lt = self.expr_type(expr.left)
         rt = self.expr_type(expr.right)
 
+        # A type parameter can only be operated on when its constraint allows it.
+        parameter = None
+        if lt in self.type_vars:
+            parameter = lt
+        elif rt in self.type_vars:
+            parameter = rt
+        if parameter is not None:
+            if op in ("+", "-", "*", "/", "%"):
+                self.require_kind(parameter, "Numeric", expr, op)
+                return parameter
+            if op in ("<", "<=", ">", ">="):
+                self.require_kind(parameter, "Orderable", expr, op)
+                return "Bool"
+
         if op in ("und", "ou"):
             for side, t in ((expr.left, lt), (expr.right, rt)):
                 if t not in ("Bool", ANY):
@@ -808,6 +957,8 @@ class Checker:
                 return "Bool"
             if lt in NUMERIC and rt in NUMERIC:
                 return "Bool"
+            if T.base(lt) == T.base(rt):
+                return "Bool"          # a bare container vs a parameterisation
             self.error("cannot compare %s with %s using '%s'" % (lt, rt, op), expr)
         if op in ("<", "<=", ">", ">="):
             if lt == ANY or rt == ANY:
@@ -823,7 +974,14 @@ class Checker:
                 return ANY
             if lt == "String" and rt == "String":
                 return "String"
-            if lt == "List" and rt == "List":
+            if T.base(lt) == "List" and T.base(rt) == "List":
+                left_args, right_args = T.args(lt), T.args(rt)
+                if left_args and right_args and left_args[0] != right_args[0]:
+                    self.error("cannot add %s and %s" % (lt, rt), expr)
+                if left_args:
+                    return T.make("List", [left_args[0]])
+                if right_args:
+                    return T.make("List", [right_args[0]])
                 return "List"
             if lt in NUMERIC and rt in NUMERIC:
                 return "Float" if "Float" in (lt, rt) else "Int"
@@ -840,18 +998,21 @@ class Checker:
     def index_type(self, expr):
         t = self.expr_type(expr.target)
         it = self.expr_type(expr.index)
-        if t == "List":
+        if T.base(t) == "List":
             if it not in ("Int", ANY):
                 self.error("list index must be Int, found %s" % it, expr.index)
-            return ANY
+            element = T.args(t)
+            return element[0] if element else ANY
         if t == "String":
             if it not in ("Int", ANY):
                 self.error("string index must be Int, found %s" % it, expr.index)
             return "String"
-        if t == "Map":
-            if it not in ("String", ANY):
-                self.error("map key must be String, found %s" % it, expr.index)
-            return ANY
+        if T.base(t) == "Map":
+            parts = T.args(t)
+            key_type = parts[0] if parts else "String"
+            if it not in (key_type, ANY) and not self.compatible(it, key_type):
+                self.error("map key must be %s, found %s" % (key_type, it), expr.index)
+            return parts[1] if len(parts) > 1 else ANY
         if t == ANY:
             return ANY
         self.error("cannot index a value of type %s" % t, expr)
@@ -867,9 +1028,9 @@ class Checker:
         if target == ANY:
             return ANY
         if target is not None:
-            info = self.types.get(target)
+            info = self.types.get(T.base(target))
             fields = info.field_types() if info is not None else {}
-            if target not in self.types:
+            if T.base(target) not in self.types:
                 self.error("cannot read field '%s' of %s" % (expr.name, target), expr,
                            hint="only a struct has named fields")
             if expr.name not in fields:
@@ -886,6 +1047,17 @@ class Checker:
             self.error("'%s' must be called with (...)" % native.qualified, expr)
         self.error("module '%s' has no member '%s'" % (module, member), expr,
                    hint="available: %s" % _module_members(module))
+
+    def user_type_of(self, node):
+        """The declared type of a receiver expression, when it is a user type."""
+        if isinstance(node, ast.Ident) and node.name in self.types:
+            return self.types[node.name]      # `Type.method(...)`: a static call
+        try:
+            receiver = self.expr_type(node)
+        except T.TypeError_:
+            return None
+        base = T.base(receiver) if isinstance(receiver, str) else None
+        return self.types.get(base) if base else None
 
     def check_private_field(self, type_name, field_name, node):
         """A private field may only be read or written inside its own class."""
@@ -906,9 +1078,13 @@ class Checker:
                 self.ident_type(node)      # raises the right diagnostic
         if isinstance(node, ast.Index):
             container = self.expr_type(node.target)
-            if container == "List" or container == ANY:
-                return ANY          # the element type is known at run time
-            if container == "Map":
+            if T.base(container) == "List":
+                args = T.args(container)
+                return args[0] if args else ANY     # a bare List is known at run time
+            if T.base(container) == "Map":
+                args = T.args(container)
+                return args[1] if len(args) > 1 else ANY
+            if container == ANY:
                 return ANY
             self.error("cannot index a %s, so it has no fields" % container, node)
             return None
@@ -923,7 +1099,7 @@ class Checker:
             if info.type == ANY:
                 # an untyped List element: the runtime knows, the checker does not
                 return ANY
-            if info.type not in self.types:
+            if T.base(info.type) not in self.types:
                 self.error("'%s' is %s, not a struct, so it has no fields"
                            % (node.name, info.type), node,
                            hint="only a struct has named fields; a Map uses "
@@ -976,7 +1152,7 @@ class Checker:
         target = self.member_target_type(obj)
         if target is None or target == ANY:
             return None
-        info = self.types.get(target)
+        info = self.types.get(T.base(target))
         if info is None or info.kind != "class":
             return None
         method = info.methods.get(expr.name)
@@ -998,6 +1174,20 @@ class Checker:
                        expr)
         return method
 
+    def receiver_mapping(self, node, type_info):
+        """The class's type parameters, bound from the receiver's type."""
+        if not type_info.type_params:
+            return {}
+        try:
+            receiver = self.expr_type(node) if node is not None else type_info.name
+        except T.TypeError_:
+            return {}
+        mapping = {}
+        if T.base(receiver) == type_info.name:
+            T.unify(T.make(type_info.name, [n for n, _c in type_info.type_params]),
+                    receiver, mapping)
+        return mapping
+
     def check_method_args(self, expr, label, method):
         if len(expr.args) != len(method.params):
             self.error("%s expects %d argument(s) but got %d"
@@ -1009,6 +1199,31 @@ class Checker:
                 self.error("argument %d of %s must be %s, found %s"
                            % (index + 1, label, expected, actual), arg)
 
+    def infer_generic_call(self, expr, info):
+        """Infer a generic function's type arguments from its arguments."""
+        if len(expr.args) != len(info.params):
+            self.error("function '%s' expects %d argument(s) but got %d"
+                       % (info.name, len(info.params), len(expr.args)), expr)
+        mapping = {}
+        for index, arg in enumerate(expr.args):
+            actual = self.expr_type(arg)
+            expected = info.params[index][1]
+            if not T.unify(expected, actual, mapping):
+                self.error("argument %d of '%s' must be %s, found %s"
+                           % (index + 1, info.name, expected, actual), arg)
+        missing = [n for n, _c in info.type_params if n not in mapping]
+        if missing:
+            self.error("cannot infer type parameter(s) %s for '%s'"
+                       % (", ".join(missing), info.name), expr,
+                       hint="pass an argument that determines it")
+        for name, constraint in info.type_params:
+            if not T.satisfies(mapping[name], constraint):
+                self.error("type argument %s = %s does not satisfy %s"
+                           % (name, mapping[name], constraint), expr,
+                           hint="%s accepts %s" % (constraint,
+                                                   ", ".join(T.kinds_of(constraint))))
+        return T.substitute(info.ret, mapping)
+
     def call_type(self, expr):
         callee = expr.callee
         if isinstance(callee, ast.Member):
@@ -1017,11 +1232,22 @@ class Checker:
                 label = "%s.%s" % (callee.obj.name
                                    if isinstance(callee.obj, ast.Ident)
                                    else "value", callee.name)
+                owner = self.user_type_of(callee.obj)
+                mapping = self.receiver_mapping(callee.obj, owner) if owner else {}
+                if mapping:
+                    method = MethodInfo(
+                        method.name,
+                        [(n, T.substitute(t, mapping)) for n, t in method.params],
+                        T.substitute(method.ret, mapping),
+                        is_static=method.is_static,
+                        is_private=method.is_private, node=method.node)
                 self.check_method_args(expr, label, method)
                 return method.ret
         if isinstance(callee, ast.Ident):
             name = callee.name
             info = self.functions.get(name)
+            if info is not None and info.type_params:
+                return self.infer_generic_call(expr, info)
             if info is not None:
                 self.check_args(expr, name, [(p[1]) for p in info.params], len(info.params))
                 return info.ret
@@ -1095,7 +1321,23 @@ class Checker:
             return True
         if actual == "Int" and expected == "Float":
             return True
-        return False
+        # Parameterised types: same base, and the arguments must match. A bare
+        # container on either side (an unannotated literal, or existing code that
+        # says just `List`) stays compatible with any parameterisation.
+        try:
+            a_base, a_args = T.parse(actual)
+            e_base, e_args = T.parse(expected)
+        except T.TypeError_:
+            return False
+        if a_base != e_base:
+            return False
+        if not e_args or not a_args:
+            return True
+        if len(a_args) != len(e_args):
+            return False
+        return all(T.render(a) == T.render(e) or T.render(a) == ANY
+                   or T.render(e) == ANY
+                   for a, e in zip(a_args, e_args))
 
     def conversion_hint(self, actual, expected):
         if actual == "Float" and expected == "Int":

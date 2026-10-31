@@ -64,6 +64,9 @@ class Parser:
         # naming its own class). A typo like `Integer` is still rejected at parse
         # time, which is what the tests pin down.
         self.struct_names = set()
+        # Type parameters in scope, one frame per enclosing declaration:
+        # `sfn f<T>(x: T)` may name T in its parameter and return types.
+        self.type_param_scopes = []
         for index, token in enumerate(tokens[:-1]):
             if token.kind == "kw" and token.value in ("struct", "class"):
                 following = tokens[index + 1]
@@ -251,6 +254,8 @@ class Parser:
     def parse_struct(self):
         tok = self.advance()  # struct
         name_tok = self.expect_ident("struct name")
+        type_params = self.parse_type_params()
+        self.type_param_scopes.append({p[0] for p in type_params})
         self.skip_newlines()
         self.expect_op("{", "a struct body is required")
         fields = []
@@ -280,12 +285,15 @@ class Parser:
             self.error("struct '%s' has no fields" % name_tok.value,
                        hint="an empty struct cannot hold anything; add a field")
         self.struct_names.add(name_tok.value)
-        return ast.StructDecl(name_tok.value, fields,
+        self.type_param_scopes.pop()
+        return ast.StructDecl(name_tok.value, fields, type_params=type_params,
                               line=tok.line, col=tok.col)
 
     def parse_function(self):
         tok = self.advance()  # sfn
         name_tok = self.expect_ident("function name")
+        type_params = self.parse_type_params()
+        self.type_param_scopes.append({p[0] for p in type_params})
         self.expect_op("(", "function parameters are required, use '()' for none")
         params = []
         if not self.at_op(")"):
@@ -307,7 +315,9 @@ class Parser:
             ret_type = self.parse_type()
         self.skip_newlines()
         body = self.parse_block()
+        self.type_param_scopes.pop()
         return ast.FuncDecl(name_tok.value, params, ret_type, body,
+                            type_params=type_params,
                             line=tok.line, col=tok.col)
 
     def parse_class(self):
@@ -315,6 +325,8 @@ class Parser:
         tok = self.advance()                      # class
         name_tok = self.expect_ident("class name")
         self.struct_names.add(name_tok.value)
+        type_params = self.parse_type_params()
+        self.type_param_scopes.append({p[0] for p in type_params})
         self.skip_newlines()
         self.expect_op("{", "a class body is required")
         fields, methods = [], []
@@ -345,7 +357,9 @@ class Parser:
             self.end_statement()
             self.skip_newlines()
         self.expect_op("}")
+        self.type_param_scopes.pop()
         return ast.ClassDecl(name_tok.value, fields, methods,
+                             type_params=type_params,
                              line=tok.line, col=tok.col)
 
     def parse_method(self, is_private=False):
@@ -459,17 +473,62 @@ class Parser:
         self.advance()  # }
         return ast.Block(stmts, line=start.line, col=start.col)
 
+    def active_type_params(self):
+        names = set()
+        for frame in self.type_param_scopes:
+            names |= frame
+        return names
+
+    def parse_type_params(self):
+        """`<T>`, `<K, V>`, `<T: Orderable>` after a declaration name."""
+        if not (self.cur.kind == "op" and self.cur.value == "<"):
+            return []
+        self.advance()
+        params, seen = [], set()
+        while True:
+            tok = self.expect_ident("type parameter name")
+            if tok.value in seen:
+                self.error("duplicate type parameter '%s'" % tok.value, tok,
+                           hint="each type parameter may appear once")
+            seen.add(tok.value)
+            constraint = None
+            if self.cur.kind == "op" and self.cur.value == ":":
+                self.advance()
+                ctok = self.expect_ident("constraint name")
+                constraint = ctok.value
+            params.append((tok.value, constraint, tok.line, tok.col))
+            if self.cur.kind == "op" and self.cur.value == ",":
+                self.advance()
+                continue
+            break
+        self.expect_op(">", "unbalanced type parameter list")
+        return params
+
     def parse_type(self):
         tok = self.cur
         if tok.kind != "ident":
             self.error("expected a type name but found %s" % tok.describe())
-        if tok.value not in BUILTIN_TYPES and tok.value not in self.struct_names:
+        in_scope = (tok.value in BUILTIN_TYPES or tok.value in self.struct_names
+                    or tok.value in self.active_type_params())
+        if not in_scope:
             self.error("unknown type '%s'" % tok.value, tok,
                        hint="available types: %s"
                             % ", ".join(sorted(set(BUILTIN_TYPES)
-                                               | self.struct_names)))
+                                               | self.struct_names
+                                               | self.active_type_params())))
+        name = tok.value
         self.advance()
-        return tok.value
+        if not (self.cur.kind == "op" and self.cur.value == "<"):
+            return name
+        # `List<Int>`, `Map<String, List<Int>>` — the argument list is kept as
+        # text, so a parameterised type is still a string to every later stage.
+        self.advance()
+        arguments = [self.parse_type()]
+        while self.cur.kind == "op" and self.cur.value == ",":
+            self.advance()
+            arguments.append(self.parse_type())
+        self.expect_op(">", "unbalanced type arguments")
+        return "%s<%s>" % (name, ", ".join(arguments))
 
     # -- expressions ---------------------------------------------------------
     def parse_expression(self):
