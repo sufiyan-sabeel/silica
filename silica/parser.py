@@ -59,6 +59,15 @@ class Parser:
         self.tokens = tokens
         self.filename = filename
         self.pos = 0
+        # Struct names, collected before parsing so that a type annotation may
+        # name a struct declared later in the file. A typo like `Integer` is
+        # still rejected at parse time, which is what the tests pin down.
+        self.struct_names = set()
+        for index, token in enumerate(tokens[:-1]):
+            if token.kind == "kw" and token.value == "struct":
+                following = tokens[index + 1]
+                if following.kind == "ident":
+                    self.struct_names.add(following.value)
 
     # -- token helpers -------------------------------------------------------
     @property
@@ -160,6 +169,8 @@ class Parser:
                 return self.parse_break()
             if kw == "continue":
                 return self.parse_continue()
+            if kw == "struct":
+                return self.parse_struct()
             if kw == "fin":
                 self.advance()
                 return ast.FinStmt(line=tok.line, col=tok.col)
@@ -168,6 +179,18 @@ class Parser:
                            hint="'sino' must directly follow an 'si' block")
         if tok.kind == "op" and tok.value == "{":
             self.error("unexpected block")
+        # member assignment: `name.field = expr`
+        if (tok.kind == "ident" and self.peek().kind == "op" and self.peek().value == "."
+                and self.peek(2).kind == "ident"
+                and self.peek(3).kind == "op" and self.peek(3).value == "="):
+            self.advance()                       # name
+            self.advance()                       # .
+            field = self.advance()               # field
+            self.advance()                       # =
+            value = self.parse_expression()
+            self.end_statement()
+            return ast.MemberAssignStmt(tok.value, field.value, value,
+                                        line=tok.line, col=tok.col)
         # assignment: `name = expr` (a bare identifier followed by '=')
         if tok.kind == "ident" and self.peek().kind == "op" and self.peek().value == "=":
             self.advance()
@@ -216,6 +239,33 @@ class Parser:
         self.end_statement()
         return ast.LetStmt(name_tok.value, type_ann, init, is_const,
                            line=tok.line, col=tok.col)
+
+    def parse_struct(self):
+        tok = self.advance()  # struct
+        name_tok = self.expect_ident("struct name")
+        self.skip_newlines()
+        self.expect_op("{", "a struct body is required")
+        fields = []
+        seen = set()
+        self.skip_newlines()
+        while not self.at_op("}"):
+            field_tok = self.expect_ident("field name")
+            if field_tok.value in seen:
+                self.error("duplicate field '%s' in struct '%s'"
+                           % (field_tok.value, name_tok.value),
+                           hint="each field name may appear once")
+            seen.add(field_tok.value)
+            self.expect_op(":", "a struct field needs a type, e.g. 'x: Int'")
+            ftype = self.parse_type()
+            fields.append((field_tok.value, ftype, field_tok.line, field_tok.col))
+            self.end_statement()
+        self.expect_op("}")
+        if not fields:
+            self.error("struct '%s' has no fields" % name_tok.value,
+                       hint="an empty struct cannot hold anything; add a field")
+        self.struct_names.add(name_tok.value)
+        return ast.StructDecl(name_tok.value, fields,
+                              line=tok.line, col=tok.col)
 
     def parse_function(self):
         tok = self.advance()  # sfn
@@ -346,9 +396,11 @@ class Parser:
         tok = self.cur
         if tok.kind != "ident":
             self.error("expected a type name but found %s" % tok.describe())
-        if tok.value not in BUILTIN_TYPES:
+        if tok.value not in BUILTIN_TYPES and tok.value not in self.struct_names:
             self.error("unknown type '%s'" % tok.value, tok,
-                       hint="available types: Int, Float, Bool, String, Unit, List, Map, Any")
+                       hint="available types: %s"
+                            % ", ".join(sorted(set(BUILTIN_TYPES)
+                                               | self.struct_names)))
         self.advance()
         return tok.value
 
@@ -387,15 +439,38 @@ class Parser:
             if tok.kind == "op" and tok.value == "(":
                 self.advance()
                 args = []
+                named = []
                 if not self.at_op(")"):
                     while True:
-                        args.append(self.parse_expression())
+                        # `name: value` inside an argument list is a named field
+                        if (self.cur.kind == "ident"
+                                and self.peek().kind == "op"
+                                and self.peek().value == ":"):
+                            field = self.advance()
+                            self.advance()  # :
+                            named.append((field.value, self.parse_expression(),
+                                          field.line, field.col))
+                        else:
+                            if named:
+                                self.error(
+                                    "positional arguments cannot follow named ones",
+                                    hint="put every positional argument first")
+                            args.append(self.parse_expression())
                         if self.at_op(","):
                             self.advance()
                             continue
                         break
                 self.expect_op(")", "unbalanced argument list")
-                expr = ast.Call(expr, args, line=tok.line, col=tok.col)
+                is_struct = (isinstance(expr, ast.Ident)
+                             and (expr.name in self.struct_names or named))
+                if is_struct:
+                    positional = [(None, a, getattr(a, "line", tok.line),
+                                   getattr(a, "col", tok.col)) for a in args]
+                    expr = ast.StructLit(expr.name, positional + named,
+                                         line=tok.line, col=tok.col)
+                else:
+                    expr = ast.Call(expr, args, named=named,
+                                    line=tok.line, col=tok.col)
             elif tok.kind == "op" and tok.value == "[":
                 self.advance()
                 index = self.parse_expression()
