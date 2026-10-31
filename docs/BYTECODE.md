@@ -122,6 +122,10 @@ instruction boundaries.
 | `0x23` | `ITER_NEXT` | target | branch (see below) |
 | `0x24` | `HALT_OK` | - | 0 -> 0 (terminal) |
 | `0x25` | `HALT_POP` | - | 1 -> 0 (terminal) |
+| `0x26` | `MAKE_STRUCT` | u: descriptor const, u: field count | n -> 1 |
+| `0x27` | `GET_FIELD` | u: field-name const | 1 -> 1 |
+| `0x28` | `SET_FIELD` | u: field-name const | 2 -> 0 |
+| `0x29` | `FREEZE` | - | 0 -> 0 (marks the top value immutable) |
 
 `CALL_NATIVE` refers to its module and function by **string constants**, not by
 index into a runtime table, so a native is resolved by name at load time and an
