@@ -8,6 +8,7 @@ compatible with every type. That is a documented limitation, not an oversight.
 """
 
 from . import ast
+from .tokens import BUILTIN_TYPES
 from .errors import SilicaTypeError
 from .natives import (PLANNED_MODULES, get_constant, get_native, module_exists,
                       ui_reserved_modules)
@@ -49,6 +50,8 @@ class Checker:
         self.pre_globals = list(pre_globals or [])
         self.functions = {}
         self.globals = {}
+        # struct name -> [(field, type, line, col)] in declaration order
+        self.structs = {}
         self.modules = set()
         self.scopes = []
         self.current_func = None
@@ -92,6 +95,9 @@ class Checker:
             if isinstance(stmt, ast.UseStmt):
                 self.check_use(stmt)
         for stmt in self.program.stmts:
+            if isinstance(stmt, ast.StructDecl):
+                self.declare_struct(stmt)
+        for stmt in self.program.stmts:
             if isinstance(stmt, ast.FuncDecl):
                 self.declare_function(stmt)
 
@@ -101,7 +107,7 @@ class Checker:
         for stmt in self.program.stmts:
             if isinstance(stmt, ast.LetStmt):
                 self.check_let(stmt, top_level=True)
-            elif isinstance(stmt, (ast.UseStmt, ast.FuncDecl)):
+            elif isinstance(stmt, (ast.UseStmt, ast.FuncDecl, ast.StructDecl)):
                 continue
             elif isinstance(stmt, ast.FinStmt):
                 self.error("'fin' is only allowed at the end of a block", stmt)
@@ -122,6 +128,92 @@ class Checker:
                 self.error("'main' must not take parameters",
                            self.functions["main"].node)
         return self
+
+    def declare_struct(self, decl):
+        """Register a struct, and check its fields while we are here."""
+        if decl.name in self.structs:
+            self.error("struct '%s' is already declared" % decl.name, decl,
+                       hint="struct names must be unique in a file")
+        if decl.name in self.functions:
+            self.error("'%s' is already a function" % decl.name, decl,
+                       hint="a struct and a function cannot share a name")
+        if decl.name in BUILTIN_TYPES:
+            self.error("'%s' is a built-in type name" % decl.name, decl,
+                       hint="pick another name for the struct")
+        fields = []
+        seen = set()
+        for name, type_name, line, col in decl.fields:
+            if name in seen:
+                self.error("duplicate field '%s' in struct '%s'" % (name, decl.name),
+                           decl, hint="each field name may appear once")
+            seen.add(name)
+            if type_name not in BUILTIN_TYPES and type_name not in self.structs:
+                if type_name == decl.name:
+                    self.error("struct '%s' cannot contain itself" % decl.name, decl,
+                               hint="a struct that holds itself has no finite size; "
+                                    "use List for a sequence of them")
+                self.error("unknown type '%s' for field '%s'" % (type_name, name), decl,
+                           hint="known types: %s"
+                                % ", ".join(sorted(set(BUILTIN_TYPES) | set(self.structs))))
+            fields.append((name, type_name, line, col))
+        self.structs[decl.name] = fields
+
+    def check_type_name(self, type_name, node, what="type"):
+        """A declared type must be a built-in or a struct declared in this file."""
+        if type_name in BUILTIN_TYPES or type_name in self.structs:
+            return
+        self.error("unknown %s '%s'" % (what, type_name), node,
+                   hint="known types: %s"
+                        % ", ".join(sorted(set(BUILTIN_TYPES) | set(self.structs))))
+
+    def struct_fields(self, type_name):
+        return self.structs.get(type_name)
+
+    def check_struct_literal(self, expr):
+        """Type-check `Point(x: 1, y: 2)` and return the struct's type."""
+        fields = self.struct_fields(expr.name)
+        if fields is None:
+            if expr.name in self.functions:
+                self.error("'%s' is a function, not a struct" % expr.name, expr)
+            self.error("unknown struct '%s'" % expr.name, expr,
+                       hint=("known structs: %s" % ", ".join(sorted(self.structs))
+                             if self.structs else
+                             "declare one with 'struct Name { field: Type }'"))
+        order = [f[0] for f in fields]
+        types = {f[0]: f[1] for f in fields}
+
+        if expr.args and all(name is None for name, _v, _l, _c in expr.args) \
+                and len(expr.args) > len(order):
+            self.error("struct '%s' takes %d field%s, but %d values were given"
+                       % (expr.name, len(order), "" if len(order) == 1 else "s",
+                          len(expr.args)), expr)
+
+        supplied = {}
+        for index, (name, value, line, col) in enumerate(expr.args):
+            if name is None:
+                if index >= len(order):
+                    self.error("struct '%s' has no field %d" % (expr.name, index + 1),
+                               value)
+                name = order[index]
+            if name not in types:
+                self.error("struct '%s' has no field '%s'" % (expr.name, name), value,
+                           hint="fields are: %s" % ", ".join(order))
+            if name in supplied:
+                self.error("field '%s' is given twice" % name, value)
+            supplied[name] = True
+            actual = self.expr_type(value)
+            if not self.compatible(actual, types[name]):
+                self.error("field '%s' of struct '%s' expects %s, found %s"
+                           % (name, expr.name, types[name], actual), value,
+                           hint=self.conversion_hint(actual, types[name]))
+
+        missing = [f for f in order if f not in supplied]
+        if missing:
+            self.error("struct '%s' is missing %s"
+                       % (expr.name, ", ".join("'%s'" % m for m in missing)), expr,
+                       hint="every field must be given: %s"
+                            % ", ".join("%s: %s" % (f, types[f]) for f in order))
+        return expr.name
 
     def is_imported(self, module):
         """True when `module` was imported, directly or as a submodule.
@@ -203,6 +295,9 @@ class Checker:
                        "collections, fs, json")
 
     def declare_function(self, decl):
+        if decl.name in self.structs:
+            self.error("'%s' is already a struct" % decl.name, decl,
+                       hint="a struct and a function cannot share a name")
         if decl.name in self.functions:
             self.error("function '%s' is already declared" % decl.name, decl)
         if decl.name in ("sprint", "dit", "input"):
@@ -229,6 +324,8 @@ class Checker:
         self.current_func = info
         self.push_scope()
         for name, ptype, line, col in decl.params:
+            if ptype is not None:
+                self.check_type_name(ptype, decl, "parameter type")
             self.declare(VarInfo(name, ptype or ANY, True, line, col), decl)
         self.check_block(decl.body, new_scope=False)
         if info.ret != "Unit" and not self.always_returns(decl.body):
@@ -282,6 +379,8 @@ class Checker:
             self.check_let(stmt)
         elif isinstance(stmt, ast.AssignStmt):
             self.check_assign(stmt)
+        elif isinstance(stmt, ast.MemberAssignStmt):
+            self.check_member_assign(stmt)
         elif isinstance(stmt, ast.ExprStmt):
             self.expr_type(stmt.expr)
         elif isinstance(stmt, ast.IfStmt):
@@ -414,6 +513,8 @@ class Checker:
 
     def check_let(self, stmt, top_level=False):
         declared = stmt.type_ann
+        if declared is not None:
+            self.check_type_name(declared, stmt)
         actual = self.expr_type(stmt.init)
         if declared is None:
             if actual == "Unit":
@@ -441,6 +542,33 @@ class Checker:
             self.error("cannot assign %s to '%s' of type %s"
                        % (actual, stmt.name, info.type), stmt.value,
                        hint=self.conversion_hint(actual, info.type))
+
+    def check_member_assign(self, stmt):
+        info = self.lookup(stmt.target)
+        if info is None:
+            self.error("unknown name '%s'" % stmt.target, stmt,
+                       hint="declare it first with 'let %s = ...'" % stmt.target)
+        if info.type == ANY:
+            return          # untyped list element: the VM checks at runtime
+        fields = self.struct_fields(info.type)
+        if fields is None:
+            self.error("'%s' is %s, not a struct, so it has no field '%s'"
+                       % (stmt.target, info.type, stmt.field), stmt,
+                       hint="use %s[\"%s\"] = ... for a Map" % (stmt.target, stmt.field))
+        types = {f[0]: f[1] for f in fields}
+        if stmt.field not in types:
+            self.error("struct '%s' has no field '%s'" % (info.type, stmt.field), stmt,
+                       hint="fields are: %s" % ", ".join(types))
+        if info.is_const:
+            self.error("cannot modify field '%s' of '%s': it is a constant"
+                       % (stmt.field, stmt.target), stmt,
+                       hint="declare it with 'let' to allow changes")
+        actual = self.expr_type(stmt.value)
+        if not self.compatible(actual, types[stmt.field]):
+            self.error("field '%s' of struct '%s' expects %s, found %s"
+                       % (stmt.field, info.type, types[stmt.field], actual),
+                       stmt.value,
+                       hint=self.conversion_hint(actual, types[stmt.field]))
 
     def check_return(self, stmt):
         if self.current_func is None:
@@ -481,6 +609,8 @@ class Checker:
             return self.binary_type(expr)
         if isinstance(expr, ast.Call):
             return self.call_type(expr)
+        if isinstance(expr, ast.StructLit):
+            return self.check_struct_literal(expr)
         if isinstance(expr, ast.Member):
             return self.member_type(expr)
         if isinstance(expr, ast.ListLit):
@@ -593,6 +723,24 @@ class Checker:
         self.error("cannot index a value of type %s" % t, expr)
 
     def member_type(self, expr):
+        # A whole module path used as a value (`ui.lib.widgets`) is not a field
+        # access at all; resolve_member_path produces the right message for it.
+        segments, _tail = _flatten_member(expr)
+        if segments and module_exists(".".join(segments)):
+            self.resolve_member_path(expr)
+        # `p.x` and `l.end.x`: a field of a struct, not a module member
+        target = self.member_target_type(expr.obj)
+        if target == ANY:
+            return ANY
+        if target is not None:
+            fields = {f[0]: f[1] for f in self.structs.get(target, [])}
+            if target not in self.structs:
+                self.error("cannot read field '%s' of %s" % (expr.name, target), expr,
+                           hint="only a struct has named fields")
+            if expr.name not in fields:
+                self.error("struct '%s' has no field '%s'" % (target, expr.name),
+                           expr, hint="fields are: %s" % ", ".join(fields))
+            return fields[expr.name]
         module, member = self.resolve_member_path(expr)
         found, _value = get_constant(module, member)
         if found:
@@ -602,6 +750,33 @@ class Checker:
             self.error("'%s' must be called with (...)" % native.qualified, expr)
         self.error("module '%s' has no member '%s'" % (module, member), expr,
                    hint="available: %s" % _module_members(module))
+
+    def member_target_type(self, node):
+        """The type of the object a member is read from, when it is a value.
+
+        Returns None for module paths (`math.pi`), which are resolved separately.
+        """
+        if isinstance(node, ast.Ident):
+            info = self.lookup(node.name)
+            if info is None:
+                return None
+            if info.type == ANY:
+                # an untyped List element: the runtime knows, the checker does not
+                return ANY
+            if info.type not in self.structs:
+                self.error("'%s' is %s, not a struct, so it has no fields"
+                           % (node.name, info.type), node,
+                           hint="only a struct has named fields; a Map uses "
+                                "%s[\"key\"]" % node.name)
+            return info.type
+        if isinstance(node, ast.Member):
+            # `ui.lib.widgets` is a module path: leave it to resolve_member_path,
+            # which has the right message for that case
+            segments, _tail = _flatten_member(node)
+            if segments and module_exists(".".join(segments)):
+                return None
+            return self.member_type(node)
+        return None
 
     def call_type(self, expr):
         callee = expr.callee
