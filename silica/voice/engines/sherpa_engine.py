@@ -180,6 +180,10 @@ class TTS(TTSEngine):
             raise EngineError("sherpa-onnx returned no audio for %r" % text[:40])
         return samples, int(audio.sample_rate)
 
+    def supports_cloning(self):
+        """ZipVoice models clone from a reference clip; VITS/Piper models do not."""
+        return bool(os.environ.get("SILICA_SHERPA_ZIPVOICE_MODEL"))
+
     def close(self):
         self._tts = None
         self._loaded_from = None
