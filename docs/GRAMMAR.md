@@ -1,6 +1,6 @@
-# Silica Grammar — v0.9.0
+# Silica Grammar — v0.9.1
 
-EBNF for the grammar the v0.9.0 parser accepts. `NEWLINE` is a significant token
+EBNF for the grammar the v0.9.1 parser accepts. `NEWLINE` is a significant token
 that terminates statements and is ignored inside `(` … `)` and `[` … `]`.
 
 ```ebnf
@@ -27,8 +27,8 @@ while-stmt     = "tant" expr block ;
 for-stmt       = "per" IDENT "in" expr block ;
 ret-stmt       = "ret" [ expr ] NEWLINE ;
 halt-stmt      = "halt" [ "(" expr ")" ] NEWLINE ;
-break-stmt     = "break" NEWLINE ;                             (* 0.9.0 *)
-continue-stmt  = "continue" NEWLINE ;                          (* 0.9.0 *)
+break-stmt     = "break" NEWLINE ;                             (* 0.9.1 *)
+continue-stmt  = "continue" NEWLINE ;                          (* 0.9.1 *)
                  (* both are legal only inside a loop body, which the
                     checker enforces; the grammar cannot express it *)
 expr-stmt      = expr NEWLINE ;
