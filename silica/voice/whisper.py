@@ -40,23 +40,43 @@ def _faster_whisper():
 _MODELS = {}
 
 
-def load_model(size=None, model_dir=None):
-    """Load and cache a Whisper model. `size` is tiny/base/small/medium/large-v3."""
+def load_model(size=None, model_dir=None, allow_download=None):
+    """Load and cache a Whisper model. `size` is tiny/base/small/medium/large-v3.
+
+    **Inference never downloads.** faster-whisper asks the Hugging Face Hub
+    whether a newer revision exists even when the model is already cached, which
+    opens sockets during what is supposed to be an offline transcription. So the
+    model is loaded with `local_files_only=True` unless a download is explicitly
+    allowed.
+
+    A download happens only when `allow_download` is true, or when
+    `SILICA_WHISPER_ALLOW_DOWNLOAD=1` is set — a deliberate act, never a side
+    effect of calling `transcribe`.
+    """
     size = size or os.environ.get("SILICA_WHISPER_MODEL", DEFAULT_MODEL)
-    key = (size, model_dir)
+    if allow_download is None:
+        allow_download = os.environ.get("SILICA_WHISPER_ALLOW_DOWNLOAD") == "1"
+    key = (size, model_dir, allow_download)
     if key in _MODELS:
         return _MODELS[key]
     faster_whisper = _faster_whisper()
-    kwargs = {"device": "cpu", "compute_type": "int8", "cpu_threads": 1}
+    kwargs = {"device": "cpu", "compute_type": "int8", "cpu_threads": 1,
+              "local_files_only": not allow_download}
     if model_dir:
         kwargs["download_root"] = model_dir
     try:
         model = faster_whisper.WhisperModel(size, **kwargs)
     except Exception as exc:
+        if allow_download:
+            raise STTError("cannot load the Whisper model %r: %s" % (size, exc))
         raise STTError(
-            "cannot load the Whisper model %r: %s\n"
-            "The first run downloads it (~75 MB for 'tiny', ~150 MB for 'base'); "
-            "if there is no network, install a model directory first." % (size, exc))
+            "the Whisper model %r is not available locally, and transcription "
+            "does not download models.\n"
+            "Fetch it once, deliberately:\n"
+            "    SILICA_WHISPER_ALLOW_DOWNLOAD=1 python -c "
+            "\"from silica.voice import whisper; whisper.load_model('%s')\"\n"
+            "(~75 MB for 'tiny', ~150 MB for 'base')\n"
+            "Underlying error: %s" % (size, size, exc))
     _MODELS[key] = model
     return model
 
