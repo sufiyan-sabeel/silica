@@ -49,8 +49,9 @@ jobs:
 
       - name: Download the published assets
         run: |
-          mkdir -p assets
-          cd assets
+          # not `assets/`: that is a repository directory holding the logo
+          mkdir -p release-assets
+          cd release-assets
           gh release download "${{ steps.tag.outputs.tag }}" \
             --repo "$GITHUB_REPOSITORY" --clobber
           ls -l
@@ -59,14 +60,14 @@ jobs:
 
       - name: Verify the published checksums
         run: |
-          cd assets
+          cd release-assets
           sha256sum --check SHA256SUMS.txt
 
       - name: Install the wheel into a clean environment
         run: |
           python -m venv /tmp/verify
           /tmp/verify/bin/pip install --quiet --no-index --no-deps \
-            "assets/silica_lang-${{ steps.tag.outputs.version }}-py3-none-any.whl"
+            "release-assets/silica_lang-${{ steps.tag.outputs.version }}-py3-none-any.whl"
           /tmp/verify/bin/silica --version
 
       - name: The installed CLI must report the released version
@@ -98,14 +99,15 @@ jobs:
       - name: The installer must verify the published checksums
         run: |
           HOME=/tmp/fresh SILICA_VERSION="${{ steps.tag.outputs.version }}" \
-            SILICA_BASE_URL="file://$PWD/assets" sh ./install.sh
+            SILICA_BASE_URL="file://$PWD/release-assets" sh ./install.sh
           /tmp/fresh/.local/bin/silica --version
           /tmp/fresh/.local/bin/silica --version | grep -q "${{ steps.tag.outputs.version }}"
 
       - name: The installer must refuse a wheel whose checksum does not match
         run: |
           mkdir -p /tmp/tampered
-          cp assets/* /tmp/tampered/
+          cp release-assets/SHA256SUMS.txt /tmp/tampered/
+          cp "release-assets/silica_lang-${{ steps.tag.outputs.version }}-py3-none-any.whl" /tmp/tampered/
           printf 'tampered' >> "/tmp/tampered/silica_lang-${{ steps.tag.outputs.version }}-py3-none-any.whl"
           if HOME=/tmp/bad SILICA_VERSION="${{ steps.tag.outputs.version }}" \
                SILICA_BASE_URL="file:///tmp/tampered" sh ./install.sh > /tmp/bad.log 2>&1; then
