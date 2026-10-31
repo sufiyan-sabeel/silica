@@ -29,7 +29,7 @@ from .engine import (check_source, compile_ast, compile_file, compile_source,
 from .errors import CapabilityError, ParseError, SilicaError
 from .natives import format_value, get_native
 
-VERSION = "0.9.0"
+VERSION = "0.9.1"
 
 USAGE = """silica %s — the Silica language toolchain
 
