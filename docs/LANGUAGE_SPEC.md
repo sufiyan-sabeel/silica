@@ -1,6 +1,6 @@
-# Silica Language Specification — v0.9.2
+# Silica Language Specification — v0.9.3
 
-This document is normative for the v0.9.2 reference implementation. Anything
+This document is normative for the v0.9.3 reference implementation. Anything
 described here is implemented and covered by tests in `tests/`; anything else is
 listed under [Not implemented yet](#not-implemented-yet).
 
@@ -400,7 +400,18 @@ field and lists the real ones.
 ### Field access and mutation
 
 `p.x` reads a field; `p.x = value` writes one. Both are checked at compile time
-against the declared field type.
+against the declared field type, and both work through a path of any depth:
+
+```silica
+struct Box {
+    corner: Point
+    side: Int
+}
+
+let b = Box(corner: Point(x: 2, y: 3), side: 4)
+b.corner.x = 10          # writes the nested Point's x
+sprint(b.corner.x)       # 10
+```
 
 A struct bound with `let` is mutable. One bound with `const` is frozen: the
 checker rejects a direct assignment, and the runtime rejects one made through an
