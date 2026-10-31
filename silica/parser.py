@@ -179,18 +179,23 @@ class Parser:
                            hint="'sino' must directly follow an 'si' block")
         if tok.kind == "op" and tok.value == "{":
             self.error("unexpected block")
-        # member assignment: `name.field = expr`
-        if (tok.kind == "ident" and self.peek().kind == "op" and self.peek().value == "."
-                and self.peek(2).kind == "ident"
-                and self.peek(3).kind == "op" and self.peek(3).value == "="):
-            self.advance()                       # name
-            self.advance()                       # .
-            field = self.advance()               # field
-            self.advance()                       # =
-            value = self.parse_expression()
-            self.end_statement()
-            return ast.MemberAssignStmt(tok.value, field.value, value,
-                                        line=tok.line, col=tok.col)
+        # member assignment: `name.field = expr`, at any depth
+        if tok.kind == "ident":
+            path, offset = [tok.value], 1
+            while (self.peek(offset).kind == "op"
+                   and self.peek(offset).value == "."
+                   and self.peek(offset + 1).kind == "ident"):
+                path.append(self.peek(offset + 1).value)
+                offset += 2
+            if (len(path) > 1 and self.peek(offset).kind == "op"
+                    and self.peek(offset).value == "="):
+                for _ in range(offset):
+                    self.advance()               # name . field ...
+                self.advance()                   # =
+                value = self.parse_expression()
+                self.end_statement()
+                return ast.MemberAssignStmt(tok.value, path[1:], value,
+                                            line=tok.line, col=tok.col)
         # assignment: `name = expr` (a bare identifier followed by '=')
         if tok.kind == "ident" and self.peek().kind == "op" and self.peek().value == "=":
             self.advance()
