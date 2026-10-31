@@ -67,9 +67,38 @@ class Binary(Node):
 
 
 @dataclass
+class StructDecl(Node):
+    """`struct Point { x: Int ... }` — a named record with typed fields."""
+    name: str
+    fields: list
+    line: int = 0
+    col: int = 0
+
+
+@dataclass
+class StructLit(Node):
+    """`Point(x: 1, y: 2)` — construction. Args are (field name or None, value)."""
+    name: str
+    args: list
+    line: int = 0
+    col: int = 0
+
+
+@dataclass
+class MemberAssignStmt(Node):
+    """`p.x = 5` — assigning to a struct field."""
+    target: str
+    field: str
+    value: Node
+    line: int = 0
+    col: int = 0
+
+
+@dataclass
 class Call(Node):
     callee: Node          # Ident or Member
     args: List[Node]
+    named: list = field(default_factory=list)   # [(name, expr, line, col)]
     line: int = 0
     col: int = 0
 
