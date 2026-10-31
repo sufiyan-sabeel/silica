@@ -173,6 +173,7 @@ class FuncDecl(Node):
     body: Block
     is_static: bool = False
     is_private: bool = False
+    type_params: List[tuple] = field(default_factory=list)   # (name, constraint)
     line: int = 0
     col: int = 0
 
@@ -191,6 +192,7 @@ class FieldDecl(Node):
 class StructDecl(Node):
     name: str
     fields: List[Node]
+    type_params: List[tuple] = field(default_factory=list)
     line: int = 0
     col: int = 0
 
@@ -200,6 +202,7 @@ class ClassDecl(Node):
     name: str
     fields: List[Node]
     methods: List[Node]   # FuncDecl nodes, in declaration order
+    type_params: List[tuple] = field(default_factory=list)
     line: int = 0
     col: int = 0
 

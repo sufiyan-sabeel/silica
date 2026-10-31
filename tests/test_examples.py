@@ -44,6 +44,7 @@ EXPECTED = {
         '{"width":80,"ratio":1.5,"wrap":true,"tags":["a","b"]}\n'
         "[1, 2, 3]\n"),
     "classes.sc": "1\n2\n2\n1\nwrite the docs\nnein\nTicket { id: 1, title: write the docs, open: nein }\noui\nnein\n",
+    "generics.sc": "2\nbeta\n[7, 7, 7]\n7\npear\n9.0\nage\n42\n2\n2\n",
 }
 
 # examples that need capability flags to run; the grant is the narrowest that

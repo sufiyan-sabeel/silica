@@ -9,6 +9,9 @@ program        = { NEWLINE | use-decl | func-decl | global-decl
 
 struct-decl    = "struct" IDENT "{" { NEWLINE | field-decl } "}" ;
 class-decl     = "class" IDENT "{" { NEWLINE | field-decl | method-decl } "}" ;
+type-params    = "<" type-param { "," type-param } ">" ;
+type-param     = IDENT [ ":" constraint ] ;
+type           = IDENT [ "<" type { "," type } ">" ] ;
 field-decl     = [ "private" ] IDENT ":" type NEWLINE ;
 method-decl    = [ "private" ] [ "static" ] func-decl ;
 

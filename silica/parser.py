@@ -236,6 +236,7 @@ class Parser:
     def parse_function(self):
         tok = self.advance()  # sfn
         name_tok = self.expect_ident("function name")
+        type_params = self.parse_type_params()
         self.expect_op("(", "function parameters are required, use '()' for none")
         params = []
         if not self.at_op(")"):
@@ -258,11 +259,12 @@ class Parser:
         self.skip_newlines()
         body = self.parse_block()
         return ast.FuncDecl(name_tok.value, params, ret_type, body,
-                            line=tok.line, col=tok.col)
+                            type_params=type_params, line=tok.line, col=tok.col)
 
     def parse_struct(self):
         tok = self.advance()                     # struct
         name = self.expect_ident("struct name")
+        type_params = self.parse_type_params()
         self.expect_op("{", "a struct body needs braces")
         fields = []
         self.skip_newlines()
@@ -280,11 +282,13 @@ class Parser:
             fields.append(self.parse_field())
             self.skip_newlines()
         self.advance()                           # }
-        return ast.StructDecl(name.value, fields, line=tok.line, col=tok.col)
+        return ast.StructDecl(name.value, fields, type_params=type_params,
+                              line=tok.line, col=tok.col)
 
     def parse_class(self):
         tok = self.advance()                     # class
         name = self.expect_ident("class name")
+        type_params = self.parse_type_params()
         self.expect_op("{", "a class body needs braces")
         fields, methods = [], []
         self.skip_newlines()
@@ -302,7 +306,8 @@ class Parser:
                 fields.append(self.parse_field(private))
             self.skip_newlines()
         self.advance()                           # }
-        return ast.ClassDecl(name.value, fields, methods, line=tok.line, col=tok.col)
+        return ast.ClassDecl(name.value, fields, methods, type_params=type_params,
+                             line=tok.line, col=tok.col)
 
     def parse_field(self, is_private=False):
         """`name: Type` — a field declaration, not a binding."""
@@ -428,6 +433,26 @@ class Parser:
         self.advance()  # }
         return ast.Block(stmts, line=start.line, col=start.col)
 
+    def parse_type_params(self):
+        """`<T>`, `<T: Orderable>`, `<K, V>` — type parameters of a declaration."""
+        params = []
+        if not self.at_op("<"):
+            return params
+        self.advance()
+        while True:
+            tok = self.expect_ident("type parameter")
+            constraint = None
+            if self.at_op(":"):
+                self.advance()
+                constraint = self.expect_ident("constraint name").value
+            params.append((tok.value, constraint, tok.line, tok.col))
+            if self.at_op(","):
+                self.advance()
+                continue
+            break
+        self.expect_op(">", "unbalanced type parameter list")
+        return params
+
     def parse_type(self):
         """Any identifier is accepted here; the checker resolves it.
 
@@ -439,7 +464,16 @@ class Parser:
         if tok.kind != "ident":
             self.error("expected a type name but found %s" % tok.describe())
         self.advance()
-        return tok.value
+        name = tok.value
+        if not self.at_op("<"):
+            return name
+        self.advance()
+        arguments = [self.parse_type()]
+        while self.at_op(","):
+            self.advance()
+            arguments.append(self.parse_type())
+        self.expect_op(">", "unbalanced type arguments")
+        return "%s<%s>" % (name, ", ".join(arguments))
 
     # -- expressions ---------------------------------------------------------
     def parse_expression(self):

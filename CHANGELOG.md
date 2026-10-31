@@ -5,6 +5,62 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## [Unreleased] — Phase 3: generics
+
+No version bump: `pyproject.toml` stays at 0.9.1. Nothing is tagged or released.
+
+### Added — type parameters that are actually checked
+- **Generic functions**: `sfn first<T>(items: List<T>) -> T`, with type arguments
+  inferred from the call's arguments.
+- **Generic structs and classes**: `struct Box<T>`, `class Stack<T>`, including
+  `Pair<K, V>`. Construction infers from the arguments and, when they cannot
+  determine a parameter, from the binding's annotation
+  (`let s: Stack<String> = Stack([])`).
+- **Generic built-in containers**: `List<T>` and `Map<K, V>`. Element and key
+  types flow through indexing, iteration and concatenation, so `xs[0]` on a
+  `List<Int>` is an `Int` — the `Any` caveat from Phase 2 is gone for annotated
+  containers.
+- **Constraints**: `Numeric`, `Orderable`, `Equatable`. An unconstrained type
+  parameter cannot be used with `+ - * / %` or `< <= > >=`, and the constraint is
+  checked both in the body and at every call site.
+- **Method signatures follow the receiver**: calling `peek()` on a `Stack<String>`
+  yields `String`, and passing the wrong argument to `add_item` is an error.
+- **Erasure, stated plainly**: type arguments are checked statically and erased at
+  run time, so `type_of(Box(1))` is `Box`. Monomorphisation is listed as future
+  work rather than implied.
+
+### Changed
+- **`silica/types.py`** (new): type expressions — parsing `Map<String, List<Int>>`,
+  base/args, substitution, unification for inference, and the constraint kinds.
+  The checker keeps its string representation, so the change stayed local to the
+  places that need structure.
+- **`parser.py` / `ast.py`**: `<T>`, `<T: Constraint>` on `sfn`/`struct`/`class`,
+  and `<…>` inside type annotations. Type arguments are **not** accepted in
+  expression position (`first<Int>(xs)`), because `Type<Arg>(…)` is ambiguous with
+  the `<` operator; inference covers the practical cases.
+- **`checker.py`**: declaration type parameters, arity checking for container and
+  user types, invariance of type arguments, inference at call sites and at
+  construction, substitution through method signatures, constraint enforcement,
+  and eleven new diagnostics. A generic receiver resolves its base type, so
+  `Box<Int>` uses the `Box` declaration.
+- **`fmt.py`**: type parameters round-trip on all three declaration forms.
+- **Literal inference**: a homogeneous `[1, 2]` is `List<Int>` and
+  `{"a": 1}` is `Map<String, Int>`; a heterogeneous literal stays bare.
+
+### Documentation and examples
+- **`docs/GENERICS.md`**: syntax, container typing, inference (including the two
+  cases that fail on purpose), the constraint table, what erasure means and costs,
+  every error, and what is deferred.
+- **`docs/LANGUAGE_SPEC.md`**, **`docs/GRAMMAR.md`**: the generic forms.
+- **`examples/generics.sc`**: a `Pair<K, V>`, a generic `Bag<T>`, a generic
+  `repeat<T>` and a constrained `largest<T: Orderable>`.
+
+### Tests
+- **`tests/test_generics.py`**: 46 tests — type expressions, parsing, the
+  checker's inference/constraint/invariance rules, runtime behaviour, erasure
+  (asserted, not assumed), bytecode round-trip and an end-to-end program.
+- The full suite stays green: 942 passed, 7 skipped, 1180 subtests.
+
 ## [Unreleased] — Phase 2: structs and classes
 
 No version bump: `pyproject.toml` stays at 0.9.1. Nothing is tagged or released.

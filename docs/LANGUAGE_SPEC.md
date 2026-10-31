@@ -67,6 +67,8 @@ These words are reserved and may not be used as identifiers.
 | Class | `class Name { … }` | An object type: fields plus methods, identity equality. |
 | Private | `private` | A field or method visible only inside its own type. |
 | Static | `static sfn` | A method with no `self`, called as `Type.name(...)`. |
+| Type parameters | `sfn f<T>(…)`, `struct Box<T>`, `class Bag<T>` | Generic declarations; arguments are inferred and erased at run time (docs/GENERICS.md). |
+| Constraints | `<T: Numeric>`, `<T: Orderable>`, `<T: Equatable>` | What operations a type parameter permits. |
 | Binding | `let x = e` / `const x = e` | Mutable / immutable binding. |
 
 ### 2.1 Why both `sprint` and `dit` exist

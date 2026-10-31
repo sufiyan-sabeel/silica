@@ -56,14 +56,14 @@ class Printer:
                 target = self.expr(target, 0)
             self.write("%s = %s" % (target, self.expr(node.value, 0)))
         elif isinstance(node, ast.StructDecl):
-            self.write("struct %s {" % node.name)
+            self.write("struct %s%s {" % (node.name, self.type_params(node)))
             self.depth += 1
             for field in node.fields:
                 self.field(field)
             self.depth -= 1
             self.write("}")
         elif isinstance(node, ast.ClassDecl):
-            self.write("class %s {" % node.name)
+            self.write("class %s%s {" % (node.name, self.type_params(node)))
             self.depth += 1
             for field in node.fields:
                 self.field(field)
@@ -112,7 +112,8 @@ class Printer:
                 (name if ptype is None else "%s: %s" % (name, ptype))
                 for name, ptype, _line, _col in node.params)
             ret = " -> %s" % node.ret_type if node.ret_type else ""
-            self.write("sfn %s(%s)%s {" % (node.name, params, ret))
+            self.write("sfn %s%s(%s)%s {" % (node.name, self.type_params(node),
+                                             params, ret))
             self.depth += 1
             for inner in node.body.stmts:
                 self.stmt(inner)
@@ -139,6 +140,14 @@ class Printer:
         else:  # pragma: no cover
             raise SilicaError("cannot format statement %r" % (node,))
 
+    def type_params(self, node):
+        params = getattr(node, "type_params", None)
+        if not params:
+            return ""
+        rendered = [name if constraint is None else "%s: %s" % (name, constraint)
+                    for name, constraint, *_rest in params]
+        return "<%s>" % ", ".join(rendered)
+
     def field(self, node):
         prefix = "private " if node.is_private else ""
         self.write("%s%s: %s" % (prefix, node.name, node.type_ann))
@@ -150,7 +159,8 @@ class Printer:
             (name if ptype is None else "%s: %s" % (name, ptype))
             for name, ptype, _line, _col in node.params)
         ret = " -> %s" % node.ret_type if node.ret_type else ""
-        self.write("%ssfn %s(%s)%s {" % (prefix, node.name, params, ret))
+        self.write("%ssfn %s%s(%s)%s {" % (prefix, node.name,
+                                           self.type_params(node), params, ret))
         self.depth += 1
         for inner in node.body.stmts:
             self.stmt(inner)
