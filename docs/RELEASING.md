@@ -119,12 +119,12 @@ worth knowing before the next release:
 So the source archive of `v0.8.0` still contains the previous, longer README.
 That tag is deliberately left where it is — moving it would silently change what
 everyone who already downloaded 0.8.0 has. The corrected README ships in the next
-release, **v0.9.1**, which is cut from a commit that contains it. Check before
+release, **v0.9.2**, which is cut from a commit that contains it. Check before
 publishing:
 
 ```bash
 # the tag's README must be the current one, not the pre-0.8.0 text
-git show v0.9.1:README.md | head -5
+git show v0.9.2:README.md | head -5
 ```
 
 If a release archive turns out to carry a stale README, cut a new patch version.
