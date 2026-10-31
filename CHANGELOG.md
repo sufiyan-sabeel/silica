@@ -5,6 +5,81 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## [0.9.1] — 2026-10-31
+
+A perceptual colour system, plus the bug fixes that had been sitting unreleased.
+
+### Added — `use colors`
+
+29 functions, no dependencies, in the standard library.
+
+- **Perceptual colour spaces**: sRGB, linear sRGB, HSL, **OKLab**, **OKLCH** and
+  Display P3, with correct transfer functions and published matrices.
+- **Gamut mapping instead of clipping.** `colors.oklch(0.65, 0.18, 190)` asks for
+  a teal sRGB cannot show; it comes back at chroma 0.112 with the same lightness
+  and hue, rather than being silently clipped into a different colour.
+- **Palettes**: `colors.palette(base)` generates the conventional `50`–`950`
+  scale from one colour, with per-step perceptual lightness targets and chroma
+  scaled down at the extremes. Deterministic.
+- **Themes**: `colors.theme(base)` yields semantic tokens, with `on_accent`
+  chosen by contrast rather than by taking the lightest step.
+- **Accessibility**: WCAG relative luminance, contrast ratio, AA/AAA verdicts,
+  `best_foreground`, and `colors.audit(theme)` which checks the pairs that matter
+  and reports a verdict per pair.
+- **CSS output**: `colors.css_theme` and `colors.css_scale` emit custom
+  properties.
+- **Perceptual mixing**: red and blue average to `#8c53a2`, not the muddy
+  `#7f007f` sRGB produces.
+
+Verified against published OKLab reference values, with an exact 8-bit round trip
+for a spread of colours, and black-on-white contrast of exactly 21.0.
+
+### Fixed — bugs carried in 0.9.0
+
+- **`voice install` wrote `<name>.onnx.onnx`**, so `is_installed()` never found
+  what had just been downloaded and no installed voice was usable through the
+  catalogue. Present since 0.4.0.
+- **faster-whisper opened sockets during transcription** — it asks the Hugging
+  Face Hub for a newer revision on every load, even with the model cached. Models
+  now load with `local_files_only=True`; fetching one requires a deliberate
+  `SILICA_WHISPER_ALLOW_DOWNLOAD=1`.
+- **The packaging guard only walked one directory level**, so a nested subpackage
+  (`silica.voice.engines`) shipped missing from the wheel. It now walks the whole
+  tree.
+- **A TUI runtime error left the terminal in curses mode** — no alternate-screen
+  exit, no cursor restore. Every open screen is now restored on exit, including
+  the uncaught-exception path.
+- **The calculator accepted `abc` as a number** and then aborted mid-session,
+  leaving the terminal unrestored. Validation now checks each character.
+- **`silica --help` claimed "Not implemented in 0.8.0"**; corrected.
+
+### Colour system internals worth knowing
+
+- `oklab_to_srgb` deliberately does **not** clamp. Silent clipping is how a
+  conversion loses colour; callers either test `in_srgb_gamut` or map.
+- The gamut tolerance is 0.002 of a channel — about half an 8-bit step — because
+  a round trip through two 3×3 matrix chains lands pure blue at 1.0002. Genuine
+  violations are far larger and are not hidden by it.
+- Chroma below 0.001 is treated as achromatic: that is matrix round-off, not a
+  colour.
+
+### Not done, and not claimed
+
+- **No HDR.** No PQ/HLG transfer functions, no luminance metadata, no backend
+  that could use them. Display P3 conversion is not HDR.
+- **APCA is not implemented.** It has its own licence and versioned constants,
+  which have not been verified here. An approximation would not be labelled APCA.
+- **Colour is not wired into the TUI or GUI yet.** `colors` produces values; the
+  TUI keeps its own hex tokens. Connecting them is future work.
+- **Nothing was tested on Android or Termux.**
+
+### Tests
+
+890 tests, 7 skipped (display- and engine-dependent). 43 new colour tests covering
+reference vectors, round trips, gamut detection and mapping, alpha compositing,
+WCAG thresholds including the borderline `#777777` case, palette determinism and
+monotonic lightness, CSS generation, and the Silica-facing namespace.
+
 ## [Unreleased] — Phase 6
 
 ### Added — voice profiles and consent
