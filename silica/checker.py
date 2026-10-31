@@ -548,27 +548,33 @@ class Checker:
         if info is None:
             self.error("unknown name '%s'" % stmt.target, stmt,
                        hint="declare it first with 'let %s = ...'" % stmt.target)
-        if info.type == ANY:
-            return          # untyped list element: the VM checks at runtime
-        fields = self.struct_fields(info.type)
-        if fields is None:
-            self.error("'%s' is %s, not a struct, so it has no field '%s'"
-                       % (stmt.target, info.type, stmt.field), stmt,
-                       hint="use %s[\"%s\"] = ... for a Map" % (stmt.target, stmt.field))
-        types = {f[0]: f[1] for f in fields}
-        if stmt.field not in types:
-            self.error("struct '%s' has no field '%s'" % (info.type, stmt.field), stmt,
-                       hint="fields are: %s" % ", ".join(types))
         if info.is_const:
             self.error("cannot modify field '%s' of '%s': it is a constant"
-                       % (stmt.field, stmt.target), stmt,
+                       % (stmt.path[-1], stmt.target), stmt,
                        hint="declare it with 'let' to allow changes")
-        actual = self.expr_type(stmt.value)
-        if not self.compatible(actual, types[stmt.field]):
-            self.error("field '%s' of struct '%s' expects %s, found %s"
-                       % (stmt.field, info.type, types[stmt.field], actual),
-                       stmt.value,
-                       hint=self.conversion_hint(actual, types[stmt.field]))
+        current = info.type
+        # every step but the last must name a struct-typed field
+        for depth, field in enumerate(stmt.path):
+            if current == ANY:
+                return      # untyped list element: the VM checks at runtime
+            fields = self.struct_fields(current)
+            if fields is None:
+                where = stmt.target + "." + ".".join(stmt.path[:depth])
+                self.error("'%s' is %s, not a struct, so it has no field '%s'"
+                           % (where, current, field), stmt,
+                           hint="only a struct has assignable fields")
+            types = {f[0]: f[1] for f in fields}
+            if field not in types:
+                self.error("struct '%s' has no field '%s'" % (current, field), stmt,
+                           hint="fields are: %s" % ", ".join(types))
+            if depth == len(stmt.path) - 1:
+                actual = self.expr_type(stmt.value)
+                if not self.compatible(actual, types[field]):
+                    self.error("field '%s' of struct '%s' expects %s, found %s"
+                               % (field, current, types[field], actual),
+                               stmt.value,
+                               hint=self.conversion_hint(actual, types[field]))
+            current = types[field]
 
     def check_return(self, stmt):
         if self.current_func is None:
