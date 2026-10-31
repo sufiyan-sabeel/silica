@@ -8,7 +8,7 @@ A small, fast-moving programming language with its own syntax, a checked compile
 a versioned bytecode format, a capability-based security model, a standard library
 that includes speech and UI, and a **Script Mode IDE** you run in your browser.
 
-**Latest release: [v0.9.0](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.9.0)** ·
+**Latest release: [v0.9.1](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.9.1)** ·
 MIT licensed · 671 tests, green on Python 3.9, 3.11 and 3.12
 
 ```silica
@@ -62,13 +62,39 @@ no language server, no debugger, no concurrency, no `net`/`http`/`crypto`.
 
 Silica is also **not fast**: on the four benchmarks in `benchmarks/bench.py` it
 ran **38–101× slower than CPython** when measured on 2026-10-28 (Linux x86_64,
-CPython 3.12.13, Silica 0.9.0, best of 3 runs), because the VM is a Python loop.
+CPython 3.12.13, Silica 0.9.1, best of 3 runs), because the VM is a Python loop.
 The ratio moves with the machine and with CPython's own version, so re-run the
 script before quoting a figure; `docs/PERFORMANCE.md` and `docs/AUDIT.md` record
 the runs and the plan. One measured improvement has landed — constant folding cut
 a hot loop by 39% — and `benchmarks/optimizer.py` reproduces it.
 
 ---
+
+## Colour
+
+A perceptual colour system in the standard library — OKLab and OKLCH, gamut
+mapping instead of clipping, generated palettes, semantic themes and WCAG checks.
+No dependencies.
+
+```silica
+use colors
+
+sfn main() {
+    let brand = colors.oklch(0.65, 0.18, 190)
+    let theme = colors.theme(brand)
+
+    sprint(colors.hex(theme["accent"]))
+    sprint(str(colors.audit(theme)["passes"]))   # oui
+}
+```
+
+`colors.oklch(0.65, 0.18, 190)` asks for a teal sRGB cannot display, so it comes
+back at chroma 0.112 — same lightness, same hue, the closest colour that fits,
+rather than a silently clipped one. Mixing red and blue gives `#8c53a2`, not the
+muddy `#7f007f` sRGB produces.
+
+`docs/COLOR.md` has the reference values, the gamut algorithm, and what is
+deliberately absent (HDR, APCA).
 
 ## Script Mode IDE
 
@@ -140,7 +166,7 @@ launcher in `~/.local/bin` (or `$PREFIX/bin` on Termux). No `sudo` unless you se
 `SILICA_SYSTEM=1`.
 
 ```bash
-SILICA_VERSION=0.9.0 sh install.sh   # upgrade or pin to a version
+SILICA_VERSION=0.9.1 sh install.sh   # upgrade or pin to a version
 SILICA_VERSION=0.8.0 sh install.sh   # roll back
 sh uninstall.sh                      # remove only what it installed
 ```
@@ -148,7 +174,7 @@ sh uninstall.sh                      # remove only what it installed
 ### The package
 
 Silica is a Python package: distribution name **`silica-lang`**, import name
-`silica`, version `0.9.0`, Python **3.9+**, and **no runtime dependencies** — the
+`silica`, version `0.9.1`, Python **3.9+**, and **no runtime dependencies** — the
 language, CLI, standard library, TUI and IDE are pure standard library.
 
 It is distributed as **versioned GitHub Release assets** (wheel, sdist,
@@ -158,8 +184,8 @@ containers. Nothing here is published to a package registry, and this README doe
 not claim otherwise.
 
 ```bash
-pip install dist/silica_lang-0.9.0-py3-none-any.whl   # a downloaded asset
-silica --version                                       # -> silica 0.9.0
+pip install dist/silica_lang-0.9.1-py3-none-any.whl   # a downloaded asset
+silica --version                                       # -> silica 0.9.1
 ```
 
 See [`docs/PACKAGING.md`](docs/PACKAGING.md) for the wheel contents, the release
@@ -332,7 +358,7 @@ dependencies. They are merged only with CI green; the review checklist is in
 
 ## Releases
 
-- [v0.9.0](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.9.0) — loop control: `break` and `continue`
+- [v0.9.1](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.9.1) — loop control: `break` and `continue`
 - [v0.8.0](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.8.0) — Script Mode IDE
 - [v0.7.0](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.7.0) — constant folding optimizer
 - [v0.6.0](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.6.0) — desktop GUI
