@@ -335,7 +335,7 @@ class VM:
                     self._set_field(target, field, value, fn, offset)
                 elif op == 0x29:  # FREEZE
                     if stack and isinstance(stack[-1], StructValue):
-                        stack[-1].frozen = True
+                        self._freeze(stack[-1])
                 elif op == 0x20:  # INDEX_GET
                     index = stack.pop()
                     target = stack.pop()
@@ -373,6 +373,18 @@ class VM:
                     self._raise(fn, offset, "unknown opcode 0x%02x" % op)
 
     # -- operators -----------------------------------------------------------
+    def _freeze(self, value):
+        """Freeze a struct and any struct it contains.
+
+        A const binding must not be modifiable through a nested field, so the
+        whole reachable tree is frozen rather than only the outermost value.
+        """
+        if not isinstance(value, StructValue) or value.frozen:
+            return
+        value.frozen = True
+        for inner in value.fields.values():
+            self._freeze(inner)
+
     def _get_field(self, target, field, fn, offset):
         if isinstance(target, StructValue):
             if field not in target.fields:
