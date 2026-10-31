@@ -47,6 +47,8 @@ def type_name(value):
         return "Map"
     if isinstance(value, Iterator):
         return "Iterator"
+    if isinstance(value, StructValue):
+        return value.type_name          # a struct or class reports its own name
     return "Any"
 
 

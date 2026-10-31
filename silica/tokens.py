@@ -32,6 +32,9 @@ KEYWORDS = {
     "let",      # mutable binding
     "const",    # immutable binding
     "struct",   # named record with typed fields
+    "class",    # object type: fields + methods, identity equality
+    "private",  # a field or method visible only inside its own type
+    "static",   # a method with no `self`, called as Type.name(...)
 }
 
 # Keywords that introduce a statement at the start of a line.

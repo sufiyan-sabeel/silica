@@ -59,12 +59,13 @@ class Parser:
         self.tokens = tokens
         self.filename = filename
         self.pos = 0
-        # Struct names, collected before parsing so that a type annotation may
-        # name a struct declared later in the file. A typo like `Integer` is
-        # still rejected at parse time, which is what the tests pin down.
+        # Type names, collected before parsing so that a type annotation may
+        # name a struct or class declared later in the file (including a method
+        # naming its own class). A typo like `Integer` is still rejected at parse
+        # time, which is what the tests pin down.
         self.struct_names = set()
         for index, token in enumerate(tokens[:-1]):
-            if token.kind == "kw" and token.value == "struct":
+            if token.kind == "kw" and token.value in ("struct", "class"):
                 following = tokens[index + 1]
                 if following.kind == "ident":
                     self.struct_names.add(following.value)
@@ -171,6 +172,8 @@ class Parser:
                 return self.parse_continue()
             if kw == "struct":
                 return self.parse_struct()
+            if kw == "class":
+                return self.parse_class()
             if kw == "fin":
                 self.advance()
                 return ast.FinStmt(line=tok.line, col=tok.col)
@@ -262,7 +265,8 @@ class Parser:
             seen.add(field_tok.value)
             self.expect_op(":", "a struct field needs a type, e.g. 'x: Int'")
             ftype = self.parse_type()
-            fields.append((field_tok.value, ftype, field_tok.line, field_tok.col))
+            fields.append((field_tok.value, ftype, field_tok.line, field_tok.col,
+                           False))
             self.end_statement()
         self.expect_op("}")
         if not fields:
@@ -298,6 +302,57 @@ class Parser:
         body = self.parse_block()
         return ast.FuncDecl(name_tok.value, params, ret_type, body,
                             line=tok.line, col=tok.col)
+
+    def parse_class(self):
+        """`class Name { fields... [private] [static] sfn methods... }`."""
+        tok = self.advance()                      # class
+        name_tok = self.expect_ident("class name")
+        self.struct_names.add(name_tok.value)
+        self.skip_newlines()
+        self.expect_op("{", "a class body is required")
+        fields, methods = [], []
+        seen = set()
+        self.skip_newlines()
+        while not self.at_op("}"):
+            if self.cur.kind == "eof":
+                self.error("unexpected end of file: missing '}'",
+                           hint="class %s is never closed" % name_tok.value)
+            is_private = False
+            if self.at_kw("private"):
+                is_private = True
+                self.advance()
+            if self.at_kw("sfn") or self.at_kw("static"):
+                methods.append(self.parse_method(is_private))
+                self.skip_newlines()
+                continue
+            field_tok = self.expect_ident("field name")
+            if field_tok.value in seen:
+                self.error("duplicate field '%s' in class '%s'"
+                           % (field_tok.value, name_tok.value),
+                           hint="each field name may appear once")
+            seen.add(field_tok.value)
+            self.expect_op(":", "a class field needs a type, e.g. 'value: Int'")
+            ftype = self.parse_type()
+            fields.append((field_tok.value, ftype, field_tok.line, field_tok.col,
+                           is_private))
+            self.end_statement()
+            self.skip_newlines()
+        self.expect_op("}")
+        return ast.ClassDecl(name_tok.value, fields, methods,
+                             line=tok.line, col=tok.col)
+
+    def parse_method(self, is_private=False):
+        tok = self.cur
+        is_static = False
+        if self.at_kw("static"):
+            is_static = True
+            self.advance()
+        decl = self.parse_function()
+        decl.is_static = is_static
+        decl.is_private = is_private
+        decl.line = tok.line
+        decl.col = tok.col
+        return decl
 
     def parse_if(self):
         tok = self.advance()  # si

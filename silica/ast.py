@@ -76,6 +76,16 @@ class StructDecl(Node):
 
 
 @dataclass
+class ClassDecl(Node):
+    """`class Counter { value: Int ... sfn add() { ... } }` — fields + methods."""
+    name: str
+    fields: list          # (name, type, line, col, is_private)
+    methods: list         # FuncDecl nodes, in declaration order
+    line: int = 0
+    col: int = 0
+
+
+@dataclass
 class StructLit(Node):
     """`Point(x: 1, y: 2)` — construction. Args are (field name or None, value)."""
     name: str

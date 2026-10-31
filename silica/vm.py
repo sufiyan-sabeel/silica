@@ -86,6 +86,7 @@ class VM:
     def __init__(self, chunk, stdin=None, stdout=None, stderr=None,
                  max_frames=4096, filename="<bytecode>", initial_globals=None,
                  capabilities=None):
+        self._methods = None
         import sys
         self.chunk = chunk
         self.filename = filename
@@ -260,6 +261,34 @@ class VM:
                     frame.ip = ip
                     frames.append(Frame(callee, target,
                                         list(args) + [None] * (callee.n_locals - argc)))
+                    break
+                elif op == 0x2A:  # CALL_METHOD
+                    name_idx, argc = operands
+                    method = constants[name_idx]
+                    args = stack[-argc:] if argc else []
+                    if argc:
+                        del stack[-argc:]
+                    receiver = stack.pop()
+                    if not isinstance(receiver, StructValue):
+                        self._raise(fn, offset,
+                                    "cannot call method '%s' on a %s"
+                                    % (method, type_name(receiver)))
+                    target = self._method_index(receiver.type_name, method)
+                    if target is None:
+                        self._raise(fn, offset,
+                                    "%s has no method '%s'"
+                                    % (receiver.type_name, method),
+                                    hint="declare it with 'sfn %s(...)' inside the class"
+                                         % method)
+                    callee = functions[target]
+                    if len(frames) >= self.max_frames:
+                        self._raise(fn, offset,
+                                    "call stack overflow at depth %d" % len(frames),
+                                    hint="Silica limits recursion depth; check the base case")
+                    local_values = [receiver] + list(args)
+                    local_values += [None] * (callee.n_locals - len(local_values))
+                    frame.ip = ip
+                    frames.append(Frame(callee, target, local_values))
                     break
                 elif op == 0x1A:  # CALL_NATIVE
                     mod_idx, fn_idx, argc = operands
@@ -473,6 +502,17 @@ class VM:
             remainder = abs(a) % abs(b)
             return i64(-remainder if a < 0 else remainder)
         return math.fmod(float(a), float(b))
+
+    def _method_index(self, type_name_, method):
+        """`Type.method` functions are the dispatch table — no extra metadata."""
+        if self._methods is None:
+            table = {}
+            for index, fn in enumerate(self.chunk.functions):
+                owner, dot, name = fn.name.partition(".")
+                if dot and name:
+                    table[(owner, name)] = index
+            self._methods = table
+        return self._methods.get((type_name_, method))
 
     def _equal(self, a, b):
         from .natives import _value_eq

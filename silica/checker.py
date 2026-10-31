@@ -40,6 +40,21 @@ class FuncInfo:
         self.node = node
 
 
+class MethodInfo:
+    """One method of a class: its signature and its modifiers."""
+
+    __slots__ = ("name", "params", "ret", "is_static", "is_private", "node")
+
+    def __init__(self, name, params, ret, is_static=False, is_private=False,
+                 node=None):
+        self.name = name
+        self.params = params            # [(name, type)]
+        self.ret = ret
+        self.is_static = is_static
+        self.is_private = is_private
+        self.node = node
+
+
 class TypeInfo:
     """A user-declared type. `kind` is "struct" or "class"."""
 
@@ -76,6 +91,7 @@ class Checker:
         self.modules = set()
         self.scopes = []
         self.current_func = None
+        self.current_type = None       # the class whose method body is being checked
         # builder-block context: how deep we are inside `call { ... }` blocks and
         # inside an event body (`ui.on(...) { ... }`), both reset per function
         self.builder_depth = 0
@@ -118,6 +134,8 @@ class Checker:
         for stmt in self.program.stmts:
             if isinstance(stmt, ast.StructDecl):
                 self.declare_struct(stmt)
+            elif isinstance(stmt, ast.ClassDecl):
+                self.declare_class(stmt)
         for stmt in self.program.stmts:
             if isinstance(stmt, ast.FuncDecl):
                 self.declare_function(stmt)
@@ -128,7 +146,8 @@ class Checker:
         for stmt in self.program.stmts:
             if isinstance(stmt, ast.LetStmt):
                 self.check_let(stmt, top_level=True)
-            elif isinstance(stmt, (ast.UseStmt, ast.FuncDecl, ast.StructDecl)):
+            elif isinstance(stmt, (ast.UseStmt, ast.FuncDecl, ast.StructDecl,
+                                   ast.ClassDecl)):
                 continue
             elif isinstance(stmt, ast.FinStmt):
                 self.error("'fin' is only allowed at the end of a block", stmt)
@@ -140,6 +159,9 @@ class Checker:
         for stmt in self.program.stmts:
             if isinstance(stmt, ast.FuncDecl):
                 self.check_function(stmt)
+            elif isinstance(stmt, ast.ClassDecl):
+                for method in stmt.methods:
+                    self.check_method(method, self.types[stmt.name])
 
         if self.require_main:
             if "main" not in self.functions:
@@ -163,7 +185,7 @@ class Checker:
                        hint="pick another name for the struct")
         fields = []
         seen = set()
-        for name, type_name, line, col in decl.fields:
+        for name, type_name, line, col, _private in decl.fields:
             if name in seen:
                 self.error("duplicate field '%s' in struct '%s'" % (name, decl.name),
                            decl, hint="each field name may appear once")
@@ -176,8 +198,81 @@ class Checker:
                 self.error("unknown type '%s' for field '%s'" % (type_name, name), decl,
                            hint="known types: %s"
                                 % ", ".join(sorted(set(BUILTIN_TYPES) | set(self.types))))
-            fields.append((name, type_name, line, col))
+            fields.append((name, type_name, line, col, _private))
         self.types[decl.name] = TypeInfo(decl.name, "struct", fields)
+
+    def declare_class(self, decl):
+        """Register a class: fields (with visibility) and method signatures."""
+        if decl.name in self.types:
+            self.error("type '%s' is already declared" % decl.name, decl,
+                       hint="struct and class names share one namespace")
+        if decl.name in self.functions:
+            self.error("'%s' is already a function" % decl.name, decl,
+                       hint="a type and a function cannot share a name")
+        if decl.name in BUILTIN_TYPES:
+            self.error("'%s' is a built-in type name" % decl.name, decl,
+                       hint="pick another name for the class")
+        # register the name first, so a method may name its own class
+        info = TypeInfo(decl.name, "class", [])
+        self.types[decl.name] = info
+        fields = []
+        seen = set()
+        for name, type_name, line, col, is_private in decl.fields:
+            if name in seen:
+                self.error("duplicate field '%s' in class '%s'" % (name, decl.name),
+                           decl, hint="each field name may appear once")
+            seen.add(name)
+            self.check_type_name(type_name, decl,
+                                 what="type of field '%s'" % name)
+            fields.append((name, type_name, line, col, is_private))
+        info.fields = fields
+        for method in decl.methods:
+            if method.name in info.methods:
+                self.error("method '%s' is declared twice in class '%s'"
+                           % (method.name, decl.name), method)
+            if method.name in seen:
+                self.error("'%s' is both a field and a method in class '%s'"
+                           % (method.name, decl.name), method)
+            params = []
+            names = set()
+            for pname, ptype, pline, pcol in method.params:
+                if pname in names:
+                    self.error("duplicate parameter '%s' in %s.%s"
+                               % (pname, decl.name, method.name), method)
+                names.add(pname)
+                if ptype is not None:
+                    self.check_type_name(ptype, method,
+                                         what="type of parameter '%s'" % pname)
+                params.append((pname, ptype or ANY))
+            if method.ret_type is not None:
+                self.check_type_name(method.ret_type, method, what="return type")
+            info.methods[method.name] = MethodInfo(
+                method.name, params, method.ret_type or "Unit",
+                is_static=method.is_static, is_private=method.is_private,
+                node=method)
+
+    def check_method(self, decl, type_info):
+        """Check one method body: `self` is bound unless the method is static."""
+        info = type_info.methods[decl.name]
+        outer_func, outer_type = self.current_func, self.current_type
+        self.current_func = info
+        self.current_type = type_info
+        self.push_scope()
+        if not decl.is_static:
+            # `self` cannot be reassigned, but its fields must be mutable; the
+            # member-assignment check treats it as a value, not a constant.
+            self.declare(VarInfo("self", type_info.name, False,
+                                 decl.line, decl.col), decl)
+        for name, ptype, line, col in decl.params:
+            self.declare(VarInfo(name, ptype or ANY, True, line, col), decl)
+        self.check_block(decl.body, new_scope=False)
+        if info.ret != "Unit" and not self.always_returns(decl.body):
+            self.error(
+                "%s.%s can finish without returning a value of type %s"
+                % (type_info.name, decl.name, info.ret), decl,
+                hint="every path must end in 'ret' (or 'halt')")
+        self.pop_scope()
+        self.current_func, self.current_type = outer_func, outer_type
 
     def check_type_name(self, type_name, node, what="type"):
         """A declared type must be a built-in or a struct declared in this file."""
@@ -550,6 +645,9 @@ class Checker:
         self.declare(info, stmt)
 
     def check_assign(self, stmt):
+        if stmt.name == "self":
+            self.error("cannot reassign 'self'", stmt,
+                       hint="a method mutates its fields, not the receiver itself")
         info = self.lookup(stmt.name)
         if info is None:
             if stmt.name in self.functions:
@@ -807,8 +905,87 @@ class Checker:
             return self.member_type(node)
         return None
 
+    def is_module_path(self, node):
+        """True when `node` is a module name or a dotted path rooted at one."""
+        if isinstance(node, ast.Ident):
+            return module_exists(node.name) or node.name in PLANNED_MODULES
+        if isinstance(node, ast.Member):
+            return self.is_module_path(node.obj)
+        return False
+
+    def type_member(self, expr, want_call):
+        """Resolve `Type.method` or `instance.method`. Returns a MethodInfo.
+
+        Returns None when the object is not a class name or an instance of one,
+        so the caller can fall through to module resolution.
+        """
+        obj = expr.obj
+        if self.is_module_path(obj):
+            return None          # a module member: the module path has the message
+        if isinstance(obj, ast.Ident) and obj.name in self.types:
+            info = self.types[obj.name]
+            method = info.methods.get(expr.name)
+            if method is None:
+                self.error("class '%s' has no member '%s'" % (info.name, expr.name),
+                           expr, hint=("methods are: %s" % ", ".join(info.methods)
+                                       if info.methods else "it declares no methods"))
+            if not method.is_static:
+                self.error("%s.%s is an instance method" % (info.name, expr.name),
+                           expr, hint="call it on an instance: value.%s(...)"
+                                      % expr.name)
+            if method.is_private and self.current_type is not info:
+                self.error("'%s' is private to %s" % (expr.name, info.name), expr)
+            if not want_call:
+                self.error("'%s.%s' must be called with (...)"
+                           % (info.name, expr.name), expr)
+            return method
+
+        target = self.member_target_type(obj)
+        if target is None or target == ANY:
+            return None
+        info = self.types.get(target)
+        if info is None or info.kind != "class":
+            return None
+        method = info.methods.get(expr.name)
+        if expr.name in info.field_types():
+            self.error("'%s' is a field of %s, not a method" % (expr.name, info.name),
+                       expr)
+        if method is None:
+            self.error("class '%s' has no member '%s'" % (info.name, expr.name), expr,
+                       hint=("methods are: %s" % ", ".join(info.methods)
+                             if info.methods else "it declares no methods"))
+        if method.is_private and self.current_type is not info:
+            self.error("'%s' is private to %s" % (expr.name, info.name), expr)
+        if method.is_static:
+            self.error("%s.%s is a static method" % (info.name, expr.name), expr,
+                       hint="call it on the type: %s.%s(...)"
+                            % (info.name, expr.name))
+        if not want_call:
+            self.error("'%s.%s' must be called with (...)" % (info.name, expr.name),
+                       expr)
+        return method
+
+    def check_method_args(self, expr, label, method):
+        if len(expr.args) != len(method.params):
+            self.error("%s expects %d argument(s) but got %d"
+                       % (label, len(method.params), len(expr.args)), expr)
+        for index, arg in enumerate(expr.args):
+            actual = self.expr_type(arg)
+            expected = method.params[index][1]
+            if not self.compatible(actual, expected):
+                self.error("argument %d of %s must be %s, found %s"
+                           % (index + 1, label, expected, actual), arg)
+
     def call_type(self, expr):
         callee = expr.callee
+        if isinstance(callee, ast.Member):
+            method = self.type_member(callee, want_call=True)
+            if method is not None:
+                label = "%s.%s" % (callee.obj.name
+                                   if isinstance(callee.obj, ast.Ident)
+                                   else "value", callee.name)
+                self.check_method_args(expr, label, method)
+                return method.ret
         if isinstance(callee, ast.Ident):
             name = callee.name
             info = self.functions.get(name)

@@ -126,6 +126,7 @@ instruction boundaries.
 | `0x27` | `GET_FIELD` | u: field-name const | 1 -> 1 |
 | `0x28` | `SET_FIELD` | u: field-name const | 2 -> 0 |
 | `0x29` | `FREEZE` | - | 0 -> 0 (marks the top value immutable) |
+| `0x2A` | `CALL_METHOD` | method-name const, argc | argc + 1 -> 1 |
 
 `CALL_NATIVE` refers to its module and function by **string constants**, not by
 index into a runtime table, so a native is resolved by name at load time and an
