@@ -1,6 +1,6 @@
-# Silica Grammar — v0.9.1
+# Silica Grammar — v0.9.2
 
-EBNF for the grammar the v0.9.1 parser accepts. `NEWLINE` is a significant token
+EBNF for the grammar the v0.9.2 parser accepts. `NEWLINE` is a significant token
 that terminates statements and is ignored inside `(` … `)` and `[` … `]`.
 
 ```ebnf
@@ -27,8 +27,8 @@ while-stmt     = "tant" expr block ;
 for-stmt       = "per" IDENT "in" expr block ;
 ret-stmt       = "ret" [ expr ] NEWLINE ;
 halt-stmt      = "halt" [ "(" expr ")" ] NEWLINE ;
-break-stmt     = "break" NEWLINE ;                             (* 0.9.1 *)
-continue-stmt  = "continue" NEWLINE ;                          (* 0.9.1 *)
+break-stmt     = "break" NEWLINE ;                             (* 0.9.2 *)
+continue-stmt  = "continue" NEWLINE ;                          (* 0.9.2 *)
                  (* both are legal only inside a loop body, which the
                     checker enforces; the grammar cannot express it *)
 expr-stmt      = expr NEWLINE ;
@@ -80,3 +80,17 @@ entry          = ( STRING | IDENT ) ":" expr ;
   idiomatic terminator.
 * An expression cannot continue across a newline unless it is inside `(` or `[`;
   a long expression should be wrapped in parentheses.
+
+## Structs (0.9.2)
+
+```
+StructDecl  ::= "struct" IDENT "{" (IDENT ":" Type)* "}" 
+StructLit   ::= IDENT "(" ArgList? ")"
+ArgList     ::= Arg ("," Arg)*
+Arg         ::= IDENT ":" Expr | Expr
+MemberAssign ::= IDENT "." IDENT "=" Expr
+```
+
+A `struct` declaration produces no code; it registers a type. Construction emits
+`MAKE_STRUCT` with a field-order descriptor, field reads emit `GET_FIELD`, writes
+emit `SET_FIELD`, and `const` emits `FREEZE`.
