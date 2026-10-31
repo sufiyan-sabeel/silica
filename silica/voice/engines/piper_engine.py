@@ -54,6 +54,8 @@ class TTS(TTSEngine):
             raise EngineError(
                 "no voice is installed yet. Install one with:\n"
                 "    silica voice install %s" % catalogue.DEFAULT_VOICE)
+        # validate before loading: a model that changed on disk is not trusted
+        catalogue.check_model(name)
         _name, path = catalogue.resolve(name)
         model = piper.load_voice(path, name=name)
         return model.synthesize(text, length_scale=length_scale,
