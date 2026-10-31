@@ -101,9 +101,15 @@ class ParserTests(unittest.TestCase):
             parse_source("sfn main() {\n sprint(1) sprint(2)\n}\n")
 
     def test_unknown_type_name(self):
-        with self.assertRaises(ParseError) as ctx:
-            parse_source("sfn main() {\n let x: Integer = 1\n}\n")
+        # An unknown type is resolved by the checker (it may be declared later in
+        # the file), so the diagnostic is a type error with a suggestion.
+        from silica.checker import Checker
+        from silica.errors import SilicaTypeError
+        program = parse_source("sfn main() {\n let x: Integer = 1\n}\n")
+        with self.assertRaises(SilicaTypeError) as ctx:
+            Checker(program).check()
         self.assertIn("unknown type", ctx.exception.message)
+        self.assertIn("Int", ctx.exception.hint or "")
 
     def test_keyword_as_identifier_is_rejected(self):
         with self.assertRaises(ParseError) as ctx:

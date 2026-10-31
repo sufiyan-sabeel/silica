@@ -40,13 +40,14 @@ from .errors import VerifyError
 
 MAGIC = b"SILICABC"
 FORMAT_MAJOR = 1
-FORMAT_MINOR = 0
+FORMAT_MINOR = 1
 HEADER_SIZE = 17
 MAX_CODE_BYTES = 1 << 20
 MAX_CONSTANTS = 1 << 16
 MAX_FUNCTIONS = 1 << 12
 MAX_STACK = 4096
 MAX_LOCALS = 4096
+MAX_TYPES = 1024
 
 # --- opcodes -----------------------------------------------------------------
 OPS = {
@@ -88,6 +89,11 @@ OPS = {
     "ITER_NEXT": 0x23,
     "HALT_OK": 0x24,
     "HALT_POP": 0x25,
+    # Phase 2: structs and classes
+    "NEW": 0x26,
+    "GET_FIELD": 0x27,
+    "SET_FIELD": 0x28,
+    "CALL_METHOD": 0x29,
 }
 
 OP_NAMES = {code: name for name, code in OPS.items()}
@@ -106,6 +112,10 @@ OPERANDS = {
     "MAKE_LIST": ("u",),
     "MAKE_MAP": ("u",),
     "ITER_NEXT": ("j",),
+    "NEW": ("u", "u"),
+    "GET_FIELD": ("u",),
+    "SET_FIELD": ("u",),
+    "CALL_METHOD": ("u", "u"),
 }
 
 # (pops, pushes) for straight-line instructions
@@ -141,6 +151,8 @@ STACK_EFFECT = {
     "MAKE_LIST": (None, 1),      # pops n
     "MAKE_MAP": (None, 1),       # pops 2n
     "INDEX_GET": (2, 1),
+    "GET_FIELD": (1, 1),
+    "SET_FIELD": (2, 0),
     "LEN": (1, 1),
     "ITER_START": (1, 1),
     "HALT_OK": (0, 0),
@@ -204,16 +216,45 @@ class Function:
             self.name, self.arity, self.n_locals, len(self.code))
 
 
+class TypeInfo:
+    """A declared struct or class, as the verifier and VM see it."""
+
+    __slots__ = ("name", "is_struct", "fields", "methods")
+
+    def __init__(self, name, is_struct, fields=None, methods=None):
+        self.name = name
+        self.is_struct = bool(is_struct)
+        self.fields = list(fields or [])          # field names, declaration order
+        self.methods = list(methods or [])        # (name, arity, function index)
+
+    def method(self, name):
+        for entry in self.methods:
+            if entry[0] == name:
+                return entry
+        return None
+
+    def __repr__(self):                           # pragma: no cover
+        return "TypeInfo(%s, struct=%s, fields=%s)" % (
+            self.name, self.is_struct, self.fields)
+
+
 class Chunk:
     """A complete compiled program: constants, globals, functions, entry."""
 
     def __init__(self, constants=None, globals=None, functions=None,
-                 entry=None, init=None):
+                 entry=None, init=None, types=None):
         self.constants = constants or []
         self.globals = globals or []      # list of (name, type)
         self.functions = functions or []
         self.entry = entry                # index of `main`, or None
         self.init = init                  # index of global initialiser, or None
+        self.types = types or []          # list of TypeInfo, format 1.1+
+
+    def type(self, name):
+        for entry in self.types:
+            if entry.name == name:
+                return entry
+        return None
 
     def function(self, index):
         return self.functions[index]
@@ -355,6 +396,22 @@ def serialize(chunk):
         payload.append(1)
         write_varint(payload, chunk.entry)
 
+    # 1.1 adds the type table at the end, so a 1.0 reader sees exactly what it
+    # expects for a 1.0 file and the new reader can tell the two apart by the
+    # minor version.
+    write_varint(payload, len(chunk.types))
+    for info in chunk.types:
+        write_string(payload, info.name)
+        payload.append(1 if info.is_struct else 0)
+        write_varint(payload, len(info.fields))
+        for field_name in info.fields:
+            write_string(payload, field_name)
+        write_varint(payload, len(info.methods))
+        for method_name, arity, fn_index in info.methods:
+            write_string(payload, method_name)
+            write_varint(payload, arity)
+            write_varint(payload, fn_index)
+
     header = bytearray()
     header.extend(MAGIC)
     header.extend(struct.pack("<H", FORMAT_MAJOR))
@@ -453,10 +510,33 @@ def deserialize(data, filename="<bytecode>"):
     if reader.u8("entry flag"):
         entry = reader.varint("entry function index")
 
+    types = []
+    if minor >= 1:
+        count = reader.varint("type count")
+        if count > MAX_TYPES:
+            raise VerifyError("too many declared types (%d)" % count, filename=filename)
+        for _ in range(count):
+            type_name = reader.string("type name")
+            is_struct = bool(reader.u8("type kind"))
+            field_count = reader.varint("field count")
+            fields = [reader.string("field name") for _ in range(field_count)]
+            method_count = reader.varint("method count")
+            methods = []
+            for _ in range(method_count):
+                method_name = reader.string("method name")
+                arity = reader.varint("method arity")
+                fn_index = reader.varint("method function index")
+                if fn_index >= len(functions):
+                    raise VerifyError(
+                        "type '%s' method '%s' points at function %d, which does not exist"
+                        % (type_name, method_name, fn_index), filename=filename)
+                methods.append((method_name, arity, fn_index))
+            types.append(TypeInfo(type_name, is_struct, fields, methods))
+
     if not reader.at_end():
         raise VerifyError("trailing bytes after bytecode payload", filename=filename)
 
-    return Chunk(constants, globals_, functions, entry, init)
+    return Chunk(constants, globals_, functions, entry, init, types)
 
 
 # --- instruction decoding ----------------------------------------------------
@@ -610,6 +690,42 @@ def verify_function(chunk, fn, index, filename):
             if argc < native.min_args or argc > native.max_args:
                 raise VerifyError("native call to '%s.%s' passes %d argument(s)"
                                   % (module, fname, argc), filename=filename)
+        elif name in ("NEW", "GET_FIELD", "SET_FIELD", "CALL_METHOD"):
+            index = ins.operands[0]
+            if index >= len(chunk.constants) or not isinstance(chunk.constants[index], str):
+                raise VerifyError(
+                    "%s in '%s' needs a String name constant" % (name, fn.name),
+                    filename=filename)
+            target = chunk.constants[index]
+            if name == "NEW":
+                argc = ins.operands[1]
+                info = chunk.type(target)
+                if info is None:
+                    raise VerifyError(
+                        "NEW in '%s' names an undeclared type '%s'" % (fn.name, target),
+                        filename=filename)
+                if argc != len(info.fields):
+                    raise VerifyError(
+                        "NEW '%s' in '%s' passes %d argument(s) but the type has %d field(s)"
+                        % (target, fn.name, argc, len(info.fields)), filename=filename)
+            elif name == "CALL_METHOD":
+                argc = ins.operands[1]
+                arities = [entry[1] for info in chunk.types
+                           for entry in info.methods if entry[0] == target]
+                if not arities:
+                    raise VerifyError(
+                        "CALL_METHOD in '%s' names no declared method '%s'"
+                        % (fn.name, target), filename=filename)
+                if argc not in arities:
+                    raise VerifyError(
+                        "CALL_METHOD '%s' in '%s' passes %d argument(s); declared arities are %s"
+                        % (target, fn.name, argc, sorted(set(arities))),
+                        filename=filename)
+            else:
+                if not any(target in info.fields for info in chunk.types):
+                    raise VerifyError(
+                        "%s in '%s' names no declared field '%s'" % (name, fn.name, target),
+                        filename=filename)
         elif name in ("JUMP", "JUMP_IF_FALSE", "ITER_NEXT"):
             target = ins.operands[0]
             if target not in boundaries:
@@ -673,6 +789,10 @@ def verify_function(chunk, fn, index, filename):
 
         if name == "CALL":
             pops, pushes = ins.operands[1], 1
+        elif name == "NEW":
+            pops, pushes = ins.operands[1], 1
+        elif name == "CALL_METHOD":
+            pops, pushes = ins.operands[1] + 1, 1
         elif name == "CALL_NATIVE":
             pops, pushes = ins.operands[2], 1
         elif name == "MAKE_LIST":

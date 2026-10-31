@@ -120,7 +120,7 @@
     "function-declaration": {
       "patterns": [
         {
-          "match": "\\b(sfn)(\\s+)([A-Za-z_][A-Za-z0-9_]*)",
+          "match": "\\b(sfn|struct|class)(\\s+)([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
             "1": {
               "name": "storage.type.function.silica"
@@ -187,7 +187,7 @@
       "patterns": [
         {
           "name": "storage.type.silica",
-          "match": "\\b(sfn|let|const)\\b"
+          "match": "\\b(sfn|let|const|struct|class|private|static)\\b"
         }
       ]
     },

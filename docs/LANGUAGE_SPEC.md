@@ -63,6 +63,10 @@ These words are reserved and may not be used as identifiers.
 | Import | `use module` | Import a standard-library module. |
 | End of block | `fin` | Optional explicit block terminator, allowed immediately before `}`. |
 | Stop | `halt` / `halt(code)` | Terminate the program with exit code 0 or `code`. |
+| Struct | `struct Name { … }` | A value type: named typed fields, structural equality. |
+| Class | `class Name { … }` | An object type: fields plus methods, identity equality. |
+| Private | `private` | A field or method visible only inside its own type. |
+| Static | `static sfn` | A method with no `self`, called as `Type.name(...)`. |
 | Binding | `let x = e` / `const x = e` | Mutable / immutable binding. |
 
 ### 2.1 Why both `sprint` and `dit` exist

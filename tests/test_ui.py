@@ -169,9 +169,12 @@ class AdditivityTests(unittest.TestCase):
         with self.assertRaises(ParseError):
             parse_source("sfn main() {\n { }\n}\n")
 
-    def test_bytecode_format_is_unchanged(self):
+    def test_bytecode_format_stays_on_major_1(self):
+        # Phase 2 added opcodes, so the *minor* version moved to 1.1. The major
+        # version is what readers refuse, and 1.0 files must keep loading.
         from silica.bytecode import FORMAT_MAJOR, FORMAT_MINOR
-        self.assertEqual((FORMAT_MAJOR, FORMAT_MINOR), (1, 0))
+        self.assertEqual(FORMAT_MAJOR, 1)
+        self.assertGreaterEqual(FORMAT_MINOR, 0)
 
 
 class NamespaceTests(unittest.TestCase):

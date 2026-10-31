@@ -4,7 +4,13 @@ EBNF for the grammar the v0.9.1 parser accepts. `NEWLINE` is a significant token
 that terminates statements and is ignored inside `(` … `)` and `[` … `]`.
 
 ```ebnf
-program        = { NEWLINE | use-decl | func-decl | global-decl } EOF ;
+program        = { NEWLINE | use-decl | func-decl | global-decl
+                 | struct-decl | class-decl } EOF ;
+
+struct-decl    = "struct" IDENT "{" { NEWLINE | field-decl } "}" ;
+class-decl     = "class" IDENT "{" { NEWLINE | field-decl | method-decl } "}" ;
+field-decl     = [ "private" ] IDENT ":" type NEWLINE ;
+method-decl    = [ "private" ] [ "static" ] func-decl ;
 
 use-decl       = "use" module-path NEWLINE ;                 (* 0.2.0 *)
 module-path    = IDENT { "." IDENT } ;

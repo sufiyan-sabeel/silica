@@ -5,6 +5,73 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## [Unreleased] — Phase 2: structs and classes
+
+No version bump: `pyproject.toml` stays at 0.9.1. Nothing is tagged or released.
+
+### Added — value types and object types
+- **`struct`** — a value type: named typed fields, structural equality, printed as
+  `Point { x: 1, y: 2 }`. A struct cannot declare methods or private fields, and
+  says so rather than silently ignoring them.
+- **`class`** — an object type: fields plus methods, identity equality, `private`
+  fields and methods, and `static` methods called as `Type.name(...)`.
+- **Construction by calling the type name** (`Point(3, 4)`), positional in field
+  declaration order. No `new` keyword; the argument count and types are checked.
+- **Field access and assignment**: `p.x` and `p.x = 10`, with private fields
+  enforced by the checker.
+- **Methods** with an implicit, immutable `self`; a method may read and write its
+  own fields (including private ones) and call other methods.
+- **Structural equality for structs, identity equality for classes** — a struct
+  is a value, a class has state that methods mutate.
+- **`type_of`** returns the declared type name; `sprint`/`str` render instances.
+
+### Changed — the pipeline, stage by stage
+- **`tokens.py`**: four new keywords (`struct`, `class`, `private`, `static`).
+  This is the one breaking change: they become reserved words.
+- **`ast.py`**: `StructDecl`, `ClassDecl`, `FieldDecl`; `FuncDecl` gained
+  `is_static`/`is_private`; `AssignStmt` gained a `target` so `obj.field = v`
+  parses without new expression syntax.
+- **`parser.py`**: the two declarations and their modifiers. A type annotation now
+  accepts any identifier and is resolved by the checker (types may be declared
+  later in the file), so an unknown type is a type error with a suggestion rather
+  than a parse error.
+- **`checker.py`**: a two-phase type registry (names first, then fields and
+  methods, so types may reference each other in any order), construction and
+  member checking, private enforcement, `self` binding, and ten new diagnostics
+  with locations and suggestions. An `Any`-typed receiver (a `List` element until
+  generics land) resolves members at run time.
+- **`bytecode.py`**: `NEW`, `GET_FIELD`, `SET_FIELD`, `CALL_METHOD`; a type table
+  in the payload; verifier rules for all four (declared type, field count, method
+  existence and arity); **format 1.1** — additive, and 1.0 files still load.
+- **`vm.py`**: instance values, the four opcodes, method dispatch through the type
+  table, and instance equality.
+- **`objects.py`** (new): the instance value model, equality and rendering, shared
+  by the VM, the natives and the verifier without an import cycle.
+- **`compiler.py`**: methods compile as `Type.method` functions with `self` in
+  slot 0; construction, field access/assignment, instance dispatch and static
+  calls; the type table the verifier needs.
+- **`fmt.py`**: declarations round-trip, including `private`/`static` modifiers.
+- **`editors/vscode`**: the four keywords are highlighted.
+
+### Documentation and examples
+- **`docs/CLASSES.md`**: the reference — struct vs class, construction, fields,
+  methods, statics, printing, mutability, every error, the four opcodes and what
+  is deliberately deferred.
+- **`docs/CLASSES_SPEC.md`**: the design contract this implements.
+- **`docs/BYTECODE.md`**: the four opcodes, the type table, format 1.1 and the
+  compatibility promise. **`docs/GRAMMAR.md`** and **`docs/LANGUAGE_SPEC.md`**:
+  the two declarations and the four keywords.
+- **`examples/classes.sc`**: a ticket queue using structs, a class, a private
+  field, a static constructor and both kinds of equality.
+
+### Tests
+- **`tests/test_classes.py`**: 59 tests across parser, checker, bytecode, VM,
+  object model and an end-to-end program, including a hand-built **1.0 payload**
+  that must still load and run.
+- Two existing tests were updated for intended changes: an unknown type annotation
+  is now a type error rather than a parse error, and the bytecode-version test now
+  asserts major 1 with the minor bump recorded.
+
 ## [0.9.1] — 2026-10-31
 
 A perceptual colour system, plus the bug fixes that had been sitting unreleased.

@@ -118,8 +118,9 @@ class LetStmt(Node):
 
 @dataclass
 class AssignStmt(Node):
-    name: str
+    name: str                 # set for `x = v`; empty for a member target
     value: Node
+    target: Optional[Node] = None   # a Member for `obj.field = v`
     line: int = 0
     col: int = 0
 
@@ -170,6 +171,35 @@ class FuncDecl(Node):
     params: List[tuple]   # list of (name, type_or_None)
     ret_type: Optional[str]
     body: Block
+    is_static: bool = False
+    is_private: bool = False
+    line: int = 0
+    col: int = 0
+
+
+@dataclass
+class FieldDecl(Node):
+    """`name: Type` inside a struct or class body. Not a binding."""
+    name: str
+    type_ann: str
+    is_private: bool = False
+    line: int = 0
+    col: int = 0
+
+
+@dataclass
+class StructDecl(Node):
+    name: str
+    fields: List[Node]
+    line: int = 0
+    col: int = 0
+
+
+@dataclass
+class ClassDecl(Node):
+    name: str
+    fields: List[Node]
+    methods: List[Node]   # FuncDecl nodes, in declaration order
     line: int = 0
     col: int = 0
 
