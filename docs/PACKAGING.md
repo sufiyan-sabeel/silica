@@ -10,7 +10,7 @@ How Silica is built, where it is published, and what is deliberately not done.
 |---|---|
 | Distribution name | **`silica-lang`** |
 | Import name | `silica` |
-| Version | `0.9.0` |
+| Version | `0.9.1` |
 | Format | Python wheel (`py3-none-any`) and sdist (`tar.gz`) |
 | Requires | Python **3.9+** |
 | Runtime dependencies | **none** — pure standard library |
@@ -87,7 +87,7 @@ unverified.
 ### Upgrade and rollback
 
 ```bash
-SILICA_VERSION=0.9.0 sh install.sh   # upgrade or pin to a version
+SILICA_VERSION=0.9.1 sh install.sh   # upgrade or pin to a version
 SILICA_VERSION=0.8.0 sh install.sh   # roll back
 sh uninstall.sh                      # remove only what the installer created
 ```
@@ -100,7 +100,7 @@ leaves `~/.local/bin/silica` pointing at the new version.
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"          # development
-pip install dist/silica_lang-0.9.0-py3-none-any.whl   # a built artifact
+pip install dist/silica_lang-0.9.1-py3-none-any.whl   # a built artifact
 ```
 
 ### Verify an installation
