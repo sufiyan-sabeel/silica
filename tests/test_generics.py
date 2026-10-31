@@ -280,6 +280,38 @@ class RegressionTests(unittest.TestCase):
             check("struct P<T> {\n    p: P<T>\n}\n" + program(""))
         self.assertIn("cannot contain itself", ctx.exception.message)
 
+    def test_a_static_method_may_declare_its_own_type_parameters(self):
+        # was: "argument 1 of Box.pair must be U, found Int" (no inference)
+        decls = ("class Box<T> {\n    value: T\n\n"
+                 "    static sfn pair<U>(x: U) -> List<U> {\n"
+                 "        ret [x]\n    }\n}\n\n")
+        self.assertEqual(run(decls + program("sprint(Box.pair(1))"))[1], "[1]\n")
+
+    def test_an_instance_method_may_declare_its_own_type_parameters(self):
+        # was: the receiver substitution dropped the method's type parameters
+        decls = ("class Bag<T> {\n    items: List<T>\n\n"
+                 "    sfn add(item: T) {\n        push(self.items, item)\n    }\n\n"
+                 "    sfn echo<U>(x: U) -> U {\n        ret x\n    }\n}\n\n")
+        source = decls + program('let b: Bag<String> = Bag([])\n'
+                                 'b.add("a")\nsprint(b.echo(2))\nsprint(b.items[0])')
+        self.assertEqual(run(source)[1], "2\na\n")
+
+    def test_a_static_cannot_use_the_class_type_parameter(self):
+        # nothing could bind T at a static call, so the signature is rejected
+        decls = ("class Box<T> {\n    value: T\n\n"
+                 "    static sfn make() -> List<T> {\n        ret []\n    }\n}\n\n")
+        with self.assertRaises(SilicaTypeError) as ctx:
+            check(decls + program(""))
+        self.assertIn("cannot use the type parameter", ctx.exception.message)
+
+    def test_a_static_call_on_a_generic_class_does_not_evaluate_the_type_name(self):
+        # was: "'Box' is a type, not a value"
+        decls = ("class Box<T> {\n    value: T\n\n"
+                 "    static sfn of(n: Int) -> Box<Int> {\n"
+                 "        ret Box(n)\n    }\n}\n\n")
+        code, out = run(decls + program("sprint(Box.of(4).value)"))
+        self.assertEqual((code, out), (0, "4\n"))
+
     def test_a_const_binding_still_freezes_a_generic_struct(self):
         # 0.9.3 semantics: freezing is unchanged by generics
         source = BOX + program("const b: Box<Int> = Box(1)\nb.value = 2")

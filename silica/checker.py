@@ -45,16 +45,31 @@ class FuncInfo:
 class MethodInfo:
     """One method of a class: its signature and its modifiers."""
 
-    __slots__ = ("name", "params", "ret", "is_static", "is_private", "node")
+    __slots__ = ("name", "params", "ret", "is_static", "is_private", "node",
+                 "type_params")
 
     def __init__(self, name, params, ret, is_static=False, is_private=False,
-                 node=None):
+                 node=None, type_params=None):
         self.name = name
         self.params = params            # [(name, type)]
         self.ret = ret
         self.is_static = is_static
         self.is_private = is_private
         self.node = node
+        self.type_params = list(type_params or [])
+
+
+def _type_names(text):
+    """Every name in a type expression: 'List<T>' -> ['List', 'T']."""
+    names = []
+    try:
+        base, arguments = T.parse(text)
+    except T.TypeError_:
+        return [text]
+    names.append(base)
+    for item in arguments:
+        names.extend(_type_names(T.render(item)))
+    return names
 
 
 class TypeInfo:
@@ -242,6 +257,12 @@ class Checker:
             if method.name in seen:
                 self.error("'%s' is both a field and a method in class '%s'"
                            % (method.name, decl.name), method)
+            # a method may declare its own type parameters on top of the class's
+            method_params = self.type_vars_of(method)
+            class_vars = self.type_vars
+            self.type_vars = dict(class_vars)
+            for param_name, constraint in method_params:
+                self.type_vars[param_name] = constraint
             params = []
             names = set()
             for pname, ptype, pline, pcol in method.params:
@@ -255,10 +276,24 @@ class Checker:
                 params.append((pname, ptype or ANY))
             if method.ret_type is not None:
                 self.check_type_name(method.ret_type, method, what="return type")
+            self.type_vars = class_vars
+            if method.is_static and type_params:
+                names = {n for n, _c in type_params}
+                signature = [p[1] for p in params] + ([method.ret_type]
+                                                      if method.ret_type else [])
+                for entry in signature:
+                    if entry and any(part in names for part in _type_names(entry)):
+                        self.error(
+                            "%s.%s is static and cannot use the type parameter(s) %s"
+                            % (decl.name, method.name, ", ".join(sorted(names))),
+                            method,
+                            hint="make it an instance method, or give it its own "
+                                 "type parameters")
             info.methods[method.name] = MethodInfo(
                 method.name, params, method.ret_type or "Unit",
                 is_static=method.is_static, is_private=method.is_private,
                 node=method)
+            info.methods[method.name].type_params = method_params
         self.type_vars = outer_vars
 
     def check_method(self, decl, type_info):
@@ -1072,7 +1107,9 @@ class Checker:
     def member_target_type(self, node):
         if isinstance(node, ast.Call):
             result = self.expr_type(node)
-            return result if result in self.types or result == ANY else None
+            if result == ANY:
+                return ANY
+            return result if T.base(result) in self.types else None
         if isinstance(node, ast.Ident) and node.name == "self":
             if self.lookup("self") is None:
                 self.ident_type(node)      # raises the right diagnostic
@@ -1178,6 +1215,8 @@ class Checker:
         """The class's type parameters, bound from the receiver's type."""
         if not type_info.type_params:
             return {}
+        if isinstance(node, ast.Ident) and node.name in self.types:
+            return {}          # `Type.method(...)`: a static call, no receiver
         try:
             receiver = self.expr_type(node) if node is not None else type_info.name
         except T.TypeError_:
@@ -1187,6 +1226,35 @@ class Checker:
             T.unify(T.make(type_info.name, [n for n, _c in type_info.type_params]),
                     receiver, mapping)
         return mapping
+
+    def infer_method_call(self, expr, label, method):
+        """A method with its own type parameters: infer them from the arguments."""
+        if len(expr.args) != len(method.params):
+            self.error("%s expects %d argument(s) but got %d"
+                       % (label, len(method.params), len(expr.args)), expr)
+        mapping = {}
+        for index, arg in enumerate(expr.args):
+            actual = self.expr_type(arg)
+            expected = method.params[index][1]
+            if not T.unify(expected, actual, mapping):
+                self.error("argument %d of %s must be %s, found %s"
+                           % (index + 1, label, expected, actual), arg)
+        missing = [n for n, _c in method.type_params if n not in mapping]
+        if missing:
+            self.error("cannot infer type parameter(s) %s for %s"
+                       % (", ".join(missing), label), expr,
+                       hint="pass an argument that determines it")
+        for name, constraint in method.type_params:
+            if not T.satisfies(mapping[name], constraint):
+                self.error("type argument %s = %s does not satisfy %s"
+                           % (name, mapping[name], constraint), expr,
+                           hint="%s accepts %s" % (constraint,
+                                                   ", ".join(T.kinds_of(constraint))))
+        return MethodInfo(method.name,
+                          [(n, T.substitute(t, mapping)) for n, t in method.params],
+                          T.substitute(method.ret, mapping),
+                          is_static=method.is_static,
+                          is_private=method.is_private, node=method.node)
 
     def check_method_args(self, expr, label, method):
         if len(expr.args) != len(method.params):
@@ -1240,7 +1308,10 @@ class Checker:
                         [(n, T.substitute(t, mapping)) for n, t in method.params],
                         T.substitute(method.ret, mapping),
                         is_static=method.is_static,
-                        is_private=method.is_private, node=method.node)
+                        is_private=method.is_private, node=method.node,
+                        type_params=method.type_params)
+                if method.type_params:
+                    method = self.infer_method_call(expr, label, method)
                 self.check_method_args(expr, label, method)
                 return method.ret
         if isinstance(callee, ast.Ident):
