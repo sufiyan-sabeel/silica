@@ -115,6 +115,16 @@ class Printer:
             self.write("break")
         elif isinstance(node, ast.ContinueStmt):
             self.write("continue")
+        elif isinstance(node, ast.StructDecl):
+            self.write("struct %s {" % node.name)
+            self.depth += 1
+            for name, ftype, _line, _col in node.fields:
+                self.write("%s: %s" % (name, ftype))
+            self.depth -= 1
+            self.write("}")
+        elif isinstance(node, ast.MemberAssignStmt):
+            self.write("%s.%s = %s"
+                       % (node.target, node.field, self.expr(node.value, 0)))
         elif isinstance(node, ast.FinStmt):
             self.write("fin")
         else:  # pragma: no cover
@@ -148,6 +158,14 @@ class Printer:
             left = self.expr(node.left, prec)
             right = self.expr(node.right, prec, is_right=True)
             return "%s %s %s" % (left, node.op, right), prec
+        if isinstance(node, ast.StructLit):
+            parts = []
+            for name, value, _line, _col in node.args:
+                if name is None:
+                    parts.append(self.expr(value, 0))
+                else:
+                    parts.append("%s: %s" % (name, self.expr(value, 0)))
+            return "%s(%s)" % (node.name, ", ".join(parts)), POSTFIX_PREC
         if isinstance(node, ast.Call):
             args = ", ".join(self.expr(a, 0) for a in node.args)
             return "%s(%s)" % (self.expr(node.callee, POSTFIX_PREC), args), POSTFIX_PREC
