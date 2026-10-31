@@ -165,6 +165,103 @@ remain untested** — see `docs/VOICE.md` limits.
 
 ---
 
+## Voice profiles and consent
+
+A voice profile is a reference recording plus a record of who agreed to it. That
+machinery is here and tested. **Cloning is not shipped**, and this section
+explains why rather than implying otherwise.
+
+```silica
+use voice
+
+sfn main() {
+    let engines = voice.cloning_engines()
+    sprint(str(len(engines["available"])))     # 0 with the engines shipped here
+
+    per name in keys(engines["unavailable"]) {
+        sprint(name + ": " + engines["unavailable"][name])
+    }
+}
+```
+
+```
+piper: Piper voices are single-speaker; multi-speaker ones take a speaker id,
+       which selects a trained voice rather than cloning one
+sherpa: no cloning model configured. sherpa-onnx clones with a ZipVoice model,
+        set SILICA_SHERPA_ZIPVOICE_MODEL to use one (~605 MB, Chinese and English)
+```
+
+### Why no cloning engine is shipped
+
+| Engine | Can clone? | Why it is not shipped |
+|---|---|---|
+| Piper / VITS | no | single-speaker; the multi-speaker models take a speaker **id**, which selects a voice trained in, not the person in front of the microphone |
+| XTTS-v2 | yes | **Coqui Public Model License: non-commercial only.** Coqui shut down in January 2024 and no commercial licence can be obtained from anyone, so shipping it would put every user who sells their work in breach |
+| sherpa-onnx ZipVoice | yes | genuine zero-shot cloning, but ~605 MB and Chinese/English only; **licence not verified here** |
+
+Presenting a speaker-id picker as "voice cloning" would be a lie. Presenting XTTS
+as a general feature would be a licence problem for anyone with income.
+
+### Creating a profile
+
+```silica
+use voice
+
+sfn main() {
+    let profile = voice.create_profile("riyaz", "/tmp/reference.wav", {
+        consent: "I am the speaker in this recording and I consent to a voice profile being created from it.",
+        speaker: "Riyaz",
+        purpose: "my own notes app"
+    })
+    sprint(profile["speaker"])
+}
+```
+
+```bash
+silica run profile.sc --allow-speech-models
+```
+
+**Consent is not optional.** The call fails without a statement, without a named
+speaker, and rejects a token like `"yes"` as too short to mean anything. The
+statement, the speaker, the purpose and a timestamp are stored in
+`profile.json` beside the recording, under `$SILICA_HOME/voice-profiles/<name>/`.
+
+| Function | What it does | Capability |
+|---|---|---|
+| `voice.profiles()` | list profiles (metadata only) | none |
+| `voice.profile(name)` | one profile's metadata | none |
+| `voice.verify_profile(name)` | has the recording changed since creation? | none |
+| `voice.cloning_engines()` | which engines can clone, and why not | none |
+| `voice.create_profile(...)` | create a profile from a recording | **`speech.models`** |
+| `voice.delete_profile(name)` | delete profile **and** recording | **`speech.models`** |
+
+### Privacy and deletion
+
+Reference recordings and their metadata **never leave the machine** — there is no
+upload path in this code, and the offline check covers the speech module.
+
+To delete everything for a profile:
+
+```bash
+rm -rf ~/.local/share/silica/voice-profiles/<name>
+# or, through the API, which also reports what it freed:
+silica voice remove <name>   # models; profiles use voice.delete_profile(name)
+```
+
+`voice.delete_profile(name)` removes the directory and returns the bytes freed.
+Nothing is retained afterwards — no embedding, no cached copy.
+
+### Impersonation
+
+Silica has no interest in helping anyone imitate a person who has not agreed to
+it. A profile requires a consent statement naming the speaker; using a profile to
+impersonate, defraud or misrepresent someone is outside what this feature is for,
+and the consent record exists so that "who agreed to this" has an answer.
+
+If you ship something built on a voice profile, say whose voice it is.
+
+---
+
 ## Offline guarantees
 
 Speech runs on the machine it is on. No account, no API key, no telemetry, and no
