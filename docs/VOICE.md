@@ -165,6 +165,68 @@ remain untested** — see `docs/VOICE.md` limits.
 
 ---
 
+## Offline guarantees
+
+Speech runs on the machine it is on. No account, no API key, no telemetry, and no
+silent fallback to a cloud service — because there is no cloud path to fall back
+to: nothing in the speech code can reach a network except the download function.
+
+That is a claim, so it ships with a way to check it:
+
+```bash
+python tools/offline_check.py
+```
+
+```json
+{
+  "network_events": [],
+  "synthesis": "ok: 132682 bytes",
+  "transcription": "ok: 'A flying check. Nothing here should reach the network.'",
+  "voice": "en_GB-alba-medium",
+  "model_verified": true,
+  "offline": true
+}
+```
+
+The tool installs an audit hook that records every socket and URL event Python
+can report, *before* importing Silica, then synthesises and transcribes. Any
+network attempt makes it exit non-zero.
+
+**What it proves:** inference through Python opens no sockets — including from C
+extensions that go through the socket module. That is stronger than stubbing
+`socket.socket`, which a module holding its own reference can bypass.
+
+**What it does not prove:** that no other process on the machine used the network,
+or that a native library opening a socket outside Python's socket module would be
+seen. The stronger test is a real network namespace:
+
+```bash
+unshare -n python tools/offline_check.py     # needs privileges
+```
+
+That is not permitted in the environment this was built in, so it has not been
+run — say so rather than imply otherwise.
+
+### Four rules the code actually follows
+
+1. **Downloads are explicit.** `voice.download_model` / `silica voice install`
+   run because someone asked. Nothing fetches in the background, and inference
+   never triggers a fetch.
+2. **Inference never downloads.** faster-whisper used to ask the Hugging Face Hub
+   whether a newer revision existed *on every load*, opening sockets during what
+   was meant to be an offline transcription. Models are now loaded with
+   `local_files_only=True`; fetching one takes a deliberate
+   `SILICA_WHISPER_ALLOW_DOWNLOAD=1`.
+3. **Checksums are recorded and enforced.** Every download stores its SHA-256 in
+   `manifest.json`, and a model whose contents changed is **refused at load
+   time** — a voice file is loaded into an inference session, so a silent
+   substitution is not something to shrug at. `SILICA_VOICE_SKIP_VERIFY=1`
+   bypasses it deliberately.
+4. **Deletion and usage are visible.** `voice.storage()` and
+   `silica voice models` show what is on disk; `silica voice remove` frees it.
+
+---
+
 ## Managing models
 
 Voices are files, and the API treats them that way — you can see what you have,
