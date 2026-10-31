@@ -212,6 +212,61 @@ def _delete_model(ctx, args):
         _fail("voice.delete_model: %s" % exc)
 
 
+def _profiles(ctx, args):
+    from .. import voice
+    return voice.profiles()
+
+
+def _profile(ctx, args):
+    from .. import voice
+    name = _need_string("voice.profile", args[0])
+    try:
+        return voice.profile(name)
+    except Exception as exc:  # noqa: BLE001
+        _fail("voice.profile: %s" % exc)
+
+
+def _create_profile(ctx, args):
+    from .. import voice
+    name = _need_string("voice.create_profile", args[0])
+    reference = _need_string("voice.create_profile", args[1])
+    options = _options(args, 2, "voice.create_profile")
+    consent = options.get("consent")
+    if not consent:
+        _fail("voice.create_profile needs the speaker's consent",
+              hint="pass {consent: \"...\", speaker: \"...\"}; a profile "
+                   "cannot be created without it")
+    try:
+        return voice.create_profile(
+            name, reference, consent=consent,
+            speaker=options.get("speaker"), purpose=options.get("purpose"))
+    except Exception as exc:  # noqa: BLE001
+        _fail("voice.create_profile: %s" % exc)
+
+
+def _delete_profile(ctx, args):
+    from .. import voice
+    name = _need_string("voice.delete_profile", args[0])
+    try:
+        return voice.delete_profile(name)
+    except Exception as exc:  # noqa: BLE001
+        _fail("voice.delete_profile: %s" % exc)
+
+
+def _verify_profile(ctx, args):
+    from .. import voice
+    name = _need_string("voice.verify_profile", args[0])
+    try:
+        return voice.verify_profile(name)
+    except Exception as exc:  # noqa: BLE001
+        _fail("voice.verify_profile: %s" % exc)
+
+
+def _cloning_engines(ctx, args):
+    from .. import voice
+    return voice.cloning_engines()
+
+
 def _licence(ctx, args):
     """Licence details for one voice, or for the default when no name is given."""
     from .. import voice
@@ -256,6 +311,14 @@ FUNCTIONS = (
     # downloading and deleting reach the network and the disk
     ("download_model", ["String"], "Map", _download_model, 1, 1, SPEECH_MODELS, None),
     ("delete_model", ["String"], "Map", _delete_model, 1, 1, SPEECH_MODELS, None),
+    ("cloning_engines", [], "Map", _cloning_engines, 0, 0, None, None),
+    ("profiles", [], "List", _profiles, 0, 0, None, None),
+    ("profile", ["String"], "Map", _profile, 1, 1, None, None),
+    ("verify_profile", ["String"], "Map", _verify_profile, 1, 1, None, None),
+    # creating and deleting a profile writes into Silica's data directory
+    ("create_profile", ["String", "String", "Map"], "Map", _create_profile, 3, 3,
+     SPEECH_MODELS, None),
+    ("delete_profile", ["String"], "Map", _delete_profile, 1, 1, SPEECH_MODELS, None),
     ("languages", [], "Map", _languages, 0, 0, None, None),
     ("status", [], "Map", _status, 0, 0, None, None),
 )
