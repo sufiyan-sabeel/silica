@@ -72,8 +72,8 @@ def _engines():
 
 def __getattr__(name):
     """Expose the submodules and their error types without importing them eagerly."""
-    if name in ("audio", "catalogue", "espeak", "piper", "whisper",
-                "platform_audio"):
+    if name in ("audio", "catalogue", "espeak", "piper", "profile_store",
+                "whisper", "platform_audio"):
         import importlib
         return importlib.import_module("." + name, __name__)
     aliases = {
@@ -168,6 +168,65 @@ def voices():
     return _catalogue().catalogue()
 
 
+def _profiles():
+    # the module is `profile_store`, so the public `profiles()` function can keep
+    # the obvious name without the two shadowing each other
+    from . import profile_store
+    return profile_store
+
+
+def profiles():
+    """Voice profiles on this machine: metadata only, no audio."""
+    return _profiles().list_profiles()
+
+
+def profile(name):
+    return _profiles().profile(name)
+
+
+def create_profile(name, reference, consent, speaker=None, purpose=None):
+    """Create a voice profile. Refuses without the speaker's explicit consent."""
+    return _profiles().create(name, reference, consent, speaker=speaker,
+                              purpose=purpose)
+
+
+def delete_profile(name):
+    """Delete a profile and its reference recording. Returns bytes freed."""
+    return {"name": name, "freed_bytes": _profiles().delete(name)}
+
+
+def verify_profile(name):
+    return _profiles().verify(name)
+
+
+def cloning_engines():
+    """Engines that can synthesise from a reference recording, and why not."""
+    engines = _engines()
+    result = {"available": [], "unavailable": {}}
+    for name in engines.tts_names():
+        try:
+            engine = engines.get_tts(name)
+        except Exception as exc:  # noqa: BLE001
+            result["unavailable"][name] = "failed to load: %s" % exc
+            continue
+        if engine.supports_cloning():
+            result["available"].append(name)
+        else:
+            result["unavailable"][name] = _cloning_reason(name)
+    return result
+
+
+def _cloning_reason(name):
+    if name == "piper":
+        return ("Piper voices are single-speaker; multi-speaker ones take a "
+                "speaker id, which selects a trained voice rather than cloning one")
+    if name == "sherpa":
+        return ("no cloning model configured. sherpa-onnx clones with a ZipVoice "
+                "model, set SILICA_SHERPA_ZIPVOICE_MODEL to use one (~605 MB, "
+                "Chinese and English)")
+    return "this engine does not support voice cloning"
+
+
 def models():
     """Installed models, with licence, size and the checksum recorded at download."""
     return _catalogue().models()
@@ -238,7 +297,7 @@ def install(name=None):
 
 
 def synthesize(text, out=None, voice=None, length_scale=None, noise_scale=None,
-               engine=None):
+               engine=None, profile=None):
     """Render `text` to speech.
 
     With `out`, writes a WAV there and returns the path. Without it, returns
@@ -250,6 +309,25 @@ def synthesize(text, out=None, voice=None, length_scale=None, noise_scale=None,
         raise piper.TTSError("synthesize expects a String, got %s" % type(text).__name__)
     if not text.strip():
         raise piper.TTSError("nothing to say: the text is empty")
+
+    if profile:
+        # cloning is not something to fake: refuse unless an engine can do it
+        cloning = cloning_engines()
+        if not cloning["available"]:
+            raise piper.TTSError(
+                "voice profiles need a cloning engine, and none is available:\n  "
+                + "\n  ".join("%s: %s" % (k, v)
+                              for k, v in cloning["unavailable"].items())
+                + "\nThe profile %r is stored, but nothing here can use it yet."
+                % profile)
+        engine = engines.get_tts(cloning["available"][0])
+        reference = _profiles().reference_path(profile)
+        samples, rate = engine.clone(reference, text,
+                                     length_scale=length_scale)
+        if out is None:
+            return samples, rate
+        _audio().write_wav(out, samples, rate)
+        return out
 
     try:
         chosen = engines.select_tts(preferred=engine)
