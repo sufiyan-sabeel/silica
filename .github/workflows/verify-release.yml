@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing tag to verify (e.g. v0.9.0)"
+        description: "Existing tag to verify (e.g. v0.9.1)"
         required: true
 
 permissions:
@@ -38,19 +38,24 @@ jobs:
           TAG="${{ github.event.inputs.tag || github.event.workflow_run.head_branch }}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
-          echo "verifying $TAG"
+
+      # install.sh lives in the repository, so it has to be present before a
+      # step that runs it. Without this the installer steps failed with
+      # "cannot open ../install.sh".
+      - name: Check out the installer
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Download the published assets
         run: |
-          TAG="${{ steps.tag.outputs.tag }}"
-          BASE="https://github.com/${{ github.repository }}/releases/download/$TAG"
-          mkdir -p assets && cd assets
-          for name in SHA256SUMS.txt "silica_lang-${{ steps.tag.outputs.version }}-py3-none-any.whl" \
-                      "silica_lang-${{ steps.tag.outputs.version }}.tar.gz"; do
-            echo "downloading $name"
-            curl -fsSL --retry 3 --max-time 120 -O "$BASE/$name"
-          done
+          mkdir -p assets
+          cd assets
+          gh release download "${{ steps.tag.outputs.tag }}" \
+            --repo "$GITHUB_REPOSITORY" --clobber
           ls -l
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Verify the published checksums
         run: |
@@ -87,10 +92,27 @@ jobs:
           print("app.html present:", size, "bytes")
           PY
 
-      - name: The installer must verify the same checksums
+      # file:// so the installer takes its real download-and-verify path.
+      # Passing SILICA_ARTIFACT would skip verification by design, which would
+      # make this step prove nothing — that was a real bug in this workflow.
+      - name: The installer must verify the published checksums
         run: |
-          cd assets
           HOME=/tmp/fresh SILICA_VERSION="${{ steps.tag.outputs.version }}" \
-            SILICA_ARTIFACT="$PWD/silica_lang-${{ steps.tag.outputs.version }}-py3-none-any.whl" \
-            sh ../install.sh
+            SILICA_BASE_URL="file://$PWD/assets" sh ./install.sh
           /tmp/fresh/.local/bin/silica --version
+          /tmp/fresh/.local/bin/silica --version | grep -q "${{ steps.tag.outputs.version }}"
+
+      - name: The installer must refuse a wheel whose checksum does not match
+        run: |
+          mkdir -p /tmp/tampered
+          cp assets/* /tmp/tampered/
+          printf 'tampered' >> "/tmp/tampered/silica_lang-${{ steps.tag.outputs.version }}-py3-none-any.whl"
+          if HOME=/tmp/bad SILICA_VERSION="${{ steps.tag.outputs.version }}" \
+               SILICA_BASE_URL="file:///tmp/tampered" sh ./install.sh > /tmp/bad.log 2>&1; then
+            echo "the installer accepted a wheel whose checksum does not match:"
+            cat /tmp/bad.log
+            exit 1
+          fi
+          grep -q "checksum mismatch" /tmp/bad.log || {
+            echo "the installer failed, but not because of the checksum:"; cat /tmp/bad.log; exit 1; }
+          echo "refused a tampered wheel, as it should"
