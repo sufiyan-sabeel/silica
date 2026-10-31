@@ -5,6 +5,72 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## [0.9.2] — 2026-10-31
+
+Structs: named records with typed fields, checked before the program runs.
+
+### Added — `struct`
+
+```silica
+struct Point {
+    x: Int
+    y: Int
+}
+
+sfn main() {
+    let p = Point(x: 3, y: 4)
+    sprint(p.x)          # 3
+    sprint(p)            # Point(x: 3, y: 4)
+    p.x = 10             # allowed: bound with `let`
+}
+```
+
+- **Declaration** with typed fields. Duplicate fields, duplicate struct names,
+  empty structs, unknown field types and self-reference are all rejected.
+- **Construction** by name or position: `Point(x: 1, y: 2)`, `Point(1, 2)`, and
+  named fields in any order. Missing, unknown, duplicated or wrongly-typed fields
+  are compile errors that name the field and list the real ones.
+- **Field access and assignment** (`p.x`, `p.x = 5`), type-checked against the
+  declared field type, including chained access (`l.end.x`).
+- **Mutability**: `let` structs are mutable; `const` structs are frozen. The
+  checker rejects the direct case and the runtime rejects an alias.
+- **Equality** by type and field values, and `sprint` rendering as
+  `Point(x: 1, y: 2)`.
+- **Struct names are types**, usable for fields, parameters, return values and
+  annotations; structs may nest.
+- **Four new opcodes**: `MAKE_STRUCT`, `GET_FIELD`, `SET_FIELD`, `FREEZE`, with
+  operand schemas, stack effects, verifier support and serialisation. Struct
+  programs survive a compile to `.sbc` and reload.
+
+### Changed
+
+- **`parse_type` accepts struct names**, collected by a pre-scan of the token
+  stream, so a struct may be used before it is declared while a typo like
+  `Integer` is still a parse error.
+- **The checker validates type names** for `let`, parameters and fields, with the
+  known types listed in the hint.
+- **`Any` defers field access to the runtime.** Without generics a `List` element
+  is `Any`, so `per b in boxes { b.x }` cannot be checked statically; the VM
+  reports the real problem if the value is not a struct.
+- **The formatter handles structs**, struct literals and field assignment.
+  Before this, `silica fmt` refused any file containing a `struct`.
+
+### Not done, and not claimed
+
+- **No generics.** A generic that is an untyped value in syntax would be worse
+  than none, so it is deferred rather than faked. This is why `List` elements
+  remain `Any`.
+- **No methods, no inheritance.** A struct holds data; functions operate on it.
+- **No classes** in the Python sense.
+- **Structs are reference values**: a `let` struct passed to a function and
+  modified there stays modified. That is documented rather than changed.
+
+### Tests
+
+930 tests, 7 skipped. 40 new struct tests covering declaration, construction,
+field access, mutability (including the alias case only the VM can catch),
+equality, display, bytecode round-trip, and the diagnostics themselves.
+
 ## [0.9.1] — 2026-10-31
 
 A perceptual colour system, plus the bug fixes that had been sitting unreleased.
