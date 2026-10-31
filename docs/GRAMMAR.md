@@ -84,7 +84,9 @@ entry          = ( STRING | IDENT ) ":" expr ;
 ## Structs (0.9.3)
 
 ```
-StructDecl  ::= "struct" IDENT "{" (IDENT ":" Type)* "}" 
+StructDecl  ::= "struct" IDENT [ TypeParams ] "{" (IDENT ":" Type)* "}"
+TypeParams  ::= "<" IDENT [ ":" Constraint ] ( "," IDENT [ ":" Constraint ] )* ">"
+Type        ::= IDENT [ "<" Type ( "," Type )* ">" ] 
 StructLit   ::= IDENT "(" ArgList? ")"
 ArgList     ::= Arg ("," Arg)*
 Arg         ::= IDENT ":" Expr | Expr

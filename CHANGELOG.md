@@ -5,6 +5,60 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## Unreleased — generics
+
+No version bump: `pyproject.toml` stays at 0.9.3. Nothing is tagged or released,
+and nothing is merged into `main`.
+
+### Added — type parameters that are actually checked
+- **Generic declarations**: `sfn first<T>(items: List<T>) -> T`,
+  `struct Box<T>`, `class Bag<T>`, and multi-parameter forms like `Pair<K, V>`.
+- **Parameterised containers**: `List<T>` and `Map<K, V>`. Element and key types
+  flow through indexing, iteration and concatenation, so `xs[0]` on a
+  `List<Int>` is an `Int`. A bare `List`/`Map` still means "elements unknown" and
+  stays compatible with any parameterisation, so existing code is unaffected.
+- **Inference** at construction (from the arguments, then from the binding's
+  annotation: `let s: Stack<String> = Stack([])`) and at generic function calls.
+- **Constraints**: `Numeric`, `Orderable`, `Equatable`. An unconstrained type
+  parameter cannot be used with `+ - * / %` or `< <= > >=`, and the constraint is
+  checked both in the body and at every call site.
+- **Method signatures follow the receiver**: `peek()` on a `Stack<String>` is a
+  `String`, and passing the wrong argument to `add_item` is an error.
+
+### Preserved from 0.9.3 (nothing relaxed to make generics fit)
+- Struct immutability and freezing: a `const` binding still freezes its struct,
+  and the assignment rules (`value.field = x`, `MemberAssignStmt`) are untouched.
+- The self-containment rule, duplicate-field diagnostics, parse-time type-name
+  resolution, structural struct equality, identity class equality, and every
+  existing error message — the 0.9.3 test suite runs unchanged.
+- `List`/`Map` behaviour: heterogeneous literals stay bare; nothing that compiled
+  before stops compiling.
+
+### Changed
+- **`silica/types.py`** (new): type expressions — parsing `Map<String, List<Int>>`,
+  base/args, substitution, unification for inference, constraint kinds.
+- **`parser.py` / `ast.py`**: `<T>` and `<T: Constraint>` on `sfn`, `struct` and
+  `class`; `<…>` in type annotations. Type parameters are in scope for a
+  declaration's own signature, so `sfn f<T>(x: T) -> T` parses.
+- **`checker.py`**: type parameters in scope, arity rules, invariance of type
+  arguments, inference, substitution through method signatures, constraint
+  enforcement, and twelve new diagnostics.
+- **`fmt.py`**: type parameters round-trip on all three declaration forms (without
+  this the formatter's output did not re-parse).
+- **`natives.py`**: `type_of` reports a struct's or class's declared name.
+
+### Documentation and examples
+- **`docs/GENERICS.md`**: syntax, container typing, inference, the constraint
+  table, what erasure means, every error, struct immutability, what is deferred.
+- **`examples/generics.sc`**, plus `GRAMMAR.md` and `LANGUAGE_SPEC.md` entries.
+
+### Tests
+- **`tests/test_generics.py`**: 57 tests — type expressions, parsing, checker
+  rules (positive and negative), runtime behaviour, erasure, bytecode round-trip,
+  preservation of non-generic behaviour, and a regression test for every defect
+  found while porting.
+- Full suite: 1047 passed, 7 skipped, 1188 subtests (was 990 before generics).
+
 ## [0.9.3] — 2026-10-31
 
 ### Fixed — field assignment through a path
