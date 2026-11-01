@@ -123,22 +123,28 @@ class SyntheticRepo(object):
 
 class RealRepositoryTests(unittest.TestCase):
     def test_the_shipped_tree_passes_every_check(self):
+        # Self-sufficient: it builds the artefacts into a temporary directory, so
+        # it works in a clean clone where `dist/` does not exist yet.
         with tempfile.TemporaryDirectory() as tmp:
             dist = os.path.join(tmp, "dist")
-            os.makedirs(dist)
             facts_path = os.path.join(tmp, "facts.json")
+            build = subprocess.run(
+                [sys.executable, "-m", "build", "--outdir", dist],
+                cwd=ROOT, capture_output=True, text=True, timeout=600,
+                env=dict(os.environ, PIP_USER="0"))
+            self.assertEqual(build.returncode, 0, build.stderr[-800:])
             built = subprocess.run(
                 [sys.executable, os.path.join(ROOT, "tools", "package", "facts.py"),
-                 "--repo", ROOT, "--out", facts_path],
+                 "--repo", ROOT, "--dist-dir", dist, "--out", facts_path],
                 capture_output=True, text=True, timeout=300)
             self.assertEqual(built.returncode, 0, built.stderr)
             data = json.load(open(facts_path, encoding="utf-8"))
-            shutil.copy(os.path.join(ROOT, "dist", data["wheel"]["name"]), dist)
-            shutil.copy(os.path.join(ROOT, "dist", data["sdist"]["name"]), dist)
 
             repo = SyntheticRepo(tmp)          # version files, in the temp root
-            with open(os.path.join(ROOT, "pyproject.toml"), encoding="utf-8") as fh:
-                repo.write("pyproject.toml", fh.read())
+            for name in ("pyproject.toml", "install.sh", "CHANGELOG.md",
+                         "silica/__init__.py", "silica/cli.py"):
+                with open(os.path.join(ROOT, name), encoding="utf-8") as fh:
+                    repo.write(name, fh.read())
             repo.write_facts(data)
 
             code, out, err = run_silica(SUMS, tmp)
