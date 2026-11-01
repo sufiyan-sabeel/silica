@@ -675,7 +675,14 @@ class Compiler:
         module = expr.obj.name
         found, value = get_constant(module, expr.name)
         if found:
-            emitter.emit("CONST", self.intern(float(value)), line=expr.line)
+            # A module constant keeps its own type. `math.pi` is a Float, and
+            # `path.sep` is a String: forcing every constant through float()
+            # made a string constant a compile error.
+            if not isinstance(value, (bool, int, float, str)):
+                raise CompileError("constant %s.%s has no bytecode form"
+                                   % (module, expr.name), expr.line, expr.col,
+                                   self.filename)
+            emitter.emit("CONST", self.intern(value), line=expr.line)
             return
         # not a module constant: `p.x` is a field read
         self.compile_expr(emitter, expr.obj)

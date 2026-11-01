@@ -2,7 +2,7 @@
 
 import unittest
 
-from silica.errors import SilicaRuntimeError
+from silica.errors import SilicaError, SilicaRuntimeError
 from silica.natives import i64
 
 from .helpers import run
@@ -59,6 +59,23 @@ class ArithmeticTests(unittest.TestCase):
 
     def test_mixed_arithmetic_promotes_to_float(self):
         self.assertEqual(out(program("sprint(1 + 2.5)")), "3.5\n")
+
+    def test_bool_arithmetic_is_still_refused(self):
+        # The dispatch fast path tests `type(x) is int`, which excludes Bool. Bool
+        # must still be refused -- by the checker for a literal expression, by the
+        # runtime for a value that only becomes Bool at run time.
+        for expression in ("oui + oui", "oui - nein", "nein * nein",
+                           "oui < oui", "1 + oui"):
+            with self.subTest(expression=expression):
+                with self.assertRaises(SilicaError) as ctx:
+                    run(program("sprint(%s)" % expression))
+                self.assertIn("Bool", str(ctx.exception))
+
+    def test_bool_arithmetic_at_run_time_is_still_refused(self):
+        # reached through a List, so the checker cannot fold it away
+        with self.assertRaises(SilicaError) as ctx:
+            run(program("let xs: List = [oui]\nsprint(xs[0] + xs[0])"))
+        self.assertIn("Bool", str(ctx.exception))
 
     def test_integer_overflow_wraps(self):
         self.assertEqual(i64(2 ** 63), -(2 ** 63))

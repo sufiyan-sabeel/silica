@@ -524,7 +524,8 @@ def _build():
     mods = {"core": {}, "math": {}, "string": {}, "collections": {},
             "fs": {}, "gui": {}, "gui.lib.widgets": {}, "gui.lib.layout": {},
             "colors": {}, "gui.lib.theme": {}, "json": {}, "speech": {},
-            "voice": {}, "tui": {},
+            "voice": {}, "tui": {}, "python": {},
+            "path": {}, "time": {}, "random": {},
             "tui.lib.widgets": {}, "tui.lib.layout": {}, "tui.lib.style": {},
             "ui": {}, "ui.state": {},
             "ui.lib.widgets": {}, "ui.lib.theme": {}, "ui.lib.colors": {},
@@ -579,8 +580,12 @@ def _build():
     # builder) avoids a circular import at module load time.
     from .stdlib_fs import FUNCTIONS as _FS
     from .stdlib_json import FUNCTIONS as _JSON
+    from .stdlib_path import FUNCTIONS as _PATH
+    from .stdlib_time import FUNCTIONS as _TIME
+    from .stdlib_random import FUNCTIONS as _RANDOM
 
-    for module, table in (("fs", _FS), ("json", _JSON)):
+    for module, table in (("fs", _FS), ("json", _JSON), ("path", _PATH),
+                          ("time", _TIME), ("random", _RANDOM)):
         for name, params, ret, fn, requires, path_arg, min_args in table:
             add(module, name, params, ret, fn, min_args=min_args,
                 requires=requires, path_arg=path_arg)
@@ -610,6 +615,15 @@ def _build():
             max_args=max_args, requires=requires, path_arg=path_arg)
     mods["voice"].update(mods["speech"])
 
+    from .interop.natives_python import FUNCTIONS as _PYTHON
+    # The `python` module is the interoperability surface. Its natives are
+    # ordinary natives: verified at load and authorised at the VM's gate. The
+    # provider registry they call into is a separate structure.
+    for (name, params, ret, fn, min_args, max_args,
+         requires, path_arg) in _PYTHON:
+        add("python", name, params, ret, fn, min_args=min_args,
+            max_args=max_args, requires=requires, path_arg=path_arg)
+
     from .ui.natives_colors import FUNCTIONS as _COLORS
     for (name, params, ret, fn, min_args, max_args,
          requires, path_arg) in _COLORS:
@@ -632,9 +646,13 @@ CONSTANTS = {
     "math": {"pi": _math.pi, "e": _math.e, "tau": 2 * _math.pi},
 }
 
+#: Module-level constants owned by a standard-library module.
+from .stdlib_path import CONSTANTS as _PATH_CONSTANTS          # noqa: E402
+CONSTANTS["path"] = dict(_PATH_CONSTANTS)
+
 # modules that exist as documentation but are not implemented yet
-PLANNED_MODULES = {"path", "time", "random", "regex", "http",
-                   "net", "process", "log", "crypto", "test", "async", "ai"}
+PLANNED_MODULES = {"regex", "http", "net", "process", "log", "crypto",
+                   "test", "async", "ai"}
 
 
 def ui_reserved_modules():

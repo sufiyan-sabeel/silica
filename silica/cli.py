@@ -22,14 +22,14 @@ from . import ast
 from .bytecode import serialize
 from .capabilities import (FS_LIST, FS_READ, FS_WRITE, GUI_RUN,
                            SPEECH_LISTEN, SPEECH_SPEAK, TUI_RUN,
-                           CapabilitySet, grant_flag)
+                           CapabilitySet, grant_flag, INTEROP_PYTHON)
 from .engine import (check_source, compile_ast, compile_file, compile_source,
                      default_output_path, is_bytecode, load_bytecode, run_chunk,
                      run_chunk_vm)
 from .errors import CapabilityError, ParseError, SilicaError
 from .natives import format_value, get_native
 
-VERSION = "0.9.3"
+VERSION = "0.10.0"
 
 USAGE = """silica %s — the Silica language toolchain
 
@@ -56,6 +56,7 @@ Capabilities (nothing is granted by default):
   --allow-fs-list DIR    allow listing directories under DIR
   --deny-fs-read|write|list
                          remove a capability a config file granted
+  --allow-interop-python allow starting a Python worker and calling into it
   --capabilities FILE    read grants from a TOML [capabilities] table
 
 Not implemented in 0.8.0: new, add, remove, install, build (Milestone E).
@@ -70,11 +71,12 @@ ALLOW_FLAGS = {
     "--allow-speech-speak": SPEECH_SPEAK,
     "--allow-speech-listen": SPEECH_LISTEN,
     "--allow-tui": TUI_RUN,
+    "--allow-interop-python": INTEROP_PYTHON,
     "--allow-gui": GUI_RUN,
 }
 
 # these grant a facility, not a directory, so they take no value
-UNSCOPED_FLAGS = {TUI_RUN, GUI_RUN}
+UNSCOPED_FLAGS = {TUI_RUN, GUI_RUN, INTEROP_PYTHON}
 
 DENY_FLAGS = {
     "--deny-fs-read": FS_READ,
@@ -82,6 +84,7 @@ DENY_FLAGS = {
     "--deny-fs-list": FS_LIST,
     "--deny-tui": TUI_RUN,
     "--deny-gui": GUI_RUN,
+    "--deny-interop-python": INTEROP_PYTHON,
 }
 
 

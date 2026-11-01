@@ -186,8 +186,14 @@ class RegressionTests(unittest.TestCase):
             if name in ("calculator.sc", "fs_demo.sc", "tui_demo.sc",
                         "tui_calculator.sc", "tui_settings.sc",
                         "tui_dashboard.sc", "gui_demo.sc", "ui_tasks.sc",
-                        "ui_hello.sc", "ui_animate.sc"):
-                continue  # these need stdin, capabilities or a display
+                        "ui_hello.sc", "ui_animate.sc",
+                        "calculator_app.sc", "task_manager.sc",
+                        "data_report.sc"):
+                # these need stdin, capabilities or a display. The three
+                # applications are executed, with input and grants, by
+                # tests/test_apps.py — which checks their output, not just the
+                # exit code.
+                continue
             with self.subTest(example=name):
                 completed = subprocess.run(
                     [sys.executable, "-m", "silica", "run",

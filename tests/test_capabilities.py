@@ -290,8 +290,10 @@ class StructuralTests(unittest.TestCase):
                                      "fs.%s has no path argument" % name)
 
     def test_no_other_module_claims_a_capability(self):
-        # only the modules that touch the machine may declare capabilities
-        privileged = {"fs", "gui", "speech", "voice", "tui"}
+        # Only the modules that touch the machine may declare capabilities.
+        # `python` belongs here because it starts a worker process and runs
+        # foreign code; adding it does not relax the rule for any other module.
+        privileged = {"fs", "gui", "speech", "voice", "tui", "python"}
         for module, functions in MODULES.items():
             # a submodule of a privileged namespace inherits the right to declare one
             if module in privileged or module.split(".")[0] in privileged:

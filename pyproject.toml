@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "silica-lang"
-version = "0.9.3"
+version = "0.10.0"
 description = "Silica — a small, statically typed, bytecode-compiled programming language with a UI DSL and a web renderer"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -30,8 +30,9 @@ Issues = "https://github.com/sufiyan-sabeel/silica/issues"
 Homepage = "https://github.com/sufiyan-sabeel/silica"
 
 [tool.setuptools]
-packages = ["silica", "silica.gui", "silica.ide", "silica.tui",
-            "silica.ui", "silica.voice", "silica.voice.engines"]
+packages = ["silica", "silica.gui", "silica.ide", "silica.interop",
+            "silica.interop.providers", "silica.tui", "silica.ui",
+            "silica.voice", "silica.voice.engines"]
 
 [tool.setuptools.package-data]
 "silica.ui" = ["assets/*.png"]

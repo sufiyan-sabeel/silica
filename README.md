@@ -8,7 +8,7 @@ A small, fast-moving programming language with its own syntax, a checked compile
 a versioned bytecode format, a capability-based security model, a standard library
 that includes speech and UI, and a **Script Mode IDE** you run in your browser.
 
-**Latest release: [v0.9.3](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.9.3)** ·
+**Latest release: [v0.10.0](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.10.0)** ·
 MIT licensed · 671 tests, green on Python 3.9, 3.11 and 3.12
 
 ```silica
@@ -62,7 +62,7 @@ no language server, no debugger, no concurrency, no `net`/`http`/`crypto`.
 
 Silica is also **not fast**: on the four benchmarks in `benchmarks/bench.py` it
 ran **38–101× slower than CPython** when measured on 2026-10-28 (Linux x86_64,
-CPython 3.12.13, Silica 0.9.3, best of 3 runs), because the VM is a Python loop.
+CPython 3.12.13, Silica 0.10.0, best of 3 runs), because the VM is a Python loop.
 The ratio moves with the machine and with CPython's own version, so re-run the
 script before quoting a figure; `docs/PERFORMANCE.md` and `docs/AUDIT.md` record
 the runs and the plan. One measured improvement has landed — constant folding cut
@@ -188,7 +188,7 @@ launcher in `~/.local/bin` (or `$PREFIX/bin` on Termux). No `sudo` unless you se
 `SILICA_SYSTEM=1`.
 
 ```bash
-SILICA_VERSION=0.9.3 sh install.sh   # upgrade or pin to a version
+SILICA_VERSION=0.10.0 sh install.sh   # upgrade or pin to a version
 SILICA_VERSION=0.8.0 sh install.sh   # roll back
 sh uninstall.sh                      # remove only what it installed
 ```
@@ -196,7 +196,7 @@ sh uninstall.sh                      # remove only what it installed
 ### The package
 
 Silica is a Python package: distribution name **`silica-lang`**, import name
-`silica`, version `0.9.3`, Python **3.9+**, and **no runtime dependencies** — the
+`silica`, version `0.10.0`, Python **3.9+**, and **no runtime dependencies** — the
 language, CLI, standard library, TUI and IDE are pure standard library.
 
 It is distributed as **versioned GitHub Release assets** (wheel, sdist,
@@ -206,8 +206,8 @@ containers. Nothing here is published to a package registry, and this README doe
 not claim otherwise.
 
 ```bash
-pip install dist/silica_lang-0.9.3-py3-none-any.whl   # a downloaded asset
-silica --version                                       # -> silica 0.9.3
+pip install dist/silica_lang-0.10.0-py3-none-any.whl   # a downloaded asset
+silica --version                                       # -> silica 0.10.0
 ```
 
 See [`docs/PACKAGING.md`](docs/PACKAGING.md) for the wheel contents, the release
@@ -328,11 +328,13 @@ python3 -m build          # wheel + sdist in dist/
 | Platform | Status |
 |---|---|
 | Linux x86_64 (Debian/Ubuntu) | **Tested** — the full suite and the IDE were run here |
-| Termux (Android) | Code paths exist and the installer detects Termux; **not run** on a device |
+| Termux (Android) | Code paths exist and the installer detects Termux; **not run** on a device. The `python` interop worker is a child process and has not been tried there either |
 | Alpine, macOS, Windows | Pure Python, no compiled parts, so it should work; **not tested** |
 | iOS | Browser IDE only, pointed at a runner on another machine; **not tested** |
 
-Only the first row is evidence. The others are expectations.
+Only the first row is evidence. The others are expectations, and the
+interoperability worker is included in that statement: it was exercised on
+Linux x86_64 only.
 
 ---
 
@@ -380,6 +382,7 @@ dependencies. They are merged only with CI green; the review checklist is in
 
 ## Releases
 
+- [v0.10.0](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.10.0) — generics, interoperability, `path`/`time`/`random`, applications
 - [v0.9.3](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.9.3) — loop control: `break` and `continue`
 - [v0.8.0](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.8.0) — Script Mode IDE
 - [v0.7.0](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.7.0) — constant folding optimizer

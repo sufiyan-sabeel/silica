@@ -18,6 +18,14 @@ import math
 from .bytecode import (OPS, decode, verify_chunk)
 from .capabilities import CapabilitySet
 from .errors import SilicaError, SilicaRuntimeError
+def _SUBTRACT(x, y):
+    return x - y
+
+
+def _MULTIPLY(x, y):
+    return x * y
+
+
 from .natives import (Iterator, MODULES, StructValue, format_value, get_native,
                       i64, type_name)
 
@@ -186,17 +194,36 @@ class VM:
                 elif op == 0x0A:  # ADD
                     b = stack.pop()
                     a = stack.pop()
-                    stack.append(self._add(a, b, fn, offset))
+                    # Fast path: two Ints are the common case by a wide margin.
+                    # `type(x) is int` excludes Bool exactly as isinstance does
+                    # in the slow path, and the range test replaces i64() so an
+                    # overflowing add still wraps the documented way.
+                    if type(a) is int and type(b) is int:
+                        total = a + b
+                        stack.append(total if -9223372036854775808 <= total <= 9223372036854775807
+                                     else i64(total))
+                    else:
+                        stack.append(self._add(a, b, fn, offset))
                 elif op == 0x0B:  # SUB
                     b = stack.pop()
                     a = stack.pop()
-                    stack.append(self._numeric("subtract", a, b, fn, offset,
-                                               lambda x, y: x - y))
+                    if type(a) is int and type(b) is int:
+                        total = a - b
+                        stack.append(total if -9223372036854775808 <= total <= 9223372036854775807
+                                     else i64(total))
+                    else:
+                        stack.append(self._numeric("subtract", a, b, fn, offset,
+                                                   _SUBTRACT))
                 elif op == 0x0C:  # MUL
                     b = stack.pop()
                     a = stack.pop()
-                    stack.append(self._numeric("multiply", a, b, fn, offset,
-                                               lambda x, y: x * y))
+                    if type(a) is int and type(b) is int:
+                        total = a * b
+                        stack.append(total if -9223372036854775808 <= total <= 9223372036854775807
+                                     else i64(total))
+                    else:
+                        stack.append(self._numeric("multiply", a, b, fn, offset,
+                                                   _MULTIPLY))
                 elif op == 0x0D:  # DIV
                     b = stack.pop()
                     a = stack.pop()
@@ -226,19 +253,23 @@ class VM:
                 elif op == 0x13:  # LT
                     b = stack.pop()
                     a = stack.pop()
-                    stack.append(self._order(a, b, fn, offset, "<"))
+                    stack.append(a < b if type(a) is int and type(b) is int
+                                 else self._order(a, b, fn, offset, "<"))
                 elif op == 0x14:  # LE
                     b = stack.pop()
                     a = stack.pop()
-                    stack.append(self._order(a, b, fn, offset, "<="))
+                    stack.append(a <= b if type(a) is int and type(b) is int
+                                 else self._order(a, b, fn, offset, "<="))
                 elif op == 0x15:  # GT
                     b = stack.pop()
                     a = stack.pop()
-                    stack.append(self._order(a, b, fn, offset, ">"))
+                    stack.append(a > b if type(a) is int and type(b) is int
+                                 else self._order(a, b, fn, offset, ">"))
                 elif op == 0x16:  # GE
                     b = stack.pop()
                     a = stack.pop()
-                    stack.append(self._order(a, b, fn, offset, ">="))
+                    stack.append(a >= b if type(a) is int and type(b) is int
+                                 else self._order(a, b, fn, offset, ">="))
                 elif op == 0x17:  # JUMP
                     ip = offsets[operands[0]]
                 elif op == 0x18:  # JUMP_IF_FALSE
