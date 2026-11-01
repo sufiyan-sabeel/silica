@@ -53,12 +53,15 @@ jobs:
           [ "$WANT" = "$SCRIPT" ] || { echo "tag and install.sh default disagree"; exit 1; }
 
       - name: Build wheel and sdist
-        run: python -m build
-    - name: Verify the packages (Silica)
-      run: |
-        python tools/package/facts.py --dist-dir dist --out build/packaging/facts.json
-        python -m silica run --allow-fs-read . --allow-fs-write . tools/package/sums.sc
-        python -m silica run --allow-fs-read . --allow-fs-write . tools/package/verify.sc
+        run: |
+          # Reproducible wheels: same commit, same bytes.
+          export SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
+          python -m build
+      - name: Verify the packages (Silica)
+        run: |
+          python tools/package/facts.py --dist-dir dist --out build/packaging/facts.json
+          python -m silica run --allow-fs-read . --allow-fs-write . tools/package/sums.sc
+          python -m silica run --allow-fs-read . --allow-fs-write . tools/package/verify.sc
 
 
       - name: Generate checksums

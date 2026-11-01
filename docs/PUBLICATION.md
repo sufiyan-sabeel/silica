@@ -4,6 +4,25 @@ Everything needed to publish Silica to PyPI and to propose it to Termux, with th
 current state of each step. Nothing in this document has been executed beyond what
 the table says.
 
+## 0. Artefact identity — read this before publishing
+
+A release-integrity audit (`RELEASE_INTEGRITY.md`) compared a build of `main`
+against the published `v0.10.0` assets. **They do not match**, and publishing
+`0.10.0` now would put different bytes on PyPI than the GitHub release carries
+under the same version.
+
+- wheel: same 71 files, identical code, but `METADATA` and `RECORD` differ
+  (classifiers and URLs were added after the tag)
+- sdist: 118 files published vs 206 now — `MANIFEST.in` added the examples, docs,
+  tests and installers after the tag
+- even a rebuild of the tag itself is byte-different, because archive timestamps
+  vary; the file *contents* are identical
+
+**Recommendation: publish `0.10.1`, built from the commit that ships, and leave the
+`v0.10.0` assets exactly as they are.** Build once in CI and upload *those same
+files* to both the GitHub release and PyPI — never rebuild for the second
+destination — and set `SOURCE_DATE_EPOCH` so the wheel is byte-reproducible.
+
 ## State, precisely
 
 | | PyPI | Termux |
@@ -85,10 +104,10 @@ needs a human click.
 
 ### Notes that matter
 
-- **Build from `main`, not from the tag.** The v0.10.0 tag predates `MANIFEST.in`,
-  so an sdist built from the tag would lack the examples and docs. Running the
-  workflow from `main` (or cutting a `v0.10.0.post1` / `v0.10.1`) is what ships a
-  complete source distribution.
+- **Publish a new version, not `0.10.0` again.** The tag predates `MANIFEST.in`, so
+  an sdist built from it lacks the examples and docs, while an sdist built from
+  `main` differs from the published `v0.10.0` asset. Both are wrong under the same
+  version number; `0.10.1` makes identity unambiguous. See `RELEASE_INTEGRITY.md`.
 - **A published version cannot be replaced.** Uploading `0.10.0` twice is rejected.
   If something is wrong after publishing, yank it and publish a new patch version;
   do not try to overwrite.

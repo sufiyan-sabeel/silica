@@ -380,3 +380,36 @@ class DocumentationHonestyTests(unittest.TestCase):
         self.assertIn("device", text)
         self.assertNotIn("works on termux", text)
         self.assertNotIn("android support is verified", text)
+
+
+class ReleaseIntegrityTests(unittest.TestCase):
+    """The audit must stay true as the tree changes."""
+
+    def read(self, name):
+        with open(os.path.join(ROOT, name), encoding="utf-8") as handle:
+            return handle.read()
+
+    def test_the_audit_document_exists_and_names_the_hashes(self):
+        text = self.read(os.path.join("docs", "RELEASE_INTEGRITY.md"))
+        # the published v0.10.0 asset hashes, so the record cannot drift silently
+        self.assertIn("cf08d36187b819f68ff8690a6ffd8ee4a216f3e190322e10e200e398767e546c", text)
+        self.assertIn("dcd7845a14003889ace504d93fc8020aa0faf45be7b3421290f77fca6237fc1e", text)
+
+    def test_the_audit_recommends_a_new_version_not_a_republish(self):
+        text = self.read(os.path.join("docs", "RELEASE_INTEGRITY.md")).lower()
+        self.assertIn("0.10.1", text)
+        self.assertIn("do not publish `0.10.0`", text)
+        self.assertIn("untouched", text)
+
+    def test_no_document_claims_the_artefacts_are_identical(self):
+        for name in ("README.md", "docs/PUBLICATION.md", "docs/PACKAGING.md"):
+            text = self.read(name).lower()
+            for claim in ("byte-identical to the github", "matches the github asset",
+                          "same bytes as the published"):
+                self.assertNotIn(claim, text, "%s claims %r" % (name, claim))
+
+    def test_the_build_workflows_pin_source_date_epoch(self):
+        for name in ("release.yml", "publish.yml"):
+            text = self.read(os.path.join(".github", "workflows", name))
+            self.assertIn("SOURCE_DATE_EPOCH", text,
+                          "%s does not set SOURCE_DATE_EPOCH" % name)

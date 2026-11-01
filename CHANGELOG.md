@@ -9,6 +9,18 @@ semantic versioning for its toolchain; the language surface is `0.x` until
 
 No version bump: the released artefacts stay v0.10.0 and are not modified.
 
+### Added — release-integrity audit
+- **`docs/RELEASE_INTEGRITY.md`**: a build of `main` does not match the published
+  `v0.10.0` assets. The wheel differs in `METADATA`/`RECORD` only (classifiers and
+  URLs added after the tag); the sdist carries 88 more files because `MANIFEST.in`
+  came after the tag. A rebuild of the tag itself is byte-different from the
+  published asset although every file is identical — the archives differ only in
+  timestamps.
+- Recommendation: publish `0.10.1` from the shipping commit, build once and upload
+  the same files to both the GitHub release and PyPI, and set `SOURCE_DATE_EPOCH`
+  (which makes the wheel byte-reproducible; the sdist is content-reproducible
+  only). The `v0.10.0` assets are left untouched.
+
 ### Added — packaging automation written in Silica
 - **`tools/package/verify.sc`** (Silica) is the authoritative packaging validator:
   version consistency across `pyproject.toml`, `silica/__init__.py`,

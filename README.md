@@ -3,7 +3,9 @@
 </p>
 
 <p align="center">
-  <img src="assets/diagram/architecture.png" alt="Silica architecture diagram: the CLI, engine pipeline, lexer, parser, checker, compiler, bytecode, VM, capabilities, standard library, speech, Python interop and the IDE, with the files that implement each part" width="100%">
+  <a href="https://gitdiagram.com/sufiyan-sabeel/silica?utm_source=readme&amp;utm_medium=badge">
+    <img src="https://gitdiagram.com/diagram-badge.svg" alt="Architecture diagram">
+  </a>
 </p>
 
 # Silica
@@ -284,6 +286,12 @@ The Termux package is a recipe in `packaging/termux/`, not a published package.
 [`docs/PUBLICATION.md`](docs/PUBLICATION.md) is the runbook for both: the exact
 trusted-publisher fields, the publish and verify steps, the Termux submission, and
 a table stating what is built, tested, submitted, accepted and published.
+
+A build of the current tree does **not** reproduce the published `v0.10.0` bytes —
+the sdist carries 88 more files and the wheel's metadata changed after the tag was
+cut. [`docs/RELEASE_INTEGRITY.md`](docs/RELEASE_INTEGRITY.md) records the hashes,
+the exact differences and the recommendation: publish `0.10.1` from the shipping
+commit and leave the `v0.10.0` assets untouched.
 
 ```bash
 pip install dist/silica_lang-0.10.0-py3-none-any.whl   # a downloaded asset

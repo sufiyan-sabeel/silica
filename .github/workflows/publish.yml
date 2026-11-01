@@ -33,7 +33,10 @@ jobs:
       - name: Install build tooling
         run: python -m pip install --upgrade pip build
       - name: Build
-        run: python -m build
+        run: |
+          # Reproducible wheels: same commit, same bytes.
+          export SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
+          python -m build
       - name: Collect packaging facts
         run: python tools/package/facts.py --dist-dir dist --out build/packaging/facts.json
       - name: Write the checksum file (Silica)
