@@ -47,6 +47,8 @@ def type_name(value):
         return "Map"
     if isinstance(value, Iterator):
         return "Iterator"
+    if isinstance(value, StructValue):
+        return value.type_name          # a struct or class reports its own name
     return "Any"
 
 
@@ -69,16 +71,21 @@ class StructValue:
     with `const`, so an alias cannot be used to modify a constant.
     """
 
-    __slots__ = ("type_name", "fields", "frozen")
+    __slots__ = ("type_name", "fields", "frozen", "is_struct")
 
-    def __init__(self, type_name, fields, frozen=False):
+    def __init__(self, type_name, fields, frozen=False, is_struct=True):
         self.type_name = type_name
         self.fields = fields
         self.frozen = frozen
+        # A struct is a value (structural equality); a class is an object with
+        # state that methods mutate (identity equality).
+        self.is_struct = is_struct
 
     def __eq__(self, other):
         if not isinstance(other, StructValue):
             return NotImplemented
+        if not (self.is_struct and other.is_struct):
+            return self is other
         return (self.type_name == other.type_name
                 and self.fields == other.fields)
 

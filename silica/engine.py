@@ -49,6 +49,7 @@ def compile_ast(program, filename="<source>", require_main=True,
                       pre_globals=pre_globals)
     checker.check()
     compiler = Compiler(program, filename, checker.functions, checker.globals,
+                        types=checker.types,
                         pre_globals=pre_globals, pre_index=pre_index)
     chunk = compiler.compile()
     if entry_name != "main":

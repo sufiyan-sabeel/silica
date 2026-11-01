@@ -369,6 +369,14 @@ one is recorded in `CHANGELOG.md`.
 
 A struct is a named record with typed fields.
 
+A **class** is an object type: fields plus methods, `private` members and
+`static` methods. Construction is the same as for a struct (positional in field
+order, or named), and `==` compares by **identity** rather than structurally,
+because a class has state that its methods mutate. A method binds `self`, may
+read and write its own fields (including private ones) and calls other methods;
+a `static sfn` has no `self` and is called as `Type.name(...)`. See
+docs/CLASSES.md.
+
 ```silica
 struct Point {
     x: Int

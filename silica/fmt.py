@@ -44,6 +44,14 @@ class Printer:
         self.write("}")
 
     # -- statements ----------------------------------------------------------
+    def type_params(self, node):
+        params = getattr(node, "type_params", None)
+        if not params:
+            return ""
+        rendered = [name if constraint is None else "%s: %s" % (name, constraint)
+                    for name, constraint, *_rest in params]
+        return "<%s>" % ", ".join(rendered)
+
     def stmt(self, node):
         if isinstance(node, ast.LetStmt):
             keyword = "const" if node.is_const else "let"
@@ -93,7 +101,8 @@ class Printer:
                 (name if ptype is None else "%s: %s" % (name, ptype))
                 for name, ptype, _line, _col in node.params)
             ret = " -> %s" % node.ret_type if node.ret_type else ""
-            self.write("sfn %s(%s)%s {" % (node.name, params, ret))
+            self.write("sfn %s%s(%s)%s {" % (node.name, self.type_params(node),
+                                             params, ret))
             self.depth += 1
             for inner in node.body.stmts:
                 self.stmt(inner)
@@ -116,10 +125,19 @@ class Printer:
         elif isinstance(node, ast.ContinueStmt):
             self.write("continue")
         elif isinstance(node, ast.StructDecl):
-            self.write("struct %s {" % node.name)
+            self.write("struct %s%s {" % (node.name, self.type_params(node)))
             self.depth += 1
-            for name, ftype, _line, _col in node.fields:
-                self.write("%s: %s" % (name, ftype))
+            for name, ftype, _line, _col, is_private in node.fields:
+                self.write("%s%s: %s" % ("private " if is_private else "", name, ftype))
+            self.depth -= 1
+            self.write("}")
+        elif isinstance(node, ast.ClassDecl):
+            self.write("class %s%s {" % (node.name, self.type_params(node)))
+            self.depth += 1
+            for name, ftype, _line, _col, is_private in node.fields:
+                self.write("%s%s: %s" % ("private " if is_private else "", name, ftype))
+            for method in node.methods:
+                self.method(method)
             self.depth -= 1
             self.write("}")
         elif isinstance(node, ast.MemberAssignStmt):
@@ -130,6 +148,21 @@ class Printer:
             self.write("fin")
         else:  # pragma: no cover
             raise SilicaError("cannot format statement %r" % (node,))
+
+    def method(self, node):
+        prefix = ("private " if getattr(node, "is_private", False) else "") + \
+                 ("static " if getattr(node, "is_static", False) else "")
+        params = ", ".join(
+            (name if ptype is None else "%s: %s" % (name, ptype))
+            for name, ptype, _line, _col in node.params)
+        ret = " -> %s" % node.ret_type if node.ret_type else ""
+        self.write("%ssfn %s%s(%s)%s {" % (prefix, node.name,
+                                           self.type_params(node), params, ret))
+        self.depth += 1
+        for inner in node.body.stmts:
+            self.stmt(inner)
+        self.depth -= 1
+        self.write("}")
 
     # -- expressions ---------------------------------------------------------
     def expr(self, node, parent_prec, is_right=False):

@@ -92,7 +92,8 @@ OPS = {
     "MAKE_STRUCT": 0x26,     # operands: (descriptor const index, field count)
     "GET_FIELD": 0x27,       # operand: field-name const index
     "SET_FIELD": 0x28,       # operand: field-name const index
-    "FREEZE": 0x29,          # mark the value on top of the stack immutable
+    "FREEZE": 0x29,
+    "CALL_METHOD": 0x2A,     # operand: method-name const index, argc
 }
 
 OP_NAMES = {code: name for name, code in OPS.items()}
@@ -114,6 +115,7 @@ OPERANDS = {
     "MAKE_STRUCT": ("u", "u"),
     "GET_FIELD": ("u",),
     "SET_FIELD": ("u",),
+    "CALL_METHOD": ("u", "u"),
     "FREEZE": (),
 }
 
@@ -156,7 +158,8 @@ STACK_EFFECT = {
     "HALT_POP": (1, 0),
     "MAKE_STRUCT": (None, 1),    # pops n, where n is the second operand
     "GET_FIELD": (1, 1),
-    "SET_FIELD": (2, 0),         # pops the value, then the struct
+    "SET_FIELD": (2, 0),
+    "CALL_METHOD": (1, 1),       # special-cased in the analysis: pops argc + 1
     "FREEZE": (0, 0),            # peeks; does not change the stack
 }
 
@@ -623,6 +626,27 @@ def verify_function(chunk, fn, index, filename):
             if argc < native.min_args or argc > native.max_args:
                 raise VerifyError("native call to '%s.%s' passes %d argument(s)"
                                   % (module, fname, argc), filename=filename)
+        elif name == "CALL_METHOD":
+            name_idx, argc = ins.operands
+            if (name_idx >= len(chunk.constants)
+                    or not isinstance(chunk.constants[name_idx], str)):
+                raise VerifyError(
+                    "CALL_METHOD in '%s' needs a String method-name constant"
+                    % fn.name, filename=filename)
+            method = chunk.constants[name_idx]
+            candidates = [other for other in chunk.functions
+                          if other.name.endswith("." + method)]
+            if not candidates:
+                raise VerifyError(
+                    "CALL_METHOD in '%s' names no declared method '%s'"
+                    % (fn.name, method), filename=filename)
+            if argc + 1 not in [other.arity for other in candidates]:
+                raise VerifyError(
+                    "CALL_METHOD '%s' in '%s' passes %d argument(s); declared "
+                    "arities are %s" % (method, fn.name, argc,
+                                        sorted({other.arity - 1
+                                                for other in candidates})),
+                    filename=filename)
         elif name in ("JUMP", "JUMP_IF_FALSE", "ITER_NEXT"):
             target = ins.operands[0]
             if target not in boundaries:
@@ -686,6 +710,8 @@ def verify_function(chunk, fn, index, filename):
 
         if name == "CALL":
             pops, pushes = ins.operands[1], 1
+        elif name == "CALL_METHOD":
+            pops, pushes = ins.operands[1] + 1, 1
         elif name == "CALL_NATIVE":
             pops, pushes = ins.operands[2], 1
         elif name == "MAKE_LIST":

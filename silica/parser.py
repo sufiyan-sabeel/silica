@@ -59,12 +59,16 @@ class Parser:
         self.tokens = tokens
         self.filename = filename
         self.pos = 0
-        # Struct names, collected before parsing so that a type annotation may
-        # name a struct declared later in the file. A typo like `Integer` is
-        # still rejected at parse time, which is what the tests pin down.
+        # Type names, collected before parsing so that a type annotation may
+        # name a struct or class declared later in the file (including a method
+        # naming its own class). A typo like `Integer` is still rejected at parse
+        # time, which is what the tests pin down.
         self.struct_names = set()
+        # Type parameters in scope, one frame per enclosing declaration:
+        # `sfn f<T>(x: T)` may name T in its parameter and return types.
+        self.type_param_scopes = []
         for index, token in enumerate(tokens[:-1]):
-            if token.kind == "kw" and token.value == "struct":
+            if token.kind == "kw" and token.value in ("struct", "class"):
                 following = tokens[index + 1]
                 if following.kind == "ident":
                     self.struct_names.add(following.value)
@@ -171,6 +175,8 @@ class Parser:
                 return self.parse_continue()
             if kw == "struct":
                 return self.parse_struct()
+            if kw == "class":
+                return self.parse_class()
             if kw == "fin":
                 self.advance()
                 return ast.FinStmt(line=tok.line, col=tok.col)
@@ -248,12 +254,21 @@ class Parser:
     def parse_struct(self):
         tok = self.advance()  # struct
         name_tok = self.expect_ident("struct name")
+        type_params = self.parse_type_params()
+        self.type_param_scopes.append({p[0] for p in type_params})
         self.skip_newlines()
         self.expect_op("{", "a struct body is required")
         fields = []
         seen = set()
         self.skip_newlines()
         while not self.at_op("}"):
+            if self.at_kw("sfn") or self.at_kw("static"):
+                self.error("struct '%s' cannot declare methods" % name_tok.value,
+                           hint="use a class if you need behaviour")
+            if self.at_kw("private"):
+                self.error("a struct field cannot be private",
+                           hint="structs have no methods, so nothing could read it; "
+                                "use a class")
             field_tok = self.expect_ident("field name")
             if field_tok.value in seen:
                 self.error("duplicate field '%s' in struct '%s'"
@@ -262,19 +277,23 @@ class Parser:
             seen.add(field_tok.value)
             self.expect_op(":", "a struct field needs a type, e.g. 'x: Int'")
             ftype = self.parse_type()
-            fields.append((field_tok.value, ftype, field_tok.line, field_tok.col))
+            fields.append((field_tok.value, ftype, field_tok.line, field_tok.col,
+                           False))
             self.end_statement()
         self.expect_op("}")
         if not fields:
             self.error("struct '%s' has no fields" % name_tok.value,
                        hint="an empty struct cannot hold anything; add a field")
         self.struct_names.add(name_tok.value)
-        return ast.StructDecl(name_tok.value, fields,
+        self.type_param_scopes.pop()
+        return ast.StructDecl(name_tok.value, fields, type_params=type_params,
                               line=tok.line, col=tok.col)
 
     def parse_function(self):
         tok = self.advance()  # sfn
         name_tok = self.expect_ident("function name")
+        type_params = self.parse_type_params()
+        self.type_param_scopes.append({p[0] for p in type_params})
         self.expect_op("(", "function parameters are required, use '()' for none")
         params = []
         if not self.at_op(")"):
@@ -296,8 +315,65 @@ class Parser:
             ret_type = self.parse_type()
         self.skip_newlines()
         body = self.parse_block()
+        self.type_param_scopes.pop()
         return ast.FuncDecl(name_tok.value, params, ret_type, body,
+                            type_params=type_params,
                             line=tok.line, col=tok.col)
+
+    def parse_class(self):
+        """`class Name { fields... [private] [static] sfn methods... }`."""
+        tok = self.advance()                      # class
+        name_tok = self.expect_ident("class name")
+        self.struct_names.add(name_tok.value)
+        type_params = self.parse_type_params()
+        self.type_param_scopes.append({p[0] for p in type_params})
+        self.skip_newlines()
+        self.expect_op("{", "a class body is required")
+        fields, methods = [], []
+        seen = set()
+        self.skip_newlines()
+        while not self.at_op("}"):
+            if self.cur.kind == "eof":
+                self.error("unexpected end of file: missing '}'",
+                           hint="class %s is never closed" % name_tok.value)
+            is_private = False
+            if self.at_kw("private"):
+                is_private = True
+                self.advance()
+            if self.at_kw("sfn") or self.at_kw("static"):
+                methods.append(self.parse_method(is_private))
+                self.skip_newlines()
+                continue
+            field_tok = self.expect_ident("field name")
+            if field_tok.value in seen:
+                self.error("duplicate field '%s' in class '%s'"
+                           % (field_tok.value, name_tok.value),
+                           hint="each field name may appear once")
+            seen.add(field_tok.value)
+            self.expect_op(":", "a class field needs a type, e.g. 'value: Int'")
+            ftype = self.parse_type()
+            fields.append((field_tok.value, ftype, field_tok.line, field_tok.col,
+                           is_private))
+            self.end_statement()
+            self.skip_newlines()
+        self.expect_op("}")
+        self.type_param_scopes.pop()
+        return ast.ClassDecl(name_tok.value, fields, methods,
+                             type_params=type_params,
+                             line=tok.line, col=tok.col)
+
+    def parse_method(self, is_private=False):
+        tok = self.cur
+        is_static = False
+        if self.at_kw("static"):
+            is_static = True
+            self.advance()
+        decl = self.parse_function()
+        decl.is_static = is_static
+        decl.is_private = is_private
+        decl.line = tok.line
+        decl.col = tok.col
+        return decl
 
     def parse_if(self):
         tok = self.advance()  # si
@@ -397,17 +473,62 @@ class Parser:
         self.advance()  # }
         return ast.Block(stmts, line=start.line, col=start.col)
 
+    def active_type_params(self):
+        names = set()
+        for frame in self.type_param_scopes:
+            names |= frame
+        return names
+
+    def parse_type_params(self):
+        """`<T>`, `<K, V>`, `<T: Orderable>` after a declaration name."""
+        if not (self.cur.kind == "op" and self.cur.value == "<"):
+            return []
+        self.advance()
+        params, seen = [], set()
+        while True:
+            tok = self.expect_ident("type parameter name")
+            if tok.value in seen:
+                self.error("duplicate type parameter '%s'" % tok.value, tok,
+                           hint="each type parameter may appear once")
+            seen.add(tok.value)
+            constraint = None
+            if self.cur.kind == "op" and self.cur.value == ":":
+                self.advance()
+                ctok = self.expect_ident("constraint name")
+                constraint = ctok.value
+            params.append((tok.value, constraint, tok.line, tok.col))
+            if self.cur.kind == "op" and self.cur.value == ",":
+                self.advance()
+                continue
+            break
+        self.expect_op(">", "unbalanced type parameter list")
+        return params
+
     def parse_type(self):
         tok = self.cur
         if tok.kind != "ident":
             self.error("expected a type name but found %s" % tok.describe())
-        if tok.value not in BUILTIN_TYPES and tok.value not in self.struct_names:
+        in_scope = (tok.value in BUILTIN_TYPES or tok.value in self.struct_names
+                    or tok.value in self.active_type_params())
+        if not in_scope:
             self.error("unknown type '%s'" % tok.value, tok,
                        hint="available types: %s"
                             % ", ".join(sorted(set(BUILTIN_TYPES)
-                                               | self.struct_names)))
+                                               | self.struct_names
+                                               | self.active_type_params())))
+        name = tok.value
         self.advance()
-        return tok.value
+        if not (self.cur.kind == "op" and self.cur.value == "<"):
+            return name
+        # `List<Int>`, `Map<String, List<Int>>` — the argument list is kept as
+        # text, so a parameterised type is still a string to every later stage.
+        self.advance()
+        arguments = [self.parse_type()]
+        while self.cur.kind == "op" and self.cur.value == ",":
+            self.advance()
+            arguments.append(self.parse_type())
+        self.expect_op(">", "unbalanced type arguments")
+        return "%s<%s>" % (name, ", ".join(arguments))
 
     # -- expressions ---------------------------------------------------------
     def parse_expression(self):

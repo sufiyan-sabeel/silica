@@ -43,6 +43,7 @@ EXPECTED = {
         "oui\n"
         '{"width":80,"ratio":1.5,"wrap":true,"tags":["a","b"]}\n'
         "[1, 2, 3]\n"),
+    "generics.sc": "2\nbeta\n[7, 7, 7]\n7\npear\n9.0\nage\n42\n2\nBox\n",
 }
 
 # examples that need capability flags to run; the grant is the narrowest that
