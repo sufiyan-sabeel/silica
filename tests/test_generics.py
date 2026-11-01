@@ -245,6 +245,8 @@ class CheckerTests(unittest.TestCase):
 class RegressionTests(unittest.TestCase):
     """One test per defect found while porting generics onto 0.9.3."""
 
+    assertTypeError = CheckerTests.assertTypeError
+
     def test_field_access_on_a_parameterised_receiver(self):
         # was: "'b' is Box<Int>, not a struct, so it has no fields"
         code, out = run(program("let b: Box<Int> = Box(7)\nsprint(b.value)", BOX))
@@ -311,6 +313,30 @@ class RegressionTests(unittest.TestCase):
                  "        ret Box(n)\n    }\n}\n\n")
         code, out = run(decls + program("sprint(Box.of(4).value)"))
         self.assertEqual((code, out), (0, "4\n"))
+
+    def test_a_generic_field_has_the_substituted_type(self):
+        # found by the merge audit: the field type was returned as `T`, so a
+        # typed binding failed with "cannot initialise Int with a value of type T"
+        check(BOX + program("let b: Box<Int> = Box(1)\nlet n: Int = b.value"))
+        self.assertTypeError(BOX + program("let b: Box<Int> = Box(1)\n"
+                                           "let s: String = b.value"),
+                             "cannot initialise String with a value of type Int")
+
+    def test_a_nested_generic_field_substitutes_through_both_levels(self):
+        # was: "cannot read field 'v' of A"
+        decls = ("struct Pair<A, B> {\n    a: A\n    b: B\n}\n\n")
+        check(decls + BOX + program('let p: Pair<Box<Int>, String> = Pair(Box(1), "x")\n'
+                                    "let n: Int = p.a.value\nlet s: String = p.b"))
+        self.assertTypeError(
+            decls + BOX + program('let p: Pair<Box<Int>, String> = Pair(Box(1), "x")\n'
+                                  "let n: Int = p.b"),
+            "cannot initialise Int with a value of type String")
+
+    def test_assigning_a_generic_field_checks_the_substituted_type(self):
+        # was: "'b.' is Box<Int>, not a struct, so it has no field 'v'"
+        self.assertTypeError(BOX + program("let b: Box<Int> = Box(1)\nb.value = \"x\""),
+                             "expects Int, found String")
+        check(BOX + program("let b: Box<Int> = Box(1)\nb.value = 2"))
 
     def test_a_const_binding_still_freezes_a_generic_struct(self):
         # 0.9.3 semantics: freezing is unchanged by generics

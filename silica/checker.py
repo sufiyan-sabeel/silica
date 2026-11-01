@@ -829,13 +829,16 @@ class Checker:
         for depth, field in enumerate(stmt.path):
             if current == ANY:
                 return      # untyped list element: the VM checks at runtime
-            fields = self.struct_fields(current)
+            owner = self.types.get(T.base(current))
+            fields = owner.fields if owner is not None else None
             if fields is None:
                 where = stmt.target + "." + ".".join(stmt.path[:depth])
                 self.error("'%s' is %s, not a struct, so it has no field '%s'"
                            % (where, current, field), stmt,
                            hint="only a struct has assignable fields")
-            types = {f[0]: f[1] for f in fields}
+            mapping = self.mapping_for_type(current, owner)
+            types = {f[0]: (T.substitute(f[1], mapping) if mapping else f[1])
+                     for f in fields}
             if field not in types:
                 self.error("struct '%s' has no field '%s'" % (current, field), stmt,
                            hint="fields are: %s" % ", ".join(types))
@@ -1072,7 +1075,9 @@ class Checker:
                 self.error("struct '%s' has no field '%s'" % (target, expr.name),
                            expr, hint="fields are: %s" % ", ".join(fields))
             self.check_private_field(target, expr.name, expr)
-            return fields[expr.name]
+            field_type = fields[expr.name]
+            mapping = self.mapping_for_type(target, info)
+            return T.substitute(field_type, mapping) if mapping else field_type
         module, member = self.resolve_member_path(expr)
         found, _value = get_constant(module, member)
         if found:
@@ -1093,6 +1098,16 @@ class Checker:
             return None
         base = T.base(receiver) if isinstance(receiver, str) else None
         return self.types.get(base) if base else None
+
+    def mapping_for_type(self, receiver, info):
+        """Bind a declared type's parameters from a receiver's type expression."""
+        if info is None or not info.type_params or not isinstance(receiver, str):
+            return {}
+        if T.base(receiver) != info.name:
+            return {}
+        mapping = {}
+        T.unify(T.make(info.name, [n for n, _c in info.type_params]), receiver, mapping)
+        return mapping
 
     def check_private_field(self, type_name, field_name, node):
         """A private field may only be read or written inside its own class."""
