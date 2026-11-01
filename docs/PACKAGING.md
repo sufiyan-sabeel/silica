@@ -73,6 +73,11 @@ like — version consistency across five files, the wheel containing the interop
 worker, no source files leaking into the wheel, the sdist carrying the examples,
 checksums matching — is Silica code.
 
+It also refuses an sdist that carries a file git does not track: setuptools builds
+the sdist from the working tree, so a scratch file matching a `MANIFEST.in` pattern
+would otherwise be packaged and released. Build from a clean tree regardless — the
+check is the safety net, not a substitute.
+
 It runs in CI, in the release workflow and in the publish workflow, so a package
 cannot be published without passing it. `tools/package/README.md` documents the
 split and the exact commands.

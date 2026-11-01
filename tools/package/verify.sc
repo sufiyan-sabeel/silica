@@ -20,6 +20,8 @@ const CHANGELOG: String = "CHANGELOG.md"
 
 const SUMS: String = "dist/SHA256SUMS.txt"
 
+const GENERATED: List = ["PKG-INFO", "setup.cfg", "pyproject.toml"]
+
 sfn fail(failures: List, message: String) {
     push(failures, message)
 }
@@ -124,6 +126,37 @@ sfn check_sdist(failures: List, sdist: Any, suffixes: List) {
     }
 }
 
+sfn is_generated(entry: String) -> Bool {
+    si contains(GENERATED, entry) {
+        ret oui
+    }
+    ret string.contains(entry, ".egg-info/")
+}
+
+sfn check_tracking(failures: List, sdist: Any, tracked: Any) {
+    si type_of(tracked) != "List" {
+        sprint("  note: no git index here, so untracked-file detection is skipped")
+        ret
+    }
+    let files: List = sdist["files"]
+    let reported: Int = 0
+    per entry in files {
+        si contains(tracked, entry) {
+            continue
+        }
+        si is_generated(entry) {
+            continue
+        }
+        si reported < 10 {
+            fail(failures, "sdist carries an untracked file: " + entry)
+        }
+        reported = reported + 1
+    }
+    si reported > 10 {
+        fail(failures, "and " + str(reported - 10) + " more untracked file(s)")
+    }
+}
+
 sfn check_names(failures: List, version: String, wheel: Any, sdist: Any) {
     si string.contains(wheel["name"], "silica_lang-" + version) == nein {
         fail(failures, "wheel name does not carry the version: " + wheel["name"])
@@ -174,6 +207,7 @@ sfn main() {
     check_names(failures, version, wheel, sdist)
     check_wheel(failures, wheel, facts["required_wheel"], facts["forbidden_wheel_prefixes"])
     check_sdist(failures, sdist, facts["required_sdist_suffixes"])
+    check_tracking(failures, sdist, facts["tracked"])
     check_sums(failures, wheel, sdist)
     sprint("Silica packaging check for " + facts["distribution"] + " " + version)
     sprint("  wheel " + wheel["name"] + " (" + str(len(wheel["files"])) + " files)")

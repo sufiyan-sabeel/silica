@@ -93,6 +93,23 @@ def read_sums(directory):
     return sums
 
 
+def tracked_files(repo):
+    """Files git tracks, or None when there is no repository (an unpacked sdist).
+
+    The sdist is built from the *working tree*, so an untracked scratch file that
+    matches a MANIFEST.in pattern lands in it. Comparing against `git ls-files` is
+    how that is caught.
+    """
+    try:
+        out = subprocess.run(["git", "ls-files"], cwd=repo, capture_output=True,
+                             text=True, timeout=120)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if out.returncode != 0:
+        return None
+    return sorted(line for line in out.stdout.splitlines() if line)
+
+
 def pick(directory, suffix):
     names = sorted(n for n in os.listdir(directory) if n.endswith(suffix))
     return os.path.join(directory, names[-1]) if names else None
@@ -147,6 +164,7 @@ def main(argv=None):
             "files": sdist_members(sdist),
         },
         "sums": read_sums(dist),
+        "tracked": tracked_files(args.repo),
         "required_wheel": REQUIRED_WHEEL,
         "forbidden_wheel_prefixes": FORBIDDEN_WHEEL_PREFIXES,
         "required_sdist_suffixes": REQUIRED_SDIST_SUFFIXES,

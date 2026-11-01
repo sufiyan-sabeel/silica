@@ -82,6 +82,12 @@ def facts(version=VERSION, wheel_files=None, sdist_files=None,
             "silica/stdlib_random.py", "silica/ide/app.html"],
         "forbidden_wheel_prefixes": ["tests/", "examples/", "docs/",
                                      "benchmarks/", "editors/", "packaging/"],
+        "tracked": [
+            "examples/stdlib_tour.sc", "examples/data/sales.csv",
+            "docs/APPLICATIONS.md", "docs/SECURITY_MODEL.md",
+            "tests/test_interop.py", "install.sh", "uninstall.sh",
+            "MANIFEST.in",
+        ],
         "required_sdist_suffixes": [
             "examples/stdlib_tour.sc", "examples/data/sales.csv",
             "docs/APPLICATIONS.md", "docs/SECURITY_MODEL.md",
@@ -155,6 +161,14 @@ class RealRepositoryTests(unittest.TestCase):
             report = json.load(open(os.path.join(tmp, "build", "packaging",
                                                  "report.json"), encoding="utf-8"))
             self.assertTrue(report["ok"])
+            # and the sdist it just built carries only tracked files
+            tracked = set(data.get("tracked") or [])
+            self.assertTrue(tracked, "facts carry no tracked list")
+            generated = ("PKG-INFO", "setup.cfg", "pyproject.toml")
+            stray = [f for f in data["sdist"]["files"]
+                     if f not in tracked and ".egg-info/" not in f
+                     and f not in generated]
+            self.assertEqual(stray, [], "untracked files in the sdist: %s" % stray[:5])
             self.assertEqual(report["version"], VERSION)
             self.assertEqual(report["problems"], [])
 
@@ -252,6 +266,66 @@ class PolicyTests(unittest.TestCase):
         self.assert_fails("not found")
 
 
+class SdistTrackingTests(unittest.TestCase):
+    """The sdist is built from the working tree, so untracked files can leak in."""
+
+    def setUp(self):
+        self.directory = tempfile.mkdtemp(prefix="silica-track-")
+        self.addCleanup(shutil.rmtree, self.directory, True)
+        self.repo = SyntheticRepo(self.directory)
+
+    def run_verify(self):
+        return run_silica(VERIFY, self.directory)
+
+    def test_a_clean_tree_passes(self):
+        code, out, err = self.run_verify()
+        self.assertEqual(code, 0, out + err)
+
+    def test_an_untracked_file_in_the_sdist_is_caught(self):
+        # exactly the defect found: a scratch file matching examples/*.sc
+        data = facts()
+        data["sdist"]["files"] = data["sdist"]["files"] + ["examples/scratch.sc"]
+        self.repo.write_facts(data)
+        code, out, err = self.run_verify()
+        self.assertEqual(code, 1)
+        self.assertIn("sdist carries an untracked file: examples/scratch.sc", out)
+
+    def test_an_untracked_doc_is_caught(self):
+        data = facts()
+        data["sdist"]["files"] = data["sdist"]["files"] + ["docs/notes.md"]
+        self.repo.write_facts(data)
+        code, out, _err = self.run_verify()
+        self.assertEqual(code, 1)
+        self.assertIn("docs/notes.md", out)
+
+    def test_generated_metadata_is_allowed(self):
+        data = facts()
+        data["sdist"]["files"] = data["sdist"]["files"] + [
+            "PKG-INFO", "setup.cfg", "silica_lang.egg-info/PKG-INFO",
+            "silica_lang.egg-info/SOURCES.txt"]
+        self.repo.write_facts(data)
+        code, out, err = self.run_verify()
+        self.assertEqual(code, 0, out + err)
+
+    def test_without_a_git_index_the_check_is_skipped_not_failed(self):
+        data = facts()
+        data["tracked"] = None
+        data["sdist"]["files"] = data["sdist"]["files"] + ["examples/scratch.sc"]
+        self.repo.write_facts(data)
+        code, out, err = self.run_verify()
+        self.assertEqual(code, 0, out + err)
+        self.assertIn("untracked-file detection is skipped", out)
+
+    def test_many_untracked_files_are_summarised(self):
+        data = facts()
+        data["sdist"]["files"] = data["sdist"]["files"] + [
+            "examples/junk%d.sc" % i for i in range(14)]
+        self.repo.write_facts(data)
+        code, out, _err = self.run_verify()
+        self.assertEqual(code, 1)
+        self.assertIn("and 4 more untracked file(s)", out)
+
+
 class BoundaryTests(unittest.TestCase):
     """What the Silica side is allowed to do."""
 
@@ -269,16 +343,18 @@ class BoundaryTests(unittest.TestCase):
                           "urllib", "http", "curl", "sh "):
             self.assertNotIn(forbidden, source, forbidden)
 
-    def test_the_bridge_executes_only_a_fixed_build_command(self):
+    def test_the_bridge_executes_only_fixed_commands(self):
         with open(os.path.join(ROOT, "tools", "package", "facts.py"),
                   encoding="utf-8") as handle:
             source = handle.read()
-        # the only subprocess use is the fixed build invocation
-        self.assertEqual(source.count("subprocess.run"), 1)
+        # Exactly two: the build (opt-in) and `git ls-files` (read-only, to catch
+        # untracked files in the sdist). Both have fixed argument lists.
+        self.assertEqual(source.count("subprocess.run"), 2)
         self.assertIn('"--build"', source)
-        self.assertIn("[sys.executable, \"-m\", \"build\"]", source)
+        self.assertIn('[sys.executable, "-m", "build"]', source)
+        self.assertIn('["git", "ls-files"]', source)
         for forbidden in ("shell=True", "os.system", "urllib", "requests",
-                          "token", "password"):
+                          "token", "password", "curl", "wget"):
             self.assertNotIn(forbidden, source, forbidden)
 
     def test_the_verifier_needs_a_capability_to_read_anything(self):

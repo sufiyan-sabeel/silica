@@ -47,33 +47,64 @@ installers. Five files changed content, all metadata or prose:
 
 Again, no source file differs.
 
-## 2a. The CI-built artefacts, compared directly (authoritative)
+## 2b. The 206-versus-207-file sdist question, answered
 
-The comparison above was made with a local build. This one uses the artefacts CI
-produced for commit `3acace06` — downloaded from the workflow run, not rebuilt by
-hand — with `SOURCE_DATE_EPOCH` set from the commit timestamp.
+An earlier note in this audit said the sdist had 206 files locally and 207 in CI,
+which suggested the build was environment-dependent. It was not. Investigating it
+properly produced one non-finding and one real defect.
 
-| Artefact | Published v0.10.0 | CI-built from `main` | Identical |
-|---|---|---|---|
-| wheel | `cf08d36187b819f68ff8690a6ffd8ee4a216f3e190322e10e200e398767e546c` | `c8a34578ec03c343ab26b0c79863ba67983c1ecc681f594de6803b6abbf75641` | **no** |
-| sdist | `dcd7845a14003889ace504d93fc8020aa0faf45be7b3421290f77fca6237fc1e` | `efdc9b8c617190d30452ed69b3aaf4ca7c8d08a38673e4934d9310df29dcb317` | **no** |
+### The count difference was two different commits
 
-Neither artefact matches, and the differences are **content**, not timestamps:
+| Build | Commit | Files |
+|---|---|---|
+| local | `8b497af` | 206 |
+| CI | `3acace0` | 207 |
+| local, rebuilt from `3acace0` | `3acace0` | **207** |
 
-- **wheel**: 71 files in both, none added or removed, and exactly **2 differ** —
-  `dist-info/METADATA` and `dist-info/RECORD` (classifiers and Documentation/
-  Changelog URLs were added to `pyproject.toml` after the tag).
-- **sdist**: 118 files published, **207** in CI. **89 files are new** — `MANIFEST.in`,
-  which came after the tag, brings in the examples, docs, tests, benchmarks,
-  `CHANGELOG.md`, `SECURITY.md`, `CONTRIBUTING.md` and the installers. **5 files
-  differ** in content: `PKG-INFO`, `README.md`, `pyproject.toml`,
-  `silica_lang.egg-info/PKG-INFO`, `silica_lang.egg-info/SOURCES.txt`.
+Building `3acace0` locally produces **the same 207 files as CI, byte for byte in
+every member**. The one added file is `docs/RELEASE_INTEGRITY.md`, which this audit
+itself added between those two commits. The comparison had been mixing commits;
+there is no environment difference.
 
-No source file differs in either artefact. The published assets are therefore
-correct for the code they shipped; they are simply not what `main` builds today.
+### The real defect: untracked files leak into the sdist
 
-**Verdict: neither artefact may be published as `0.10.0`.** The next release must
-carry a new version number.
+`setuptools` builds the sdist from the **working tree**, not from git, so any
+untracked file that matches a `MANIFEST.in` pattern is packaged. Verified by
+dropping two scratch files into a clean clone:
+
+```bash
+echo probe > examples/untracked_probe.sc
+echo probe > docs/untracked_probe.md
+python3 -m build          # both files land in the sdist
+```
+
+The sdist then reported **209 files**, including both probes. A release built from a
+developer's tree could ship scratch files, notes or secrets that were never
+committed. That is the environment dependence worth fixing.
+
+### The fix
+
+The packaging check now refuses an sdist that carries a file git does not track:
+
+- `tools/package/facts.py` records `tracked` from `git ls-files` — one read-only
+  call, no shell, no network. When there is no repository (an unpacked sdist), it
+  reports `null` instead of guessing.
+- `tools/package/verify.sc` (Silica) fails with
+  `sdist carries an untracked file: <path>` for any sdist member that is neither
+  tracked nor a known generated file (`PKG-INFO`, `setup.cfg`, `pyproject.toml`,
+  anything under `*.egg-info/`). More than ten are summarised rather than listed.
+- With no git index the check prints `untracked-file detection is skipped` and does
+  not fail, so an unpacked sdist can still be verified.
+
+Six tests cover it: a clean tree passes, one untracked file and one untracked doc
+are caught, generated metadata is allowed, a missing git index skips rather than
+fails, and more than ten untracked files are summarised.
+
+### What this does not change
+
+No project file was removed. `MANIFEST.in` still includes the examples, docs,
+tests, benchmarks and installers — those are all tracked, and they belong in a
+source distribution.
 
 ## 3. Why even a rebuild of the *tag* does not reproduce the published bytes
 
@@ -106,9 +137,8 @@ ignores `SOURCE_DATE_EPOCH` for them.
 
 ## 5. Recommendation
 
-**Do not publish `0.10.0` to PyPI from `main`. Publish `0.10.1` built from the
-commit that ships** — confirmed by the CI-built comparison in §2a, where neither
-artefact matches the published ones.
+**Do not publish `0.10.0` to PyPI from `main`. Publish a new patch version
+(`0.10.1`) built from the commit that ships.**
 
 Why not reuse `0.10.0`:
 
