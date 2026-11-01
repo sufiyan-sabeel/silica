@@ -5,178 +5,15 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
-## Unreleased — application examples
+## [0.10.0] — 2026-11-01
 
-No version bump: `pyproject.toml` stays at 0.9.3.
+Interoperability with a real external runtime, three standard-library modules,
+three applications, a measured VM speed-up, and the security work that goes with
+running foreign code. Existing Silica programs are unaffected: this release is a
+superset of 0.9.3, and `tests/test_compat_093.py` pins that.
 
-### Added — three runnable applications
-- **`examples/calculator_app.sc`** — a line-oriented calculator with preventive
-  validation (operand shape, operator, division by zero, empty input) and no
-  capability requirement. 12 * 4 → 48.0.
-- **`examples/task_manager.sc`** — a persistent task list over `tasks.json`
-  (load, add, list, done, remove, save), behind `fs.read`/`fs.write`. Validates an
-  empty command, a missing title, a non-numeric id, an unknown id, an unknown verb
-  and a corrupt store. State survives across runs.
-- **`examples/data_report.sc`** — a data-driven report: reads `sales.csv`,
-  aggregates revenue per region, prints a table and writes `report.json`. Skips
-  and counts malformed rows; refuses a missing source without writing a report.
-- **`examples/data/sales.csv`** — the sample data the report reads.
+### Generics
 
-### Documentation
-- **`docs/APPLICATIONS.md`** — exact commands, expected output, the capability each
-  application needs, what it validates, and an explicit statement of what these
-  examples are not (no GUI, no network, Linux x86_64 only).
-- It also records the language limits the applications ran into: no exceptions, no
-  index assignment (`list[i] = v` / `map["k"] = v` do not exist, so a mutation
-  rebuilds), map literals must stay on one line, and `und`/`ou` are the boolean
-  operators — not `oder`.
-
-### Tests
-- **`tests/test_apps.py`** — 17 integration tests that execute each application in
-  a temporary directory, feed it stdin and check both the transcript and the files
-  written: the exact calculator session including every error branch, the full task
-  lifecycle plus reload persistence, refusal without capabilities (and no file
-  created), a corrupt store, a task missing its fields, CSV aggregation with
-  verified totals, bad rows counted, a missing source, and the shipped sample data
-  producing the documented report.
-- All three are discovered by the existing example checks (compile, verify) and by
-  `silica fmt --check examples/*.sc`.
-
-## Unreleased — standard library: path, time, random
-
-No version bump: `pyproject.toml` stays at 0.9.3.
-
-### Added — three modules, implemented rather than planned
-- **`path`** — path *text*: `join`, `base`, `dir`, `ext`, `stem`, `split`,
-  `normalise`, `absolute`, `is_absolute`, `is_within`, `with_suffix`, and the
-  `path.sep` constant. **No capability**: nothing here touches the disk, which is
-  the point — a program can reason about paths without being allowed near them.
-  `normalise` and `is_within` are documented as *lexical*: they do not resolve
-  symlinks, so the real boundary remains the capability check in `fs.*`. A NUL
-  byte in any argument is refused.
-- **`time`** — `now`, `now_ms`, `monotonic`, `sleep`, `iso`, `parse_iso`, `year`,
-  `month`, `day`. Two clocks with different guarantees, stated in the docs: `now`
-  is wall clock and can jump, `monotonic` cannot and is for measuring. `sleep` is
-  bounded to one day and refuses negatives and NaN. No `strftime`: one fixed
-  ISO-8601 output instead of a partial format language.
-- **`random`** — the security distinction is in the names. Ordinary
-  pseudorandom: `float`, `int`, `choice`, `shuffle`, `seed`. Cryptographically
-  secure: `secure_bytes`, `secure_int`, `secure_token`, which use the operating
-  system's CSPRNG and are never seeded. Hex and URL-safe text stand in for bytes,
-  because Silica has no byte type.
-- `path`, `time` and `random` are removed from `PLANNED_MODULES`; `regex`, `http`,
-  `net`, `process`, `log`, `crypto`, `test`, `async` and `ai` remain planned and
-  still fail loudly.
-
-### Fixed — a compiler bug the new constant exposed
-- **Module constants keep their own type.** `compile_member` forced every constant
-  through `float()`, so `math.pi` worked but any non-float constant was a compile
-  error (`could not convert string to float: '/'`). It now interns the value as it
-  is, and rejects a type with no bytecode form explicitly. `math.pi`, `math.e` and
-  `math.tau` behave exactly as before.
-
-### Tests
-- **52 new tests** across `tests/test_stdlib_path.py`, `test_stdlib_time.py` and
-  `test_stdlib_random.py`: behaviour, boundaries, integration through real Silica
-  programs, and the security cases that matter — NUL bytes in paths, traversal and
-  prefix-confusion in `is_within`, inverted ranges, absurd sizes, and a test that
-  seeding the pseudorandom generator cannot determine `secure_*` output.
-- **`examples/stdlib_tour.sc`** exercises all three modules and is pinned in
-  `EXPECTED`.
-- Full suite: 1224 passed, 7 skipped, 1266 subtests.
-
-## Unreleased — security hardening and a measured speed-up
-
-No version bump yet: `pyproject.toml` stays at 0.9.3. The release gates are not
-all met (see below).
-
-### Added — post-execution security for interoperability
-- **`silica/interop/validate.py`**: everything a provider returns is validated
-  before it becomes a Silica value — JSON scalars, lists and dicts only; String
-  keys; bounded depth, item count and byte size; 64-bit integers; finite floats;
-  reserved keys only inside their defined shape; handle ids that are non-negative
-  integers; handle kinds that are short identifiers, so a path or a secret cannot
-  ride in one; error messages coerced, newline-stripped and length-bounded.
-- **Shutdown reporting**: `PythonWorkerProvider.close()` returns
-  `{worker_stopped, handles_leaked, python}`, so a leaked foreign handle is
-  visible instead of silent.
-- **16 new tests**, including an adversarial worker fixture
-  (`tests/fixtures/evil_worker.py`) that sends deeply nested, oversized,
-  non-JSON, truncated and unknown-kind frames, malformed handle references, a
-  crash mid-call and a multi-line error. Every one is refused with a structured
-  code and the runtime stays usable.
-
-### Changed — measured VM optimization
-- **Arithmetic fast path** in the dispatch loop: ADD/SUB/MUL test `type(x) is int`
-  first (which excludes Bool exactly as before), the 64-bit range test replaces
-  `i64()` on the common path (an overflowing add still wraps), comparisons of two
-  Ints compare directly, and the per-call lambdas became module-level functions.
-- **Measured, same machine, best of three:** arithmetic loop 11705.7 → 7966.0 ms
-  (−32%), recursion 1500.5 → 1163.9 ms (−22%), collections 2635.3 → 2121.8 ms
-  (−19%), strings 152.1 → 141.0 ms. Every benchmark still reports `ok`, meaning
-  Silica and CPython produce the same result. Recorded in `docs/PERFORMANCE.md`.
-- **Regression test** for the one semantic the fast path could have broken:
-  `test_bool_arithmetic_is_still_refused`.
-
-### Documentation
-- `docs/PERFORMANCE.md` records the profile, the change, the before/after table
-  and what the numbers do not claim (Silica is still 31× slower than CPython).
-- `README.md` states that the interop worker has been exercised on Linux x86_64
-  only, and that Termux remains untested.
-
-### Still open before 0.10.0
-- Standard-library modules (Phase C) and application examples (Phase D).
-- Termux on a real device (Phase E) — documented as untested, not claimed.
-- Release validation and the version bump (Phase F).
-
-## Unreleased — interoperability foundation
-
-No version bump: `pyproject.toml` stays at 0.9.3. Nothing is tagged or released,
-and no foreign ecosystem is executed yet.
-
-### Added — `silica/interop/`, Python-side only
-- **`docs/INTEROPERABILITY_AUDIT.md`**: what the implementation actually does —
-  the native registry (25 modules, 281 natives), `CALL_NATIVE` end to end, the
-  capability model, the language surface, module resolution, bytecode constraints,
-  and the existing `ctypes`/subprocess usage in the speech path.
-- **`docs/INTEROPERABILITY.md`**: the architecture — foreign values, opaque
-  handles, the provider interface, module resolution and signature metadata,
-  conversion and structured errors, the worker protocol, runtime lifecycle,
-  capabilities, limits, isolation, the C ABI contract, WASM/WASI, and the
-  compatibility policy.
-- **`silica/interop/values.py`**: a tagged foreign value, converted explicitly and
-  bounded in both directions (depth, item count, bytes, cycles, 64-bit range).
-- **`silica/interop/handles.py`**: opaque 128-bit tokens with provider and session
-  ownership, generation counting, idempotent release, and accurate
-  released-versus-unknown diagnostics.
-- **`silica/interop/provider.py`**: the provider interface, `Signature` metadata
-  and `ForeignType`.
-- **`silica/interop/registry.py`**: a provider registry that is deliberately
-  separate from `natives.MODULES`, so no provider can enter the standard-library
-  namespace or shadow an existing module.
-- **`silica/interop/context.py`**: the invocation context, whose `authorize` calls
-  `CapabilitySet.authorize_call` — the same single gate the VM uses for natives.
-- **`silica/interop/errors.py`**: a closed set of 22 error codes.
-
-### Not implemented, and not claimed
-- No Python, C, C++, Rust, JS, JVM or WASM execution.
-- No process or worker is started; the protocol is specified, not built.
-- No native library is loaded.
-- No new opcode, keyword, capability kind or standard-library native. A Silica
-  program that compiled before compiles identically: `use interop` is still an
-  unknown module.
-
-### Tests
-- **`tests/test_interop.py`**: 49 tests with fake providers — registration,
-  metadata-only inspection, invocation, arity and type checking, structured
-  errors, the capability gate (denied by default, resolved paths, path escape),
-  handle lifecycle and ownership, value bounds, shutdown, and isolation checks
-  that the native registry, bytecode format and Silica surface are untouched.
-- Full suite: 1130 passed, 7 skipped, 1188 subtests.
-
-## Unreleased — generics
-
-No version bump: `pyproject.toml` stays at 0.9.3. Nothing is tagged or released,
 and nothing is merged into `main`.
 
 ### Added — type parameters that are actually checked
@@ -235,6 +72,165 @@ and nothing is merged into `main`.
   covered, promoted to permanent regression tests (deep nesting, inference
   chains, dispatch between classes, formatter round-trips with private/static
   members, natives on parameterised containers).
+
+### Application examples
+
+
+### Added — three runnable applications
+- **`examples/calculator_app.sc`** — a line-oriented calculator with preventive
+  validation (operand shape, operator, division by zero, empty input) and no
+  capability requirement. 12 * 4 → 48.0.
+- **`examples/task_manager.sc`** — a persistent task list over `tasks.json`
+  (load, add, list, done, remove, save), behind `fs.read`/`fs.write`. Validates an
+  empty command, a missing title, a non-numeric id, an unknown id, an unknown verb
+  and a corrupt store. State survives across runs.
+- **`examples/data_report.sc`** — a data-driven report: reads `sales.csv`,
+  aggregates revenue per region, prints a table and writes `report.json`. Skips
+  and counts malformed rows; refuses a missing source without writing a report.
+- **`examples/data/sales.csv`** — the sample data the report reads.
+
+### Documentation
+- **`docs/APPLICATIONS.md`** — exact commands, expected output, the capability each
+  application needs, what it validates, and an explicit statement of what these
+  examples are not (no GUI, no network, Linux x86_64 only).
+- It also records the language limits the applications ran into: no exceptions, no
+  index assignment (`list[i] = v` / `map["k"] = v` do not exist, so a mutation
+  rebuilds), map literals must stay on one line, and `und`/`ou` are the boolean
+  operators — not `oder`.
+
+### Tests
+- **`tests/test_apps.py`** — 17 integration tests that execute each application in
+  a temporary directory, feed it stdin and check both the transcript and the files
+  written: the exact calculator session including every error branch, the full task
+  lifecycle plus reload persistence, refusal without capabilities (and no file
+  created), a corrupt store, a task missing its fields, CSV aggregation with
+  verified totals, bad rows counted, a missing source, and the shipped sample data
+  producing the documented report.
+- All three are discovered by the existing example checks (compile, verify) and by
+  `silica fmt --check examples/*.sc`.
+
+### Standard library: path, time, random
+
+
+### Added — three modules, implemented rather than planned
+- **`path`** — path *text*: `join`, `base`, `dir`, `ext`, `stem`, `split`,
+  `normalise`, `absolute`, `is_absolute`, `is_within`, `with_suffix`, and the
+  `path.sep` constant. **No capability**: nothing here touches the disk, which is
+  the point — a program can reason about paths without being allowed near them.
+  `normalise` and `is_within` are documented as *lexical*: they do not resolve
+  symlinks, so the real boundary remains the capability check in `fs.*`. A NUL
+  byte in any argument is refused.
+- **`time`** — `now`, `now_ms`, `monotonic`, `sleep`, `iso`, `parse_iso`, `year`,
+  `month`, `day`. Two clocks with different guarantees, stated in the docs: `now`
+  is wall clock and can jump, `monotonic` cannot and is for measuring. `sleep` is
+  bounded to one day and refuses negatives and NaN. No `strftime`: one fixed
+  ISO-8601 output instead of a partial format language.
+- **`random`** — the security distinction is in the names. Ordinary
+  pseudorandom: `float`, `int`, `choice`, `shuffle`, `seed`. Cryptographically
+  secure: `secure_bytes`, `secure_int`, `secure_token`, which use the operating
+  system's CSPRNG and are never seeded. Hex and URL-safe text stand in for bytes,
+  because Silica has no byte type.
+- `path`, `time` and `random` are removed from `PLANNED_MODULES`; `regex`, `http`,
+  `net`, `process`, `log`, `crypto`, `test`, `async` and `ai` remain planned and
+  still fail loudly.
+
+### Fixed — a compiler bug the new constant exposed
+- **Module constants keep their own type.** `compile_member` forced every constant
+  through `float()`, so `math.pi` worked but any non-float constant was a compile
+  error (`could not convert string to float: '/'`). It now interns the value as it
+  is, and rejects a type with no bytecode form explicitly. `math.pi`, `math.e` and
+  `math.tau` behave exactly as before.
+
+### Tests
+- **52 new tests** across `tests/test_stdlib_path.py`, `test_stdlib_time.py` and
+  `test_stdlib_random.py`: behaviour, boundaries, integration through real Silica
+  programs, and the security cases that matter — NUL bytes in paths, traversal and
+  prefix-confusion in `is_within`, inverted ranges, absurd sizes, and a test that
+  seeding the pseudorandom generator cannot determine `secure_*` output.
+- **`examples/stdlib_tour.sc`** exercises all three modules and is pinned in
+  `EXPECTED`.
+- Full suite: 1224 passed, 7 skipped, 1266 subtests.
+
+### Security hardening and a measured speed-up
+
+
+### Added — post-execution security for interoperability
+- **`silica/interop/validate.py`**: everything a provider returns is validated
+  before it becomes a Silica value — JSON scalars, lists and dicts only; String
+  keys; bounded depth, item count and byte size; 64-bit integers; finite floats;
+  reserved keys only inside their defined shape; handle ids that are non-negative
+  integers; handle kinds that are short identifiers, so a path or a secret cannot
+  ride in one; error messages coerced, newline-stripped and length-bounded.
+- **Shutdown reporting**: `PythonWorkerProvider.close()` returns
+  `{worker_stopped, handles_leaked, python}`, so a leaked foreign handle is
+  visible instead of silent.
+- **16 new tests**, including an adversarial worker fixture
+  (`tests/fixtures/evil_worker.py`) that sends deeply nested, oversized,
+  non-JSON, truncated and unknown-kind frames, malformed handle references, a
+  crash mid-call and a multi-line error. Every one is refused with a structured
+  code and the runtime stays usable.
+
+### Changed — measured VM optimization
+- **Arithmetic fast path** in the dispatch loop: ADD/SUB/MUL test `type(x) is int`
+  first (which excludes Bool exactly as before), the 64-bit range test replaces
+  `i64()` on the common path (an overflowing add still wraps), comparisons of two
+  Ints compare directly, and the per-call lambdas became module-level functions.
+- **Measured, same machine, best of three:** arithmetic loop 11705.7 → 7966.0 ms
+  (−32%), recursion 1500.5 → 1163.9 ms (−22%), collections 2635.3 → 2121.8 ms
+  (−19%), strings 152.1 → 141.0 ms. Every benchmark still reports `ok`, meaning
+  Silica and CPython produce the same result. Recorded in `docs/PERFORMANCE.md`.
+- **Regression test** for the one semantic the fast path could have broken:
+  `test_bool_arithmetic_is_still_refused`.
+
+### Documentation
+- `docs/PERFORMANCE.md` records the profile, the change, the before/after table
+  and what the numbers do not claim (Silica is still 31× slower than CPython).
+- `README.md` states that the interop worker has been exercised on Linux x86_64
+  only, and that Termux remains untested.
+
+### Interoperability foundation
+
+and no foreign ecosystem is executed yet.
+
+### Added — `silica/interop/`, Python-side only
+- **`docs/INTEROPERABILITY_AUDIT.md`**: what the implementation actually does —
+  the native registry (25 modules, 281 natives), `CALL_NATIVE` end to end, the
+  capability model, the language surface, module resolution, bytecode constraints,
+  and the existing `ctypes`/subprocess usage in the speech path.
+- **`docs/INTEROPERABILITY.md`**: the architecture — foreign values, opaque
+  handles, the provider interface, module resolution and signature metadata,
+  conversion and structured errors, the worker protocol, runtime lifecycle,
+  capabilities, limits, isolation, the C ABI contract, WASM/WASI, and the
+  compatibility policy.
+- **`silica/interop/values.py`**: a tagged foreign value, converted explicitly and
+  bounded in both directions (depth, item count, bytes, cycles, 64-bit range).
+- **`silica/interop/handles.py`**: opaque 128-bit tokens with provider and session
+  ownership, generation counting, idempotent release, and accurate
+  released-versus-unknown diagnostics.
+- **`silica/interop/provider.py`**: the provider interface, `Signature` metadata
+  and `ForeignType`.
+- **`silica/interop/registry.py`**: a provider registry that is deliberately
+  separate from `natives.MODULES`, so no provider can enter the standard-library
+  namespace or shadow an existing module.
+- **`silica/interop/context.py`**: the invocation context, whose `authorize` calls
+  `CapabilitySet.authorize_call` — the same single gate the VM uses for natives.
+- **`silica/interop/errors.py`**: a closed set of 22 error codes.
+
+### Not implemented, and not claimed
+- No Python, C, C++, Rust, JS, JVM or WASM execution.
+- No process or worker is started; the protocol is specified, not built.
+- No native library is loaded.
+- No new opcode, keyword, capability kind or standard-library native. A Silica
+  program that compiled before compiles identically: `use interop` is still an
+  unknown module.
+
+### Tests
+- **`tests/test_interop.py`**: 49 tests with fake providers — registration,
+  metadata-only inspection, invocation, arity and type checking, structured
+  errors, the capability gate (denied by default, resolved paths, path escape),
+  handle lifecycle and ownership, value bounds, shutdown, and isolation checks
+  that the native registry, bytecode format and Silica surface are untouched.
+- Full suite: 1130 passed, 7 skipped, 1188 subtests.
 
 ## [0.9.3] — 2026-10-31
 

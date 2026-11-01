@@ -1,4 +1,4 @@
-# Silica Language Specification — v0.9.3
+# Silica Language Specification — v0.10.0
 
 This document is normative for the v0.9.3 reference implementation. Anything
 described here is implemented and covered by tests in `tests/`; anything else is
