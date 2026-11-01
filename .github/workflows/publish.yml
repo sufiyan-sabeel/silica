@@ -22,65 +22,42 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: Build wheel and sdist
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install build tooling
-        run: python -m pip install --upgrade pip build
-      - name: Build
-        run: |
-          # Reproducible wheels: same commit, same bytes.
-          export SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
-          python -m build
-      - name: Collect packaging facts
-        run: python tools/package/facts.py --dist-dir dist --out build/packaging/facts.json
-      - name: Write the checksum file (Silica)
-        run: python -m silica run --allow-fs-read . --allow-fs-write . tools/package/sums.sc
-      - name: Verify the packages (Silica)
-        # Every policy decision about what a wheel and an sdist must contain is
-        # made here, in Silica source. Python only listed the archives and
-        # hashed them.
-        run: python -m silica run --allow-fs-read . --allow-fs-write . tools/package/verify.sc
-      - name: Upload the checksum file
-        run: cp build/packaging/report.json dist/ 2>/dev/null || true
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-  publish-testpypi:
-    name: Upload to TestPyPI
-    if: github.event_name == 'workflow_dispatch' && inputs.repository == 'testpypi'
-    needs: build
-    runs-on: ubuntu-latest
-    environment: testpypi
-    permissions:
-      id-token: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://test.pypi.org/legacy/
-
   publish-pypi:
-    name: Upload to PyPI
+    name: Publish the CI-built artefacts to PyPI
     if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.repository == 'pypi')
-    needs: build
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
+      contents: read
       id-token: write
+      actions: read
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: actions/checkout@v4
+
+      - name: Download the artefacts CI built for this commit
+        # The whole point: never rebuild between destinations. These are the same
+        # files attached to the GitHub release, so PyPI and GitHub serve identical
+        # bytes.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA=$(git rev-parse HEAD)
+          echo "shipping commit: $SHA"
+          RUN=$(gh run list --workflow=ci.yml --commit="$SHA" --status=success \
+                --limit 1 --json databaseId --jq '.[0].databaseId')
+          if [ -z "$RUN" ] || [ "$RUN" = "null" ]; then
+            echo "no successful CI run for $SHA — refusing to rebuild" >&2
+            exit 1
+          fi
+          echo "downloading dist from CI run $RUN"
+          gh run download "$RUN" -n dist -D dist
+          ls -l dist/
+
+      - name: Verify the packages (Silica)
+        run: |
+          python tools/package/facts.py --dist-dir dist --out build/packaging/facts.json
+          python -m silica run --allow-fs-read . --allow-fs-write . tools/package/sums.sc
+          python -m silica run --allow-fs-read . --allow-fs-write . tools/package/verify.sc
+
+      - name: Upload to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
