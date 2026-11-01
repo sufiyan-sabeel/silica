@@ -57,7 +57,15 @@ and nothing is merged into `main`.
   rules (positive and negative), runtime behaviour, erasure, bytecode round-trip,
   preservation of non-generic behaviour, and a regression test for every defect
   found while porting.
-- Full suite: 1047 passed, 7 skipped, 1188 subtests (was 990 before generics).
+- Full suite: 1081 passed, 7 skipped, 1188 subtests (was 990 before generics).
+- **`tools/audit_generics.py`**: the pre-merge audit as a developer tool — 58 cases
+  across nesting, inference, dispatch, diagnostics, formatter round-trip,
+  backward compatibility and interaction. Deliberately outside `tests/` so pytest
+  never collects it.
+- **`tests/test_generics_audit.py`**: the 27 audit cases that were not already
+  covered, promoted to permanent regression tests (deep nesting, inference
+  chains, dispatch between classes, formatter round-trips with private/static
+  members, natives on parameterised containers).
 
 ## [0.9.3] — 2026-10-31
 
