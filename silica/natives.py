@@ -524,7 +524,7 @@ def _build():
     mods = {"core": {}, "math": {}, "string": {}, "collections": {},
             "fs": {}, "gui": {}, "gui.lib.widgets": {}, "gui.lib.layout": {},
             "colors": {}, "gui.lib.theme": {}, "json": {}, "speech": {},
-            "voice": {}, "tui": {},
+            "voice": {}, "tui": {}, "python": {},
             "tui.lib.widgets": {}, "tui.lib.layout": {}, "tui.lib.style": {},
             "ui": {}, "ui.state": {},
             "ui.lib.widgets": {}, "ui.lib.theme": {}, "ui.lib.colors": {},
@@ -609,6 +609,15 @@ def _build():
         add("speech", name, params, ret, fn, min_args=min_args,
             max_args=max_args, requires=requires, path_arg=path_arg)
     mods["voice"].update(mods["speech"])
+
+    from .interop.natives_python import FUNCTIONS as _PYTHON
+    # The `python` module is the interoperability surface. Its natives are
+    # ordinary natives: verified at load and authorised at the VM's gate. The
+    # provider registry they call into is a separate structure.
+    for (name, params, ret, fn, min_args, max_args,
+         requires, path_arg) in _PYTHON:
+        add("python", name, params, ret, fn, min_args=min_args,
+            max_args=max_args, requires=requires, path_arg=path_arg)
 
     from .ui.natives_colors import FUNCTIONS as _COLORS
     for (name, params, ret, fn, min_args, max_args,

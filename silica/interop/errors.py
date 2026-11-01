@@ -40,7 +40,10 @@ CODES = frozenset({
     "handle.unknown",            # token names no live handle
     "handle.released",           # token was released
     "handle.owner",              # token belongs to another provider or session
-    # protocol (reserved for the worker layer, not implemented yet)
+    # worker process
+    "worker.start",              # the worker could not be started
+    "worker.lost",               # the worker exited or its pipe closed
+    # protocol
     "protocol.version",
     "protocol.frame",
 })

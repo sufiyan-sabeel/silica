@@ -31,7 +31,8 @@ Homepage = "https://github.com/sufiyan-sabeel/silica"
 
 [tool.setuptools]
 packages = ["silica", "silica.gui", "silica.ide", "silica.interop",
-            "silica.tui", "silica.ui", "silica.voice", "silica.voice.engines"]
+            "silica.interop.providers", "silica.tui", "silica.ui",
+            "silica.voice", "silica.voice.engines"]
 
 [tool.setuptools.package-data]
 "silica.ui" = ["assets/*.png"]

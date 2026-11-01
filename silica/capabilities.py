@@ -63,14 +63,18 @@ SPEECH_LISTEN = "speech.listen"
 SPEECH_MODELS = "speech.models"
 TUI_RUN = "tui.run"
 GUI_RUN = "gui.run"
+# Running code in another runtime means starting a process and executing foreign
+# code, which is a stronger act than reading a file, so it is its own capability.
+# It does not grant filesystem, network or native-library access by itself.
+INTEROP_PYTHON = "interop.python"
 
 KNOWN = (FS_READ, FS_WRITE, FS_LIST, SPEECH_SPEAK, SPEECH_LISTEN, SPEECH_MODELS,
-         TUI_RUN, GUI_RUN)
+         TUI_RUN, GUI_RUN, INTEROP_PYTHON)
 
 # which native argument holds the path, per capability, is declared on the
 # native itself; this table is only used for diagnostics and config parsing.
 # Capabilities that grant a whole facility rather than a directory of files.
-_UNSCOPED = (TUI_RUN, GUI_RUN, SPEECH_MODELS)
+_UNSCOPED = (TUI_RUN, GUI_RUN, SPEECH_MODELS, INTEROP_PYTHON)
 
 _TITLES = {
     FS_READ: "read files",
@@ -81,6 +85,7 @@ _TITLES = {
     SPEECH_MODELS: "download or delete voice models",
     TUI_RUN: "draw to the terminal and read keys",
     GUI_RUN: "open windows and run an event loop",
+    INTEROP_PYTHON: "start a Python worker and call into it",
 }
 
 _FLAGS = {
@@ -92,6 +97,7 @@ _FLAGS = {
     SPEECH_MODELS: "--allow-speech-models",
     TUI_RUN: "--allow-tui",
     GUI_RUN: "--allow-gui",
+    INTEROP_PYTHON: "--allow-interop-python",
 }
 
 

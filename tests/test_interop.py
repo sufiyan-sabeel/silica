@@ -120,7 +120,7 @@ class BrokenProviders(object):
 
     class UnknownCapability(FakeEcho):
         name = "badcap"
-        capabilities = ("interop.python",)
+        capabilities = ("interop.not-a-real-ecosystem",)
 
     class BadSignature(FakeEcho):
         name = "badsig"

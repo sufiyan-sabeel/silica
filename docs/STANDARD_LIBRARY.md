@@ -539,6 +539,71 @@ clear error instead of pretending to work.
 
 ---
 
+## python — interoperability with a Python worker
+
+`use python` — call into CPython from Silica. The Python code runs in a **separate
+worker process**, never inside the VM: the VM sends framed JSON messages over a
+pipe and receives converted values back. Nothing is unpickled, so a hostile
+payload cannot execute code in the host.
+
+**Capability: `interop.python`** (`--allow-interop-python`). Without it every
+function below except `python.info` is refused before the worker starts.
+
+| Function | Signature | Returns |
+|---|---|---|
+| `python.start()` | `() -> Unit` | starts the worker if it is not running |
+| `python.stop()` | `() -> Unit` | stops the worker and releases its handles |
+| `python.import(module)` | `(String) -> Any` | a handle for the imported module |
+| `python.attr(target, name)` | `(Any, String) -> Any` | a converted attribute (e.g. `math.pi`) |
+| `python.call(target, function, args)` | `(Any, String, List) -> Any` | the converted result |
+| `python.release(handle)` | `(Any) -> Unit` | frees a foreign object |
+| `python.info()` | `() -> Map` | `{running, python, handles, capability}` — starts nothing |
+
+`python.call` accepts 2 or 3 arguments; the third is the argument list and
+defaults to `[]`. `python.start()` is optional: the first call that needs the
+worker starts it.
+
+```silica
+use python
+
+sfn main() {
+    let m: Any = python.import("math")
+    sprint(python.call(m, "sqrt", [2]))    # 1.4142135623730951
+    sprint(python.attr(m, "pi"))           # 3.141592653589793
+    python.release(m)
+    python.stop()
+}
+```
+
+### Conversion rules
+
+In, and out, without guessing: `Unit`/`null`, `Bool`, `Int` (64-bit, out of range
+is an error), `Float`, `String`, `List`, `Map` (String keys only) and binary data
+(base64 over the wire). A Python object with no such shape comes back as an
+**opaque handle** the program can only pass back to Python — never an address,
+never a Python object.
+
+### Errors
+
+Failures are reported with a stable code and no traceback, so host paths do not
+leak: `operation.failed` (missing module, unknown function, rejected argument),
+`operation.timeout` (the worker is stopped, not reused), `worker.lost` (the worker
+crashed), `handle.released` / `handle.owner` (a handle that is gone or belongs to
+another provider or session).
+
+### Limits
+
+A frame is capped at 8 MiB, a call has a deadline (10 s by default), and each
+session is capped at 1024 live handles. A timed-out or crashed worker is
+terminated and must be restarted.
+
+### Platform notes
+
+The worker is a child process of the interpreter, so it works wherever Silica
+runs, including Termux — but it has been tested on Linux x86_64 only. It is **not**
+a sandbox: the worker can do anything the Python process can do. See
+`docs/SECURITY_MODEL.md`.
+
 ## Planned modules (not implemented)
 
 `path`, `time`, `random`, `regex`, `http`, `net`, `process`, `log`, `crypto`,
@@ -565,8 +630,10 @@ stdin; it cannot open a file. Privileged operations are named capabilities
   the VM authorises the call, and the native receives the path that was actually
   authorised. There is no second resolution step to disagree with the check.
 
-There is no network, process, environment or arbitrary host-execution
-capability. `silica capabilities` prints the effective set.
+There is no network, environment or arbitrary host-execution capability.
+Starting a foreign runtime is its own capability (`interop.python`), and it grants
+no filesystem, network or native-library access by itself. `silica capabilities`
+prints the effective set.
 
 ## colours
 
