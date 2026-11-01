@@ -40,6 +40,33 @@ need to accept the second.
 
 ---
 
+## v0.10.1 — release record
+
+| | |
+|---|---|
+| Shipping commit | `46054c0583336965f12e688f593060a41d7717ed` |
+| Tag | `v0.10.1` → tag object `369055ae1e43df593a26321d319f15f310839713` |
+| GitHub release | https://github.com/sufiyan-sabeel/silica/releases/tag/v0.10.1 |
+| Wheel | `silica_lang-0.10.1-py3-none-any.whl` — `26d082773e1c924dbec8b525a1088ba0b6aec43fcd4a901d2113eab2ef900cb5` |
+| Sdist | `silica_lang-0.10.1.tar.gz` — `f205098928d4dc23227e46803644e73f82be4baab9ef070720aeb2ccbe6f2c11` |
+| Checksums | `SHA256SUMS.txt` — `35b29dc4cd17a2ef4caefa4dd9a076f524c312b189dd306d471853e711c3deff` |
+
+**One build, two destinations.** The wheel and sdist above are the artefacts CI
+built for the shipping commit. Those exact files are attached to the GitHub release
+and are the files the publish workflow uploads to PyPI — it downloads the `dist`
+artifact from the successful CI run for the tag rather than rebuilding.
+
+That is not a preference, it is a requirement: two builds of the same commit differ
+in bytes because archive ownership and permission bits come from whoever ran the
+build (see `RELEASE_INTEGRITY.md` §2c). Building once is the only way both
+destinations can serve identical files.
+
+**Installation verified** from the CI-built wheel in a fresh virtual environment:
+`silica --version` reports `silica 0.10.1`, a real program runs (`sum=6`), and the
+interop package and the `path`/`time`/`random` modules are importable.
+
+`v0.10.0` tag, release, assets and hashes are untouched.
+
 ## 1. PyPI
 
 ### What is already in place
