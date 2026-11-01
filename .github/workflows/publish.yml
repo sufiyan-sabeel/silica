@@ -11,10 +11,14 @@ on:
     types: [published]
   workflow_dispatch:
     inputs:
+      tag:
+        description: "Release tag whose CI build should be published (e.g. v0.10.1)"
+        required: true
+        type: string
       repository:
         description: "Where to upload"
         required: true
-        default: testpypi
+        default: pypi
         type: choice
         options: [testpypi, pypi]
 
@@ -34,6 +38,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Resolve the shipping commit
+        id: shipping
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A tag is published, not a branch tip: resolve the tag to its commit so
+          # the artefacts match the GitHub release, whichever ref ran this job.
+          if [ -n "${{ inputs.tag }}" ]; then
+            SHA=$(git rev-parse "${{ inputs.tag }}^{commit}")
+          elif [ -n "${{ github.event.release.tag_name }}" ]; then
+            SHA=$(git rev-parse "${{ github.event.release.tag_name }}^{commit}")
+          else
+            SHA=$(git rev-parse HEAD)
+          fi
+          echo "shipping commit: $SHA"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
       - name: Download the artefacts CI built for this commit
         # The whole point: never rebuild between destinations. These are the same
         # files attached to the GitHub release, so PyPI and GitHub serve identical
@@ -41,8 +62,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          SHA=$(git rev-parse HEAD)
-          echo "shipping commit: $SHA"
+          SHA="${{ steps.shipping.outputs.sha }}"
           RUN=$(gh run list --workflow=ci.yml --commit="$SHA" --status=success \
                 --limit 1 --json databaseId --jq '.[0].databaseId')
           if [ -z "$RUN" ] || [ "$RUN" = "null" ]; then
