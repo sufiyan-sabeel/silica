@@ -5,9 +5,17 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
-## Unreleased — distribution and publication readiness
+## [0.10.1] — 2026-11-01
 
-No version bump: the released artefacts stay v0.10.0 and are not modified.
+A packaging and distribution release. No language, standard-library or VM change:
+every Silica program that ran on 0.10.0 runs identically on 0.10.1.
+
+0.10.1 exists because a build of `main` no longer reproduced the published v0.10.0
+artefacts — the sdist gained the examples, docs and tests that `MANIFEST.in` now
+includes, and the wheel's metadata gained classifiers and project URLs. Rather than
+put different bytes on PyPI under a version that already exists on GitHub, the
+packaging work ships under its own version number. The v0.10.0 tag, release and
+assets are untouched.
 
 ### Added — release-integrity audit
 - **`docs/RELEASE_INTEGRITY.md`**: a build of `main` does not match the published

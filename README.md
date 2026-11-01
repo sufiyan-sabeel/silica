@@ -12,7 +12,7 @@ A small, fast-moving programming language with its own syntax, a checked compile
 a versioned bytecode format, a capability-based security model, a standard library
 that includes speech and UI, and a **Script Mode IDE** you run in your browser.
 
-**Latest release: [v0.10.0](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.10.0)** ·
+**Latest release: [v0.10.1](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.10.1)** ·
 MIT licensed · 1273 tests, green on Python 3.9, 3.11 and 3.12
 
 **Website: [sufiyan-sabeel.github.io/silica-website](https://sufiyan-sabeel.github.io/silica-website/)** — syntax
@@ -192,7 +192,7 @@ executable it installs is **`silica`**:
 
 ```bash
 pip install silica-lang
-silica --version          # silica 0.10.0
+silica --version          # silica 0.10.1
 ```
 
 To keep it out of your system Python:
@@ -257,7 +257,7 @@ launcher in `~/.local/bin` (or `$PREFIX/bin` on Termux). No `sudo` unless you se
 `SILICA_SYSTEM=1`.
 
 ```bash
-SILICA_VERSION=0.10.0 sh install.sh   # upgrade or pin to a version
+SILICA_VERSION=0.10.1 sh install.sh   # upgrade or pin to a version
 SILICA_VERSION=0.8.0 sh install.sh   # roll back
 sh uninstall.sh                      # remove only what it installed
 ```
@@ -265,7 +265,7 @@ sh uninstall.sh                      # remove only what it installed
 ### The package
 
 Silica is a Python package: distribution name **`silica-lang`**, import name
-`silica`, version `0.10.0`, Python **3.9+**, and **no runtime dependencies** — the
+`silica`, version `0.10.1`, Python **3.9+**, and **no runtime dependencies** — the
 language, CLI, standard library, TUI and IDE are pure standard library.
 
 Today it is distributed as **versioned GitHub Release assets** (wheel, sdist,
@@ -293,8 +293,8 @@ commit and leave the `v0.10.0` assets untouched.
 
 
 ```bash
-pip install dist/silica_lang-0.10.0-py3-none-any.whl   # a downloaded asset
-silica --version                                       # -> silica 0.10.0
+pip install dist/silica_lang-0.10.1-py3-none-any.whl   # a downloaded asset
+silica --version                                       # -> silica 0.10.1
 ```
 
 See [`docs/PACKAGING.md`](docs/PACKAGING.md) for the wheel contents, the release
@@ -469,6 +469,7 @@ dependencies. They are merged only with CI green; the review checklist is in
 
 ## Releases
 
+- [v0.10.1](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.10.1) — packaging: the release check in Silica, a complete sdist, PyPI publication
 - [v0.10.0](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.10.0) — generics, interoperability, `path`/`time`/`random`, applications
 - [v0.9.3](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.9.3) — loop control: `break` and `continue`
 - [v0.8.0](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.8.0) — Script Mode IDE

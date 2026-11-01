@@ -28,7 +28,7 @@
 set -eu
 
 REPO="sufiyan-sabeel/silica"
-VERSION="${SILICA_VERSION:-0.10.0}"
+VERSION="${SILICA_VERSION:-0.10.1}"
 DIST_NAME="silica_lang"
 
 say() { printf '%s\n' "$*"; }

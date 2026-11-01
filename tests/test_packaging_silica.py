@@ -169,7 +169,12 @@ class RealRepositoryTests(unittest.TestCase):
                      if f not in tracked and ".egg-info/" not in f
                      and f not in generated]
             self.assertEqual(stray, [], "untracked files in the sdist: %s" % stray[:5])
-            self.assertEqual(report["version"], VERSION)
+            # the version declared by the project, not a hardcoded copy, so a
+            # release bump does not break this test
+            with open(os.path.join(ROOT, "pyproject.toml"), encoding="utf-8") as fh:
+                declared = [l.split("=", 1)[1].strip().strip('"')
+                            for l in fh if l.strip().startswith("version =")][0]
+            self.assertEqual(report["version"], declared)
             self.assertEqual(report["problems"], [])
 
 
