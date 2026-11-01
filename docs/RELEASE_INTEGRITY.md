@@ -106,6 +106,37 @@ No project file was removed. `MANIFEST.in` still includes the examples, docs,
 tests, benchmarks and installers — those are all tracked, and they belong in a
 source distribution.
 
+## 2c. Local versus CI, same commit: contents match, bytes do not
+
+Rebuilt commit `50a8fc3` locally with the same `SOURCE_DATE_EPOCH` CI uses
+(`1793550888`) and compared with the artefacts CI produced for that commit.
+
+| | local | CI | identical |
+|---|---|---|---|
+| wheel file list | 71 files | 71 files | **yes** |
+| sdist file list | 207 files | 207 files | **yes** |
+| every file's contents | — | — | **yes, all 71 and 207** |
+| wheel sha256 | `8b3893bb61c76ca5…` | `bf0201fcaffd1967…` | no |
+| sdist sha256 | `aa464affb1f01bfe…` | `00497087fd0fb20b…` | no |
+
+The archives differ only in metadata the toolchain copies from the filesystem:
+
+| Field | local | CI |
+|---|---|---|
+| tar `uid`/`gid`/`uname`/`gname` | 1000 / 1000 / `sandbox` / `sandbox` | 1001 / 1001 / `runner` / `runner` |
+| tar member `mode` | `664` | `644` |
+| zip entry `external_attr` | `2176057344` | `2175008768` (the same `664` vs `644`) |
+| zip entry `date_time` | `2026-11-01 16:34:48` | `2026-11-01 16:34:48` — `SOURCE_DATE_EPOCH` worked |
+
+So: **content is reproducible across environments; bytes are not**, because
+ownership and permission bits come from whoever ran the build. `SOURCE_DATE_EPOCH`
+fixes timestamps but not ownership or mode.
+
+That is why the release rule is *build once and publish those exact files to both
+destinations* rather than "rebuild and hope". Byte-identity across two builds would
+additionally require normalising `umask` and tar ownership, which setuptools does
+not do.
+
 ## 3. Why even a rebuild of the *tag* does not reproduce the published bytes
 
 Built from tag `v0.10.0` (`2153329`) — the exact commit the release was cut from:
