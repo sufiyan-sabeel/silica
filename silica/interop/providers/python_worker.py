@@ -107,8 +107,12 @@ class PythonWorkerProvider(Provider):
     version = "1.0"
     capabilities = ("interop.python",)
 
-    def __init__(self, python=None, timeout=DEFAULT_TIMEOUT, clock=None):
+    def __init__(self, python=None, timeout=DEFAULT_TIMEOUT, clock=None,
+                 worker_module="silica.interop.worker_main"):
         self.python = python or sys.executable
+        self.worker_module = worker_module
+        #: Post-execution summary, filled by close().
+        self.last_report = {}
         self.timeout = timeout
         self._clock = clock or __import__("time").monotonic
         self._process = None
@@ -155,7 +159,7 @@ class PythonWorkerProvider(Provider):
                              else _PACKAGE_ROOT + os.pathsep + existing)
         try:
             self._process = subprocess.Popen(
-                [self.python, "-u", "-m", "silica.interop.worker_main"],
+                [self.python, "-u", "-m", self.worker_module],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE, env=env, bufsize=0)
         except OSError as exc:
@@ -178,15 +182,25 @@ class PythonWorkerProvider(Provider):
         return self
 
     def close(self):
-        if self._process is None:
-            return
-        if not self._dead and self._process.poll() is None:
-            try:
-                self._send("close", {})
-                self._read(self._clock() + SHUTDOWN_GRACE, "close")
-            except InteropError:
-                pass
-        self._terminate()
+        """Stop the worker and record what it left behind."""
+        leaked = len(self._objects)
+        was_alive = self.alive()
+        if self._process is not None:
+            if not self._dead and self._process.poll() is None:
+                try:
+                    self._send("close", {})
+                    self._read(self._clock() + SHUTDOWN_GRACE, "close")
+                except InteropError:
+                    pass
+            self._terminate()
+        self.last_report = {
+            "provider": self.name,
+            "worker_was_running": was_alive,
+            "worker_stopped": not self.alive(),
+            "handles_leaked": leaked,
+            "python": self._python_version,
+        }
+        return self.last_report
 
     def _terminate(self):
         self._dead = True
@@ -245,8 +259,12 @@ class PythonWorkerProvider(Provider):
                 self._die()
             kind, _request_id, payload = frame
             if kind == "error":
-                error = payload.get("__error__") or {}
-                self._raise_worker_error(operation, error)
+                from ..validate import validate_error_payload
+                error_type, error_message = validate_error_payload(
+                    payload, self.name, operation)
+                self._raise_worker_error(operation,
+                                         {"type": error_type,
+                                          "message": error_message})
             if kind in ("result", "hello_ok", "release_ok", "bye"):
                 return payload.get("value", payload)
             if kind == "hello_ok":
@@ -316,9 +334,15 @@ class PythonWorkerProvider(Provider):
         return ForeignValue.handle(handle)
 
     def _value(self, payload, ctx):
-        if isinstance(payload, dict) and "__handle__" in payload:
-            return self._store(ctx, payload["__handle__"],
-                               payload.get("kind") or "object")
+        """Validate a provider payload, then convert it. Never trusts it."""
+        from ..validate import (is_handle_ref, validate_handle_ref,
+                                validate_payload)
+        if is_handle_ref(payload):
+            ident, kind = validate_handle_ref(payload, ctx.limits, self.name,
+                                              ctx.operation)
+            return self._store(ctx, ident, kind)
+        validate_payload(payload, ctx.limits, what="result", provider=self.name,
+                         operation=ctx.operation)
         from ..values import from_silica
         return from_silica(payload, ctx.limits)
 

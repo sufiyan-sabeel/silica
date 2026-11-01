@@ -256,3 +256,106 @@ class SilicaSurfaceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AdversarialWorkerTests(unittest.TestCase):
+    """A worker that lies. Every payload is validated before it is converted."""
+
+    def hostile(self, mode, operation="import", args=None, timeout=10.0,
+                limits=None):
+        os.environ["SILICA_EVIL_MODE"] = mode
+        provider = PythonWorkerProvider(timeout=timeout,
+                                        worker_module="tests.fixtures.evil_worker")
+        registry = ProviderRegistry(handles=HandleRegistry())
+        registry.register(provider)
+        self.addCleanup(provider.close)
+        self.addCleanup(os.environ.pop, "SILICA_EVIL_MODE", None)
+        return registry.invoke(
+            "python", operation, args if args is not None else ["math"],
+            ctx=InvocationContext("python", operation, handles=registry.handles,
+                                  timeout=timeout, limits=limits))
+
+    def assert_rejected(self, mode, *codes, **kwargs):
+        with self.assertRaises(InteropError) as ctx:
+            self.hostile(mode, **kwargs)
+        self.assertIn(ctx.exception.code, codes, ctx.exception.message)
+        return ctx.exception
+
+    def test_deeply_nested_output_is_rejected(self):
+        self.assert_rejected("deep", "value.depth", "value.size")
+
+    def test_oversized_output_is_rejected(self):
+        # a tight limit, so the size bound is what refuses it (not the type check)
+        from silica.interop import Limits
+        self.assert_rejected("huge", "value.size", limits=Limits(max_bytes=1024))
+
+    def test_a_handle_id_that_is_not_an_int_is_rejected(self):
+        self.assert_rejected("badhandle", "protocol.frame")
+
+    def test_a_bool_handle_id_is_rejected(self):
+        # True is an int in Python; at the boundary it is not a valid id
+        self.assert_rejected("boolhandle", "protocol.frame")
+
+    def test_a_handle_kind_carrying_a_path_is_rejected(self):
+        self.assert_rejected("badkind", "protocol.frame")
+
+    def test_a_handle_reference_with_extra_keys_is_rejected(self):
+        self.assert_rejected("extrakey", "protocol.frame")
+
+    def test_a_reserved_key_inside_a_value_is_rejected(self):
+        self.assert_rejected("reserved", "protocol.frame")
+
+    def test_a_payload_that_is_not_json_is_rejected(self):
+        self.assert_rejected("notjson", "protocol.frame")
+
+    def test_a_truncated_frame_is_rejected(self):
+        self.assert_rejected("truncated", "protocol.frame", "worker.lost")
+
+    def test_an_unknown_frame_kind_is_rejected(self):
+        self.assert_rejected("badkindcode", "protocol.frame")
+
+    def test_a_worker_that_dies_mid_call_is_reported(self):
+        self.assert_rejected("crash", "worker.lost", "protocol.frame")
+
+    def test_an_error_frame_is_sanitised(self):
+        error = self.assert_rejected("errorframe", "operation.failed")
+        self.assertNotIn("\n", error.message)
+        self.assertIn("Explosion", error.message)
+
+    def test_a_rejected_payload_leaves_nothing_behind(self):
+        # after a hostile answer the provider must be closed, not half-alive
+        provider = PythonWorkerProvider(worker_module="tests.fixtures.evil_worker")
+        os.environ["SILICA_EVIL_MODE"] = "badhandle"
+        self.addCleanup(os.environ.pop, "SILICA_EVIL_MODE", None)
+        registry = ProviderRegistry(handles=HandleRegistry())
+        registry.register(provider)
+        with self.assertRaises(InteropError):
+            registry.invoke("python", "import", ["math"],
+                            ctx=InvocationContext("python", "import",
+                                                  handles=registry.handles,
+                                                  timeout=10))
+        provider.close()
+        self.assertFalse(provider.alive())
+        self.assertEqual(provider.last_report["handles_leaked"], 0)
+
+
+class PostExecutionTests(WorkerTestCase):
+    def test_shutdown_reports_a_leaked_handle(self):
+        self.import_("math")                 # deliberately not released
+        report = self.provider.close()
+        self.assertTrue(report["worker_stopped"])
+        self.assertEqual(report["handles_leaked"], 1)
+
+    def test_shutdown_reports_a_clean_session(self):
+        math = self.import_("math")
+        self.registry.invoke("python", "release", [to_silica(math)],
+                             ctx=context(self.registry, "release"))
+        report = self.provider.close()
+        self.assertEqual(report["handles_leaked"], 0)
+        self.assertTrue(report["worker_stopped"])
+
+    def test_a_returned_handle_is_live_in_the_registry(self):
+        math = self.import_("math")
+        handle = to_silica(math)
+        self.assertIs(self.registry.handles.use(handle, "python"), handle)
+        self.assertEqual(self.registry.handles.live(), 1)
