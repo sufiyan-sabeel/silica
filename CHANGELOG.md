@@ -5,6 +5,43 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## Unreleased — application examples
+
+No version bump: `pyproject.toml` stays at 0.9.3.
+
+### Added — three runnable applications
+- **`examples/calculator_app.sc`** — a line-oriented calculator with preventive
+  validation (operand shape, operator, division by zero, empty input) and no
+  capability requirement. 12 * 4 → 48.0.
+- **`examples/task_manager.sc`** — a persistent task list over `tasks.json`
+  (load, add, list, done, remove, save), behind `fs.read`/`fs.write`. Validates an
+  empty command, a missing title, a non-numeric id, an unknown id, an unknown verb
+  and a corrupt store. State survives across runs.
+- **`examples/data_report.sc`** — a data-driven report: reads `sales.csv`,
+  aggregates revenue per region, prints a table and writes `report.json`. Skips
+  and counts malformed rows; refuses a missing source without writing a report.
+- **`examples/data/sales.csv`** — the sample data the report reads.
+
+### Documentation
+- **`docs/APPLICATIONS.md`** — exact commands, expected output, the capability each
+  application needs, what it validates, and an explicit statement of what these
+  examples are not (no GUI, no network, Linux x86_64 only).
+- It also records the language limits the applications ran into: no exceptions, no
+  index assignment (`list[i] = v` / `map["k"] = v` do not exist, so a mutation
+  rebuilds), map literals must stay on one line, and `und`/`ou` are the boolean
+  operators — not `oder`.
+
+### Tests
+- **`tests/test_apps.py`** — 17 integration tests that execute each application in
+  a temporary directory, feed it stdin and check both the transcript and the files
+  written: the exact calculator session including every error branch, the full task
+  lifecycle plus reload persistence, refusal without capabilities (and no file
+  created), a corrupt store, a task missing its fields, CSV aggregation with
+  verified totals, bad rows counted, a missing source, and the shipped sample data
+  producing the documented report.
+- All three are discovered by the existing example checks (compile, verify) and by
+  `silica fmt --check examples/*.sc`.
+
 ## Unreleased — standard library: path, time, random
 
 No version bump: `pyproject.toml` stays at 0.9.3.
