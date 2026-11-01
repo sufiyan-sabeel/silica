@@ -15,8 +15,8 @@ that includes speech and UI, and a **Script Mode IDE** you run in your browser.
 **Latest release: [v0.10.0](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.10.0)** ·
 MIT licensed · 1273 tests, green on Python 3.9, 3.11 and 3.12
 
-**Website: [sufiyan-sabeel.github.io/silica-website](https://sufiyan-sabeel.github.io/silica-website/)** ·
-syntax reference, documentation and the current repository status
+**Website: [sufiyan-sabeel.github.io/silica-website](https://sufiyan-sabeel.github.io/silica-website/)** — syntax
+reference, documentation, examples and the live repository status.
 
 ```silica
 sfn main() {
