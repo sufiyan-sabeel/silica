@@ -5,6 +5,51 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## Unreleased — interoperability foundation
+
+No version bump: `pyproject.toml` stays at 0.9.3. Nothing is tagged or released,
+and no foreign ecosystem is executed yet.
+
+### Added — `silica/interop/`, Python-side only
+- **`docs/INTEROPERABILITY_AUDIT.md`**: what the implementation actually does —
+  the native registry (25 modules, 281 natives), `CALL_NATIVE` end to end, the
+  capability model, the language surface, module resolution, bytecode constraints,
+  and the existing `ctypes`/subprocess usage in the speech path.
+- **`docs/INTEROPERABILITY.md`**: the architecture — foreign values, opaque
+  handles, the provider interface, module resolution and signature metadata,
+  conversion and structured errors, the worker protocol, runtime lifecycle,
+  capabilities, limits, isolation, the C ABI contract, WASM/WASI, and the
+  compatibility policy.
+- **`silica/interop/values.py`**: a tagged foreign value, converted explicitly and
+  bounded in both directions (depth, item count, bytes, cycles, 64-bit range).
+- **`silica/interop/handles.py`**: opaque 128-bit tokens with provider and session
+  ownership, generation counting, idempotent release, and accurate
+  released-versus-unknown diagnostics.
+- **`silica/interop/provider.py`**: the provider interface, `Signature` metadata
+  and `ForeignType`.
+- **`silica/interop/registry.py`**: a provider registry that is deliberately
+  separate from `natives.MODULES`, so no provider can enter the standard-library
+  namespace or shadow an existing module.
+- **`silica/interop/context.py`**: the invocation context, whose `authorize` calls
+  `CapabilitySet.authorize_call` — the same single gate the VM uses for natives.
+- **`silica/interop/errors.py`**: a closed set of 22 error codes.
+
+### Not implemented, and not claimed
+- No Python, C, C++, Rust, JS, JVM or WASM execution.
+- No process or worker is started; the protocol is specified, not built.
+- No native library is loaded.
+- No new opcode, keyword, capability kind or standard-library native. A Silica
+  program that compiled before compiles identically: `use interop` is still an
+  unknown module.
+
+### Tests
+- **`tests/test_interop.py`**: 49 tests with fake providers — registration,
+  metadata-only inspection, invocation, arity and type checking, structured
+  errors, the capability gate (denied by default, resolved paths, path escape),
+  handle lifecycle and ownership, value bounds, shutdown, and isolation checks
+  that the native registry, bytecode format and Silica surface are untouched.
+- Full suite: 1130 passed, 7 skipped, 1188 subtests.
+
 ## Unreleased — generics
 
 No version bump: `pyproject.toml` stays at 0.9.3. Nothing is tagged or released,
