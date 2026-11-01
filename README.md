@@ -211,10 +211,12 @@ pip install --upgrade silica-lang
 pip uninstall silica-lang
 ```
 
-**Status:** the package is published from this repository through a trusted
-publishing workflow (`.github/workflows/publish.yml`, no stored tokens). Check the
-[PyPI project page](https://pypi.org/project/silica-lang/) for what is currently
-available rather than taking this line as a promise about the index state.
+**Status: not published yet.** `pip install silica-lang` will fail until the
+trusted publisher is registered and the workflow is run — the exact configuration
+and the verification steps are in [`docs/PUBLICATION.md`](docs/PUBLICATION.md).
+The workflow (`.github/workflows/publish.yml`) uses OIDC, so no token is stored
+anywhere. Once it is published, the PyPI page is
+[pypi.org/project/silica-lang](https://pypi.org/project/silica-lang/).
 
 ### Termux — `pkg`
 
@@ -227,9 +229,12 @@ pkg install silica-lang        # NOT available yet
 ```
 
 **Status: the package is not in the Termux repositories, so that command does not
-work and nothing here claims otherwise.** Proposing it upstream means a pull
-request to `termux-packages` and its maintainers' review. Until then, use the
-installer or `pip`, both of which work in Termux:
+work and nothing here claims otherwise.** The recipe has been audited against
+`packages/httpie/build.sh` — the closest existing analogue, a Python CLI built with
+`cross-pip` in Termux's crossenv — and the ready-to-submit pull request description
+is in [`packaging/termux/PR.md`](packaging/termux/PR.md). Nothing has been built or
+run on Android. Until it is accepted, use the installer or `pip`, both of which
+work in Termux:
 
 ```bash
 pkg install python
@@ -238,7 +243,9 @@ silica --version
 ```
 
 `packaging/termux/README.md` documents how to build and try the `.deb` on a
-device, and what to verify before proposing it.
+device, and what to verify before proposing it. `docs/PUBLICATION.md` tracks the
+state of both channels — built, tested, submitted, accepted, published — and gives
+the exact steps that remain.
 
 ### The installer script
 
@@ -275,6 +282,10 @@ silica-lang` will fail, and this README says so rather than pretending otherwise
 It is *not* on GitHub Packages either: GitHub Packages has no Python registry.
 
 The Termux package is a recipe in `packaging/termux/`, not a published package.
+
+[`docs/PUBLICATION.md`](docs/PUBLICATION.md) is the runbook for both: the exact
+trusted-publisher fields, the publish and verify steps, the Termux submission, and
+a table stating what is built, tested, submitted, accepted and published.
 
 ```bash
 pip install dist/silica_lang-0.10.0-py3-none-any.whl   # a downloaded asset

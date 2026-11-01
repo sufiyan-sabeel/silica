@@ -94,7 +94,9 @@ carries every runtime module and no source-only files, and uploads through
 **trusted publishing** (OIDC). No API token exists in this repository, in a
 secret, or in any workflow file — that is the point of trusted publishing.
 
-To make `pip install silica-lang` real, the owner must, once:
+The full runbook — exact trusted-publisher fields, publish steps, post-publication
+verification and rollback policy — is [`PUBLICATION.md`](PUBLICATION.md). In short,
+the owner must, once:
 
 1. Register the trusted publisher at
    `https://pypi.org/manage/account/publishing/` with owner `sufiyan-sabeel`,
@@ -116,6 +118,11 @@ conventions: the v0.10.0 tag tarball pinned by SHA-256, `python` as the only
 dependency, `TERMUX_PKG_PLATFORM_INDEPENDENT=true` (the engine is pure Python, so
 aarch64 and arm share one package), installation entirely inside `$PREFIX`, and
 the launcher forced to mode 755.
+
+The recipe was audited against `packages/httpie/build.sh` and corrected: Termux
+builds Python packages inside a crossenv, so it uses `cross-pip` and
+`TERMUX_PKG_SETUP_PYTHON=true`, not plain `pip`. A ready-to-submit pull request
+description is in `packaging/termux/PR.md`.
 
 **Nothing has been built or run on Android.** No Termux/ARM64 device was
 available. `packaging/termux/README.md` says so, lists the exact commands to try

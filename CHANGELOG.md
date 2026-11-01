@@ -5,6 +5,55 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## Unreleased — distribution and publication readiness
+
+No version bump: the released artefacts stay v0.10.0 and are not modified.
+
+### Added — packaging automation written in Silica
+- **`tools/package/verify.sc`** (Silica) is the authoritative packaging validator:
+  version consistency across `pyproject.toml`, `silica/__init__.py`,
+  `silica/cli.py`, `install.sh` and `CHANGELOG.md`; distribution name and entry
+  point; the wheel carrying every runtime module including the interop worker;
+  no source-only files in the wheel; `dist-info` metadata and entry points; the
+  sdist carrying examples, docs, tests, `MANIFEST.in` and the installers;
+  artefact names carrying the version; and `SHA256SUMS.txt` matching both files.
+- **`tools/package/sums.sc`** (Silica) writes `dist/SHA256SUMS.txt` from the
+  collected facts.
+- **`tools/package/facts.py`** is the only Python: it builds with one fixed
+  command, lists archive members and hashes files, because Silica has no zip or
+  tar reader, no SHA-256 and no process API. It makes no decisions.
+- Wired into CI, the release workflow and the publish workflow, so a package
+  cannot ship without passing it.
+
+### Added — publication runbook
+- **`docs/PUBLICATION.md`**: the exact PyPI trusted-publisher fields, the publish
+  and post-publication verification commands, the Termux submission steps, and a
+  state table separating *built*, *tested*, *submitted*, *accepted* and
+  *published*.
+- **`packaging/termux/PR.md`**: a ready-to-submit pull request description for
+  `termux-packages`, including what was verified and what was not.
+
+### Fixed — the Termux recipe followed the wrong convention
+- It used plain `pip wheel`, which installs for the build host. Termux builds
+  Python packages inside a crossenv prepared by `TERMUX_PKG_SETUP_PYTHON=true`, so
+  the recipe now uses `cross-pip install --no-deps --prefix="$TERMUX_PREFIX"`,
+  declares `TERMUX_PKG_DEPENDS="python, python-pip"` and
+  `TERMUX_PKG_SETUP_PYTHON=true`, matching `packages/httpie/build.sh`.
+
+### Tests
+- **`tests/test_packaging_silica.py`**: 20 tests. The real repository end to end,
+  then a synthetic repository broken fifteen ways, each asserted to fail with the
+  message that names it — plus tests that the Silica side uses only `fs`, `json`
+  and `string`, runs no process, and needs its capability to read anything.
+- Full suite: 1265 passed, 7 skipped, 1292 subtests.
+
+### Still not true, and not claimed
+- `pip install silica-lang` — the workflow is ready; the publisher is not
+  registered, so the command fails.
+- `pkg install silica-lang` — the recipe is not submitted and has never been built
+  on Android.
+- Android ARM64 support of any kind — untested.
+
 ## [0.10.0] — 2026-11-01
 
 Interoperability with a real external runtime, three standard-library modules,

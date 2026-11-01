@@ -291,3 +291,92 @@ class BoundaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RecipeTests(unittest.TestCase):
+    """The Termux recipe must match the conventions it claims to follow."""
+
+    RECIPE = os.path.join(ROOT, "packaging", "termux", "silica-lang", "build.sh")
+
+    def source(self):
+        with open(self.RECIPE, encoding="utf-8") as handle:
+            return handle.read()
+
+    def test_it_declares_the_python_package_variables(self):
+        source = self.source()
+        for required in ("TERMUX_PKG_SETUP_PYTHON=true",
+                         "TERMUX_PKG_BUILD_IN_SRC=true",
+                         "TERMUX_PKG_PLATFORM_INDEPENDENT=true",
+                         'TERMUX_PKG_DEPENDS="python, python-pip"'):
+            self.assertIn(required, source)
+
+    def test_it_installs_with_cross_pip_not_plain_pip(self):
+        # plain `pip` would install for the build host; Termux builds inside a
+        # crossenv prepared by TERMUX_PKG_SETUP_PYTHON=true
+        source = self.source()
+        self.assertIn("cross-pip install", source)
+        for line in source.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("pip install") or " pip wheel" in stripped:
+                self.fail("recipe uses plain pip: %s" % stripped)
+
+    def test_it_pins_a_plausible_source_checksum(self):
+        import re
+        match = re.search(r"TERMUX_PKG_SHA256=([0-9a-f]{64})\b", self.source())
+        self.assertIsNotNone(match, "no 64-hex SHA256 in the recipe")
+
+    def test_it_keeps_everything_inside_the_prefix(self):
+        source = self.source()
+        self.assertIn('"$TERMUX_PREFIX"', source)
+        for forbidden in ("/usr/local", "sudo", "/data/data/com.termux/files/usr/lib"):
+            self.assertNotIn(forbidden, source, forbidden)
+
+    def test_the_launcher_is_made_executable(self):
+        self.assertIn('chmod 755 "$TERMUX_PREFIX/bin/silica"', self.source())
+
+
+class DocumentationHonestyTests(unittest.TestCase):
+    """No document may claim an installation command works before it does."""
+
+    DOCUMENTS = ["README.md", "docs/PACKAGING.md", "docs/PUBLICATION.md",
+                 "packaging/termux/README.md", "packaging/termux/PR.md"]
+
+    #: wording that marks the command as not working; matched case-insensitively
+    QUALIFIERS = ("fail", "not available", "unavailable", "does not work",
+                  "not submitted", "not in the termux", "not published",
+                  "not yet")
+
+    def test_the_termux_command_is_never_presented_as_working(self):
+        for name in self.DOCUMENTS:
+            path = os.path.join(ROOT, name)
+            if not os.path.exists(path):
+                continue
+            with open(path, encoding="utf-8") as handle:
+                text = handle.read()
+            if "pkg install silica-lang" not in text:
+                continue
+            lowered = text.lower()
+            self.assertTrue(
+                any(q.lower() in lowered for q in self.QUALIFIERS),
+                "%s mentions 'pkg install silica-lang' without saying it is "
+                "unavailable" % name)
+
+    def test_the_pip_command_is_marked_unpublished(self):
+        with open(os.path.join(ROOT, "docs", "PUBLICATION.md"),
+                  encoding="utf-8") as handle:
+            text = handle.read().lower()
+        self.assertIn("pip install silica-lang", text)
+        self.assertTrue(
+            any(q in text for q in ("fail", "not published", "unpublished")),
+            "PUBLICATION.md must say the pip command does not work yet")
+        # and the state table must not mark it published
+        self.assertIn("| **published**", text)
+
+    def test_android_support_is_described_as_unverified(self):
+        with open(os.path.join(ROOT, "packaging", "termux", "PR.md"),
+                  encoding="utf-8") as handle:
+            text = handle.read().lower()
+        self.assertIn("not", text)
+        self.assertIn("device", text)
+        self.assertNotIn("works on termux", text)
+        self.assertNotIn("android support is verified", text)
