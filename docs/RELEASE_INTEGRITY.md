@@ -47,6 +47,34 @@ installers. Five files changed content, all metadata or prose:
 
 Again, no source file differs.
 
+## 2a. The CI-built artefacts, compared directly (authoritative)
+
+The comparison above was made with a local build. This one uses the artefacts CI
+produced for commit `3acace06` — downloaded from the workflow run, not rebuilt by
+hand — with `SOURCE_DATE_EPOCH` set from the commit timestamp.
+
+| Artefact | Published v0.10.0 | CI-built from `main` | Identical |
+|---|---|---|---|
+| wheel | `cf08d36187b819f68ff8690a6ffd8ee4a216f3e190322e10e200e398767e546c` | `c8a34578ec03c343ab26b0c79863ba67983c1ecc681f594de6803b6abbf75641` | **no** |
+| sdist | `dcd7845a14003889ace504d93fc8020aa0faf45be7b3421290f77fca6237fc1e` | `efdc9b8c617190d30452ed69b3aaf4ca7c8d08a38673e4934d9310df29dcb317` | **no** |
+
+Neither artefact matches, and the differences are **content**, not timestamps:
+
+- **wheel**: 71 files in both, none added or removed, and exactly **2 differ** —
+  `dist-info/METADATA` and `dist-info/RECORD` (classifiers and Documentation/
+  Changelog URLs were added to `pyproject.toml` after the tag).
+- **sdist**: 118 files published, **207** in CI. **89 files are new** — `MANIFEST.in`,
+  which came after the tag, brings in the examples, docs, tests, benchmarks,
+  `CHANGELOG.md`, `SECURITY.md`, `CONTRIBUTING.md` and the installers. **5 files
+  differ** in content: `PKG-INFO`, `README.md`, `pyproject.toml`,
+  `silica_lang.egg-info/PKG-INFO`, `silica_lang.egg-info/SOURCES.txt`.
+
+No source file differs in either artefact. The published assets are therefore
+correct for the code they shipped; they are simply not what `main` builds today.
+
+**Verdict: neither artefact may be published as `0.10.0`.** The next release must
+carry a new version number.
+
 ## 3. Why even a rebuild of the *tag* does not reproduce the published bytes
 
 Built from tag `v0.10.0` (`2153329`) — the exact commit the release was cut from:
@@ -78,8 +106,9 @@ ignores `SOURCE_DATE_EPOCH` for them.
 
 ## 5. Recommendation
 
-**Do not publish `0.10.0` to PyPI from `main`. Publish a new patch version
-(`0.10.1`) built from the commit that ships.**
+**Do not publish `0.10.0` to PyPI from `main`. Publish `0.10.1` built from the
+commit that ships** — confirmed by the CI-built comparison in §2a, where neither
+artefact matches the published ones.
 
 Why not reuse `0.10.0`:
 
