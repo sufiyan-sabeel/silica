@@ -328,11 +328,13 @@ python3 -m build          # wheel + sdist in dist/
 | Platform | Status |
 |---|---|
 | Linux x86_64 (Debian/Ubuntu) | **Tested** — the full suite and the IDE were run here |
-| Termux (Android) | Code paths exist and the installer detects Termux; **not run** on a device |
+| Termux (Android) | Code paths exist and the installer detects Termux; **not run** on a device. The `python` interop worker is a child process and has not been tried there either |
 | Alpine, macOS, Windows | Pure Python, no compiled parts, so it should work; **not tested** |
 | iOS | Browser IDE only, pointed at a runner on another machine; **not tested** |
 
-Only the first row is evidence. The others are expectations.
+Only the first row is evidence. The others are expectations, and the
+interoperability worker is included in that statement: it was exercised on
+Linux x86_64 only.
 
 ---
 

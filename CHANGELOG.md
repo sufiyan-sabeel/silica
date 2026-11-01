@@ -5,6 +5,50 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## Unreleased — security hardening and a measured speed-up
+
+No version bump yet: `pyproject.toml` stays at 0.9.3. The release gates are not
+all met (see below).
+
+### Added — post-execution security for interoperability
+- **`silica/interop/validate.py`**: everything a provider returns is validated
+  before it becomes a Silica value — JSON scalars, lists and dicts only; String
+  keys; bounded depth, item count and byte size; 64-bit integers; finite floats;
+  reserved keys only inside their defined shape; handle ids that are non-negative
+  integers; handle kinds that are short identifiers, so a path or a secret cannot
+  ride in one; error messages coerced, newline-stripped and length-bounded.
+- **Shutdown reporting**: `PythonWorkerProvider.close()` returns
+  `{worker_stopped, handles_leaked, python}`, so a leaked foreign handle is
+  visible instead of silent.
+- **16 new tests**, including an adversarial worker fixture
+  (`tests/fixtures/evil_worker.py`) that sends deeply nested, oversized,
+  non-JSON, truncated and unknown-kind frames, malformed handle references, a
+  crash mid-call and a multi-line error. Every one is refused with a structured
+  code and the runtime stays usable.
+
+### Changed — measured VM optimization
+- **Arithmetic fast path** in the dispatch loop: ADD/SUB/MUL test `type(x) is int`
+  first (which excludes Bool exactly as before), the 64-bit range test replaces
+  `i64()` on the common path (an overflowing add still wraps), comparisons of two
+  Ints compare directly, and the per-call lambdas became module-level functions.
+- **Measured, same machine, best of three:** arithmetic loop 11705.7 → 7966.0 ms
+  (−32%), recursion 1500.5 → 1163.9 ms (−22%), collections 2635.3 → 2121.8 ms
+  (−19%), strings 152.1 → 141.0 ms. Every benchmark still reports `ok`, meaning
+  Silica and CPython produce the same result. Recorded in `docs/PERFORMANCE.md`.
+- **Regression test** for the one semantic the fast path could have broken:
+  `test_bool_arithmetic_is_still_refused`.
+
+### Documentation
+- `docs/PERFORMANCE.md` records the profile, the change, the before/after table
+  and what the numbers do not claim (Silica is still 31× slower than CPython).
+- `README.md` states that the interop worker has been exercised on Linux x86_64
+  only, and that Termux remains untested.
+
+### Still open before 0.10.0
+- Standard-library modules (Phase C) and application examples (Phase D).
+- Termux on a real device (Phase E) — documented as untested, not claimed.
+- Release validation and the version bump (Phase F).
+
 ## Unreleased — interoperability foundation
 
 No version bump: `pyproject.toml` stays at 0.9.3. Nothing is tagged or released,
