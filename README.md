@@ -248,7 +248,7 @@ curl -fsSL https://raw.githubusercontent.com/sufiyan-sabeel/silica/main/install.
 
 The installer downloads the release wheel, **verifies its SHA-256 checksum**, and
 installs into an isolated environment at `~/.local/share/silica/venv` with a
-launcher in `~/.local/bin` (or `$PREFIX/bin on Termux). No `sudo` unless you set
+launcher in `~/.local/bin` (or `$PREFIX/bin` on Termux). No `sudo` unless you set
 `SILICA_SYSTEM=1`.
 
 ```bash
@@ -260,7 +260,7 @@ sh uninstall.sh                      # remove only what it installed
 ### The package
 
 Silica is a Python package: distribution name **`silica-lang`**, import name
-`silica`, version `0.10.0`, Python **3.9**, and **no runtime dependencies** — the
+`silica`, version `0.10.0`, Python **3.9+**, and **no runtime dependencies** — the
 language, CLI, standard library, TUI and IDE are pure standard library.
 
 Today it is distributed as **versioned GitHub Release assets** (wheel, sdist,
@@ -277,7 +277,7 @@ It is *not* on GitHub Packages either: GitHub Packages has no Python registry.
 The Termux package is a recipe in `packaging/termux/`, not a published package.
 
 ```bash
-pip install dist/silica_lang-0.10.0-py3-none-any.whl    # a downloaded asset
+pip install dist/silica_lang-0.10.0-py3-none-any.whl   # a downloaded asset
 silica --version                                       # -> silica 0.10.0
 ```
 
@@ -316,7 +316,7 @@ silica compile <file.sc> [-o out.sbc]
 silica repl                     interactive session
 silica fmt <file.sc> [--check]  rewrite in canonical style
 silica test [dir]               run *_test.sc files under dir
-silica ide [--root DIR] [--port NO] [--host H]
+silica ide [--root DIR] [--port N] [--host H]
                                 Script Mode IDE in your browser
 silica voice <subcommand>       speech: list, install, speak, transcribe
 silica capabilities [flags]     print the effective capability set
