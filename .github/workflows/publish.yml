@@ -34,27 +34,17 @@ jobs:
         run: python -m pip install --upgrade pip build
       - name: Build
         run: python -m build
-      - name: Check the artefacts
-        run: |
-          python - <<'PY'
-          import glob, sys, zipfile, tarfile
-          wheel = glob.glob("dist/*.whl")[0]
-          sdist = glob.glob("dist/*.tar.gz")[0]
-          names = zipfile.ZipFile(wheel).namelist()
-          required = ["silica/cli.py", "silica/vm.py", "silica/checker.py",
-                      "silica/compiler.py", "silica/interop/worker_main.py",
-                      "silica/stdlib_path.py"]
-          missing = [r for r in required if r not in names]
-          if missing:
-              sys.exit("wheel is missing: %s" % ", ".join(missing))
-          leaks = [n for n in names if n.startswith(("tests/", "examples/", "docs/"))]
-          if leaks:
-              sys.exit("wheel carries source-only files: %s" % leaks[:3])
-          members = tarfile.open(sdist).getnames()
-          if not any(m.endswith("examples/stdlib_tour.sc") for m in members):
-              sys.exit("sdist is missing the examples")
-          print("wheel: %d files, sdist: %d files — both complete" % (len(names), len(members)))
-          PY
+      - name: Collect packaging facts
+        run: python tools/package/facts.py --dist-dir dist --out build/packaging/facts.json
+      - name: Write the checksum file (Silica)
+        run: python -m silica run --allow-fs-read . --allow-fs-write . tools/package/sums.sc
+      - name: Verify the packages (Silica)
+        # Every policy decision about what a wheel and an sdist must contain is
+        # made here, in Silica source. Python only listed the archives and
+        # hashed them.
+        run: python -m silica run --allow-fs-read . --allow-fs-write . tools/package/verify.sc
+      - name: Upload the checksum file
+        run: cp build/packaging/report.json dist/ 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         with:
           name: dist

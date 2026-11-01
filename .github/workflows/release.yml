@@ -54,6 +54,12 @@ jobs:
 
       - name: Build wheel and sdist
         run: python -m build
+    - name: Verify the packages (Silica)
+      run: |
+        python tools/package/facts.py --dist-dir dist --out build/packaging/facts.json
+        python -m silica run --allow-fs-read . --allow-fs-write . tools/package/sums.sc
+        python -m silica run --allow-fs-read . --allow-fs-write . tools/package/verify.sc
+
 
       - name: Generate checksums
         run: cd dist && sha256sum *.whl *.tar.gz > SHA256SUMS.txt && cat SHA256SUMS.txt

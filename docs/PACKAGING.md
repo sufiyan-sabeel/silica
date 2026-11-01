@@ -56,6 +56,27 @@ breakage is caught on a normal commit instead of at tag time.
 
 ---
 
+## The packaging check is written in Silica
+
+`tools/package/` implements the packaging policy in `.sc` source:
+
+| Step | Language | File |
+|---|---|---|
+| build, list archive members, hash artefacts | Python | `facts.py` |
+| write `dist/SHA256SUMS.txt` | **Silica** | `sums.sc` |
+| verify metadata, manifests, checksums | **Silica** | `verify.sc` |
+
+Silica cannot read a zip or a tar, has no SHA-256 (its `crypto` module is still
+planned) and cannot start a process, so those four operations are delegated to one
+small Python file that decides nothing. Every rule about what a valid release looks
+like — version consistency across five files, the wheel containing the interop
+worker, no source files leaking into the wheel, the sdist carrying the examples,
+checksums matching — is Silica code.
+
+It runs in CI, in the release workflow and in the publish workflow, so a package
+cannot be published without passing it. `tools/package/README.md` documents the
+split and the exact commands.
+
 ## Distribution channels and their status
 
 Three ways to get Silica, and exactly what is true about each one today.

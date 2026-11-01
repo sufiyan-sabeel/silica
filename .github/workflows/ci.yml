@@ -34,6 +34,12 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq python3-tk xvfb >/dev/null
 
+      - name: Packaging check (Silica)
+        run: |
+          python -m build
+          python tools/package/facts.py --dist-dir dist --out build/packaging/facts.json
+          python -m silica run --allow-fs-read . --allow-fs-write . tools/package/sums.sc
+          python -m silica run --allow-fs-read . --allow-fs-write . tools/package/verify.sc
       - name: Unit tests
         # xvfb-run gives the GUI window tier a display, so it runs instead of skipping
         run: |
