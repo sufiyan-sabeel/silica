@@ -15,7 +15,7 @@ a versioned bytecode format, a capability-based security model, a standard libra
 that includes speech and UI, and a **Script Mode IDE** you run in your browser.
 
 **Latest release: [v0.10.0](https://github.com/sufiyan-sabeel/silica/releases/tag/v0.10.0)** ·
-MIT licensed · 671 tests, green on Python 3.9, 3.11 and 3.12
+MIT licensed · 1273 tests, green on Python 3.9, 3.11 and 3.12
 
 **Website: [sufiyan-sabeel.github.io/silica-website](https://sufiyan-sabeel.github.io/silica-website/)** ·
 syntax reference, documentation and the current repository status
@@ -381,7 +381,7 @@ python3 benchmarks/bench.py                   # vs CPython
 python3 benchmarks/optimizer.py               # constant folding, measured
 ```
 
-Current state: **671 tests**, 664 passing and 7 skipped when no display or speech
+Current state: **1273 tests**, 1266 passing and 7 skipped when no display or speech
 engine is present, green on Python 3.9 / 3.11 / 3.12.
 
 To build a release locally:
@@ -430,7 +430,7 @@ silica/ui/         web UI DSL and HTML renderer
 silica/tui/        terminal UI: layout engine + curses driver
 silica/gui/        desktop windows on tkinter
 silica/ide/        Script Mode IDE: workspace, runner, HTTP API, editor page
-tests/             671 tests
+tests/             1273 tests
 examples/          runnable .sc programs
 docs/              language spec, bytecode, security, audit, IDE, UI, voice,
                    packaging, supply chain
