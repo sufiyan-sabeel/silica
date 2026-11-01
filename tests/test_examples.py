@@ -44,6 +44,7 @@ EXPECTED = {
         '{"width":80,"ratio":1.5,"wrap":true,"tags":["a","b"]}\n'
         "[1, 2, 3]\n"),
     "generics.sc": "2\nbeta\n[7, 7, 7]\n7\npear\n9.0\nage\n42\n2\nBox\n",
+    "stdlib_tour.sc": "reports/2026/summary.txt\nsummary.txt\nreports/2026/summary.txt\noui\nnein\n/\n2001-09-09T01:46:40Z\n1000000000\n2001\noui\noui\noui\n16\noui\noui\n3\n",
 }
 
 # examples that need capability flags to run; the grant is the narrowest that

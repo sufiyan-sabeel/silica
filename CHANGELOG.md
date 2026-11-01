@@ -5,6 +5,49 @@ All notable changes to Silica are recorded here. The format follows
 semantic versioning for its toolchain; the language surface is `0.x` until
 `1.0.0`.
 
+## Unreleased — standard library: path, time, random
+
+No version bump: `pyproject.toml` stays at 0.9.3.
+
+### Added — three modules, implemented rather than planned
+- **`path`** — path *text*: `join`, `base`, `dir`, `ext`, `stem`, `split`,
+  `normalise`, `absolute`, `is_absolute`, `is_within`, `with_suffix`, and the
+  `path.sep` constant. **No capability**: nothing here touches the disk, which is
+  the point — a program can reason about paths without being allowed near them.
+  `normalise` and `is_within` are documented as *lexical*: they do not resolve
+  symlinks, so the real boundary remains the capability check in `fs.*`. A NUL
+  byte in any argument is refused.
+- **`time`** — `now`, `now_ms`, `monotonic`, `sleep`, `iso`, `parse_iso`, `year`,
+  `month`, `day`. Two clocks with different guarantees, stated in the docs: `now`
+  is wall clock and can jump, `monotonic` cannot and is for measuring. `sleep` is
+  bounded to one day and refuses negatives and NaN. No `strftime`: one fixed
+  ISO-8601 output instead of a partial format language.
+- **`random`** — the security distinction is in the names. Ordinary
+  pseudorandom: `float`, `int`, `choice`, `shuffle`, `seed`. Cryptographically
+  secure: `secure_bytes`, `secure_int`, `secure_token`, which use the operating
+  system's CSPRNG and are never seeded. Hex and URL-safe text stand in for bytes,
+  because Silica has no byte type.
+- `path`, `time` and `random` are removed from `PLANNED_MODULES`; `regex`, `http`,
+  `net`, `process`, `log`, `crypto`, `test`, `async` and `ai` remain planned and
+  still fail loudly.
+
+### Fixed — a compiler bug the new constant exposed
+- **Module constants keep their own type.** `compile_member` forced every constant
+  through `float()`, so `math.pi` worked but any non-float constant was a compile
+  error (`could not convert string to float: '/'`). It now interns the value as it
+  is, and rejects a type with no bytecode form explicitly. `math.pi`, `math.e` and
+  `math.tau` behave exactly as before.
+
+### Tests
+- **52 new tests** across `tests/test_stdlib_path.py`, `test_stdlib_time.py` and
+  `test_stdlib_random.py`: behaviour, boundaries, integration through real Silica
+  programs, and the security cases that matter — NUL bytes in paths, traversal and
+  prefix-confusion in `is_within`, inverted ranges, absurd sizes, and a test that
+  seeding the pseudorandom generator cannot determine `secure_*` output.
+- **`examples/stdlib_tour.sc`** exercises all three modules and is pinned in
+  `EXPECTED`.
+- Full suite: 1224 passed, 7 skipped, 1266 subtests.
+
 ## Unreleased — security hardening and a measured speed-up
 
 No version bump yet: `pyproject.toml` stays at 0.9.3. The release gates are not

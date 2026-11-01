@@ -604,10 +604,131 @@ runs, including Termux — but it has been tested on Linux x86_64 only. It is **
 a sandbox: the worker can do anything the Python process can do. See
 `docs/SECURITY_MODEL.md`.
 
+## path — path text, without touching the disk
+
+`use path` — split, join and normalise paths as **strings**. Nothing in this module
+opens, stats or lists anything, so it needs **no capability**: a program can reason
+about paths without being allowed to touch them. The functions that do touch the
+disk are `fs.*`, behind `fs.read` / `fs.write` / `fs.list`.
+
+| Function | Signature | Returns |
+|---|---|---|
+| `path.join(parts)` | `(List) -> String` | the parts joined with `path.sep` |
+| `path.base(p)` | `(String) -> String` | last component (`""` for a trailing separator) |
+| `path.dir(p)` | `(String) -> String` | everything before the last component |
+| `path.ext(p)` | `(String) -> String` | extension including the dot, or `""` |
+| `path.stem(p)` | `(String) -> String` | file name without its extension |
+| `path.split(p)` | `(String) -> List` | `[head, tail]` |
+| `path.normalise(p)` | `(String) -> String` | collapses `//`, `.` and `..` **lexically** |
+| `path.absolute(p)` | `(String) -> String` | absolute form against the current directory, lexically |
+| `path.is_absolute(p)` | `(String) -> Bool` | whether it starts at the root |
+| `path.is_within(p, root)` | `(String, String) -> Bool` | whether `p` is `root` or below it, lexically |
+| `path.with_suffix(p, s)` | `(String, String) -> String` | `p` with its extension replaced by `s` |
+
+Constant: `path.sep` — the host's separator, so a program need not guess.
+
+```silica
+use path
+
+sfn main() {
+    let p: String = path.join(["data", "notes", "a.txt"])
+    sprint(p)                        # data/notes/a.txt
+    sprint(path.base(p))             # a.txt
+    sprint(path.ext(p))              # .txt
+    sprint(path.normalise("data/./x/../y.txt"))   # data/y.txt
+    sprint(path.is_within(p, "data"))             # oui
+    sprint(path.is_within("/etc/passwd", "data")) # nein
+}
+```
+
+**What `is_within` is not.** It compares normalised *text*. It does not resolve
+symlinks and does not know whether a path exists, so it cannot be a sandbox on its
+own — `a/b/..` may be a symlink to somewhere else. The real boundary is the
+capability check in `fs.*`, which resolves canonical paths before it opens
+anything. `is_within` is for deciding what to ask for, not for granting access.
+
+A NUL byte in any argument is refused: it cannot appear in a real path and it is
+the classic way to truncate a path inside a C library.
+
+## time — two clocks, and a fixed date format
+
+`use time` — read the clock, wait, and format dates. No capability: reading a
+clock touches no file, no network and no other process.
+
+| Function | Signature | Returns |
+|---|---|---|
+| `time.now()` | `() -> Int` | wall-clock seconds since the Unix epoch, UTC |
+| `time.now_ms()` | `() -> Int` | the same in milliseconds |
+| `time.monotonic()` | `() -> Float` | a monotonic clock, arbitrary origin — use for elapsed time |
+| `time.sleep(s)` | `(Float) -> Unit` | waits `s` seconds (0 ≤ s ≤ 86400) |
+| `time.iso(epoch)` | `(Int) -> String` | `2026-11-01T10:00:00Z` |
+| `time.parse_iso(s)` | `(String) -> Int` | epoch seconds from ISO-8601 |
+| `time.year(epoch)` | `(Int) -> Int` | UTC year |
+| `time.month(epoch)` | `(Int) -> Int` | UTC month, 1–12 |
+| `time.day(epoch)` | `(Int) -> Int` | UTC day of month |
+
+```silica
+use time
+
+sfn main() {
+    let start: Float = time.monotonic()
+    sprint(time.iso(time.now()))          # 2026-11-01T10:00:00Z
+    sprint(time.parse_iso("1970-01-01T00:00:10Z"))   # 10
+    sprint(time.monotonic() >= start)     # oui
+}
+```
+
+`now` can jump backwards (NTP, a manual change), so it is for timestamps.
+`monotonic` cannot, so it is for measuring. There is no `strftime`: one fixed,
+unambiguous output is more useful than a partial format language.
+
+## random — ordinary randomness, and separately, secure randomness
+
+`use random` — the distinction is in the names, because it matters.
+
+**Ordinary pseudorandom** (a Mersenne Twister: fast, reproducible, **never for
+secrets**):
+
+| Function | Signature | Returns |
+|---|---|---|
+| `random.float()` | `() -> Float` | in `[0.0, 1.0)` |
+| `random.int(low, high)` | `(Int, Int) -> Int` | `low` included, `high` excluded |
+| `random.choice(items)` | `(List) -> Any` | one element of a non-empty list |
+| `random.shuffle(items)` | `(List) -> List` | a new list; the argument is unchanged |
+| `random.seed(n)` | `(Int) -> Unit` | makes the sequence reproducible |
+
+**Cryptographically secure** (the operating system's CSPRNG, never seeded):
+
+| Function | Signature | Returns |
+|---|---|---|
+| `random.secure_bytes(n)` | `(Int) -> String` | `n` random bytes as 2n hex characters |
+| `random.secure_int(low, high)` | `(Int, Int) -> Int` | `low` included, `high` excluded |
+| `random.secure_token(n)` | `(Int) -> String` | URL-safe text from `n` random bytes |
+
+```silica
+use random
+
+sfn main() {
+    random.seed(7)
+    let a: Int = random.int(1, 7)
+    random.seed(7)
+    let b: Int = random.int(1, 7)
+    sprint(a == b)                        # oui — reproducible when seeded
+
+    sprint(len(random.secure_bytes(8)))   # 16 — hex text, two chars per byte
+    let token: String = random.secure_token(16)
+    sprint(len(token) > 16)               # oui
+}
+```
+
+`random.float`, `int`, `choice` and `shuffle` are **not** cryptographically
+secure and are documented as such; for a password, a token or a key, use the
+`secure_*` functions. Silica has no byte type, so random bytes are returned as hex
+text and tokens as URL-safe text — stated rather than silently re-encoded.
+
 ## Planned modules (not implemented)
 
-`path`, `time`, `random`, `regex`, `http`, `net`, `process`, `log`, `crypto`,
-`test`, `async`, `ai`.
+`regex`, `http`, `net`, `process`, `log`, `crypto`, `test`, `async`, `ai`.
 
 Using any of them is a compile error that names the implemented modules. They are
 deliberately not stubbed: a module either works or does not exist.
