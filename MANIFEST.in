@@ -1,0 +1,19 @@
+# A source distribution of a language should let you read and run the language,
+# not just install the engine. The wheel stays lean (packages only); the sdist
+# carries the examples, the docs, the tests and the installer.
+include LICENSE
+include README.md
+include CHANGELOG.md
+include SECURITY.md
+include CODE_OF_CONDUCT.md
+include CONTRIBUTING.md
+include install.sh
+include uninstall.sh
+include silica.toml
+recursive-include examples *.sc *.csv
+recursive-include docs *.md
+recursive-include tests *.py *.sc
+recursive-include benchmarks *.py *.sc
+recursive-include editors *
+recursive-include packaging *
+global-exclude __pycache__ *.py[cod] .DS_Store

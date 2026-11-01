@@ -12,9 +12,19 @@ license = { text = "MIT" }
 authors = [{ name = "Umaiz Sufiyan" }]
 keywords = ["language", "compiler", "bytecode", "vm", "interpreter"]
 classifiers = [
-    "Programming Language :: Python :: 3",
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Compilers",
+    "Topic :: Software Development :: Interpreters",
 ]
 
 [project.optional-dependencies]
@@ -28,6 +38,8 @@ silica = "silica.cli:main"
 Repository = "https://github.com/sufiyan-sabeel/silica.git"
 Issues = "https://github.com/sufiyan-sabeel/silica/issues"
 Homepage = "https://github.com/sufiyan-sabeel/silica"
+Documentation = "https://github.com/sufiyan-sabeel/silica/tree/main/docs"
+Changelog = "https://github.com/sufiyan-sabeel/silica/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
 packages = ["silica", "silica.gui", "silica.ide", "silica.interop",

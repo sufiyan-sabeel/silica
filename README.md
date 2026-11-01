@@ -178,6 +178,61 @@ the front end is verified structurally and by hand, not visually.
 
 Requires **Python 3.9 or newer**. No third-party packages for the core language.
 
+### Python — `pip`
+
+The distribution is on the Python Package Index as **`silica-lang`**, and the
+executable it installs is **`silica`**:
+
+```bash
+pip install silica-lang
+silica --version          # silica 0.10.0
+```
+
+To keep it out of your system Python:
+
+```bash
+python3 -m venv ~/.venvs/silica && . ~/.venvs/silica/bin/activate
+pip install silica-lang
+```
+
+Upgrade and remove with pip's own commands:
+
+```bash
+pip install --upgrade silica-lang
+pip uninstall silica-lang
+```
+
+**Status:** the package is published from this repository through a trusted
+publishing workflow (`.github/workflows/publish.yml`, no stored tokens). Check the
+[PyPI project page](https://pypi.org/project/silica-lang/) for what is currently
+available rather than taking this line as a promise about the index state.
+
+### Termux — `pkg`
+
+A Termux recipe lives at `packaging/termux/silica-lang/build.sh`, pinned to the
+v0.10.0 tag by SHA-256, depending on `python` only, platform-independent (one
+package for aarch64 and arm), installing entirely inside `$PREFIX`.
+
+```bash
+pkg install silica-lang        # NOT available yet
+```
+
+**Status: the package is not in the Termux repositories, so that command does not
+work and nothing here claims otherwise.** Proposing it upstream means a pull
+request to `termux-packages` and its maintainers' review. Until then, use the
+installer or `pip`, both of which work in Termux:
+
+```bash
+pkg install python
+pip install silica-lang
+silica --version
+```
+
+`packaging/termux/README.md` documents how to build and try the `.deb` on a
+device, and what to verify before proposing it.
+
+### The installer script
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sufiyan-sabeel/silica/main/install.sh | sh
 ```
@@ -199,11 +254,18 @@ Silica is a Python package: distribution name **`silica-lang`**, import name
 `silica`, version `0.10.0`, Python **3.9+**, and **no runtime dependencies** — the
 language, CLI, standard library, TUI and IDE are pure standard library.
 
-It is distributed as **versioned GitHub Release assets** (wheel, sdist,
-`SHA256SUMS.txt`). It is *not* on GitHub Packages, because GitHub Packages has no
-Python registry — its registries are npm, RubyGems, Maven, Gradle, NuGet and
-containers. Nothing here is published to a package registry, and this README does
-not claim otherwise.
+Today it is distributed as **versioned GitHub Release assets** (wheel, sdist,
+`SHA256SUMS.txt`), which is verified: the published wheel's checksum matches the
+published `SHA256SUMS.txt`, and it installs and runs in a clean virtual
+environment.
+
+Publication to PyPI is wired up (`.github/workflows/publish.yml`, trusted
+publishing over OIDC, no stored tokens) but **has not been performed yet** — the
+`silica-lang` name is still unregistered on the index. Until it is, `pip install
+silica-lang` will fail, and this README says so rather than pretending otherwise.
+It is *not* on GitHub Packages either: GitHub Packages has no Python registry.
+
+The Termux package is a recipe in `packaging/termux/`, not a published package.
 
 ```bash
 pip install dist/silica_lang-0.10.0-py3-none-any.whl   # a downloaded asset

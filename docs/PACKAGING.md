@@ -56,6 +56,64 @@ breakage is caught on a normal commit instead of at tag time.
 
 ---
 
+## Distribution channels and their status
+
+Three ways to get Silica, and exactly what is true about each one today.
+
+| Channel | Command | Status |
+|---|---|---|
+| GitHub Release assets | download the wheel from the release page | **verified** — checksum matches `SHA256SUMS.txt`, installs and runs |
+| PyPI | `pip install silica-lang` | **not published** — workflow ready, name still unregistered |
+| Termux | `pkg install silica-lang` | **not published** — recipe ready in `packaging/termux/`, not in `termux-packages` |
+
+### PyPI
+
+`.github/workflows/publish.yml` builds the wheel and sdist, checks that the wheel
+carries every runtime module and no source-only files, and uploads through
+**trusted publishing** (OIDC). No API token exists in this repository, in a
+secret, or in any workflow file — that is the point of trusted publishing.
+
+To make `pip install silica-lang` real, the owner must, once:
+
+1. Register the trusted publisher at
+   `https://pypi.org/manage/account/publishing/` with owner `sufiyan-sabeel`,
+   repository `silica`, workflow `publish.yml`, environment `pypi`.
+2. Create the `pypi` (and, for rehearsal, `testpypi`) environment in the
+   repository settings.
+3. Run the workflow by hand against `testpypi` first, then publish the release.
+
+`test.pypi.org` was **not reachable** from the environment this was developed in,
+so the rehearsal step is documented rather than performed. The name `silica-lang`
+returned `404` from `https://pypi.org/pypi/silica-lang/json`, which is how a
+free name answers; it was free at the time of writing and nothing here reserves
+it.
+
+### Termux
+
+`packaging/termux/silica-lang/build.sh` follows the `termux-packages`
+conventions: the v0.10.0 tag tarball pinned by SHA-256, `python` as the only
+dependency, `TERMUX_PKG_PLATFORM_INDEPENDENT=true` (the engine is pure Python, so
+aarch64 and arm share one package), installation entirely inside `$PREFIX`, and
+the launcher forced to mode 755.
+
+**Nothing has been built or run on Android.** No Termux/ARM64 device was
+available. `packaging/termux/README.md` says so, lists the exact commands to try
+on a device, and lists what to verify before proposing it upstream. Passing the
+test suite on Linux x86_64 says nothing about Android.
+
+### What a wheel and an sdist carry
+
+| | wheel | sdist |
+|---|---|---|
+| Engine, CLI, standard library, interop worker | yes | yes |
+| IDE `app.html`, UI assets | yes | yes |
+| Examples, docs, tests, benchmarks, installers | no | **yes** |
+| Size | 71 files | 117 source files |
+
+The wheel stays lean because those files belong to the source tree; the sdist
+carries them because a source distribution of a language should let you read and
+run the language. `MANIFEST.in` enforces both.
+
 ## Where it is published — and why not GitHub Packages
 
 **GitHub Packages does not support Python packages.** Its registries are npm,
