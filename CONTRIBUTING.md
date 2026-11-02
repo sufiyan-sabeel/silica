@@ -23,6 +23,22 @@ python3 -m unittest discover -s tests -t .   # must be green before and after
 No third-party runtime dependencies; the engine uses only the Python standard
 library.
 
+## Applications need a design first
+
+**No application code before the LLD.** Before adding an application to
+`examples/` — or making a non-trivial change to an existing one — write
+`docs/design/<name>-LLD.md` covering the eleven sections listed in
+[`docs/design/README.md`](docs/design/README.md), and add it to the index there.
+
+A demo counts. A prototype counts. A "quick script" that lands in `examples/`
+counts. For an existing application, the design describes the current architecture
+and the proposed change before the change is made.
+
+Two things are checked in CI: every application has a design with all eleven
+sections, and the design's capability section agrees with what the code imports. If
+you need a capability the design did not mention, update the design in the same
+commit.
+
 ## What a good change looks like
 
 1. **One concern per change.** A parser fix and a VM optimisation in one commit

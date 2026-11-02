@@ -1,14 +1,17 @@
-# Application examples
+# Applications
 
-Three complete programs that run on the current engine. They use only APIs that
-exist in this repository — no invented functions, no placeholder output — and each
-one is executed by `tests/test_apps.py`, which checks the transcript *and* the
-files the program writes.
+Every application in this repository has a low-level design in
+[`docs/design/`](design/README.md), written before the code. **No application code
+before the LLD** — the rule and the required sections are in
+[`docs/design/README.md`](design/README.md), and `tests/test_design_docs.py` fails
+the build if an application has no design, a design is missing a section, or the
+design's stated capabilities disagree with the code.
 
-Every command below assumes you are in the repository root, and that Silica is
-installed or runnable as `python3 -m silica`.
-
----
+| Application | Design |
+|---|---|
+| `examples/calculator_app.sc` | [calculator_app-LLD.md](design/calculator_app-LLD.md) |
+| `examples/task_manager.sc` | [task_manager-LLD.md](design/task_manager-LLD.md) |
+| `examples/data_report.sc` | [data_report-LLD.md](design/data_report-LLD.md) |
 
 ## 1. Calculator — `examples/calculator_app.sc`
 
