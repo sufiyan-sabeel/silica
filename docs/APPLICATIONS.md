@@ -175,6 +175,40 @@ copy examples/data/sales.csv here and run again
 
 ---
 
+## 4. Scientific calculator — `examples/scientific_calculator.sc`
+
+A phone-shaped scientific calculator: amber-on-black keypad, large display, history
+tape, keyboard support. Silica generates the page, the theme, the palette and the
+CSS; the arithmetic runs in JavaScript, because Silica does not run in a browser.
+The generated file says so in a comment.
+
+**This is not an Android app.** It is one self-contained HTML file you open in
+Chrome; it can be added to the home screen but it is a web page, and it is not an
+installable PWA.
+
+```bash
+mkdir -p build
+silica run --allow-fs-read build --allow-fs-write build examples/scientific_calculator.sc
+# wrote build/calculator.html — open it in a browser, no network needed
+```
+
+Output:
+
+```
+wrote build/calculator.html
+inlined theme.css and silica-ui-runtime.js: build/calculator.html is one file
+  contrast text/background: 19.6738
+  contrast accent_text/accent: 10.2156
+```
+
+Every colour is derived from one base colour in OKLab and contrast-checked, so the
+amber operator keys and their labels reach 10.2:1 rather than assuming white reads on
+amber. The page is 23 KB, has no external references and no network calls.
+
+Tests: `tests/test_calculator_app.py` — 23 tests over four layers: the generated
+HTML's structure, the measured palette contrast, the engine's arithmetic under Node,
+and the real page in headless Chromium with real clicks and key events.
+
 ## What these examples are not
 
 - **No GUI, TUI, mobile or desktop application.** Silica has a UI DSL that emits

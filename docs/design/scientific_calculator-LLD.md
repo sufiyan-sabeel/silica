@@ -1,6 +1,6 @@
 # scientific_calculator — low-level design
 
-Status: **design for review — not implemented.**
+Status: **implemented** (`examples/scientific_calculator.sc`).
 Target: a self-contained HTML page opened in Chrome on Android.
 Capabilities: **`fs.read`, `fs.write`** — scoped to the `build/` directory.
 
@@ -319,7 +319,31 @@ genuine change, and the deviation is recorded below.
 
 ## Deviations
 
-None yet — implementation has not started.
+Four things changed during implementation, all found by the tests:
+
+1. **The page was not self-contained.** `ui.render` writes `theme.css` and
+   `silica-ui-runtime.js` as siblings and links them. A phone user transferring one
+   file would get an unstyled, inert page. `inline_assets` now folds both into the
+   HTML and fails if the expected tags are absent, so the output is a single 23 KB
+   file with zero external references.
+
+2. **Silica keywords leaked into the JavaScript.** Writing the engine as string
+   literals inside a `.sc` file meant `} sino {` reached the browser, where it is a
+   syntax error. The Node harness caught it immediately; the fix is `} else {` in
+   the generated source. Worth remembering: the generated code is code.
+
+3. **Precedence was wrong.** The first `operator()` folded eagerly on every operator
+   press, so `12 + 4 × 3` evaluated as `(12 + 4) × 3 = 48`. The engine now keeps a
+   token list and evaluates once at `=`, with `× ÷ ^` binding tighter than `+ −`.
+
+4. **π and results could not start an expression.** After `π`, pressing `×` pushed an
+   operator with no left operand and produced `Error`. `operator()` now commits the
+   current value when the token list is empty or ends with an operator, and replaces
+   a repeated operator instead of stacking it.
+
+A fifth correction was to the tests, not the app: the browser check expected one
+history row after a sequence that completes three evaluations. The application was
+right and the expectation was wrong.
 
 ## Limitations
 
