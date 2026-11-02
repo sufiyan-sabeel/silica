@@ -489,8 +489,69 @@ class ReleaseIntegrityTests(unittest.TestCase):
                           "same bytes as the published"):
                 self.assertNotIn(claim, text, "%s claims %r" % (name, claim))
 
-    def test_the_build_workflows_pin_source_date_epoch(self):
+    def test_the_one_builder_pins_source_date_epoch(self):
+        # CI is the only workflow that builds now; release and publish consume its
+        # artefacts, so the timestamp has to be pinned here and only here.
+        text = self.read(os.path.join(".github", "workflows", "ci.yml"))
+        self.assertIn("SOURCE_DATE_EPOCH", text)
+        self.assertIn("python -m build", text)
+
+
+class WorkflowTests(unittest.TestCase):
+    """One build, two destinations — enforced, not just documented.
+
+    release.yml used to run `python -m build` itself while CI built the same
+    commit, so the GitHub release and PyPI would have received byte-different
+    artefacts. These tests keep that from coming back.
+    """
+
+    def workflow(self, name):
+        with open(os.path.join(ROOT, ".github", "workflows", name),
+                  encoding="utf-8") as handle:
+            return handle.read()
+
+    def run_steps(self, text):
+        """Only the executable lines, so a comment cannot satisfy a check."""
+        steps, in_run = [], False
+        for line in text.splitlines():
+            if line.strip().startswith("run:"):
+                in_run = True
+                steps.append(line.split("run:", 1)[1])
+                continue
+            if in_run:
+                if line.strip() and not line.startswith((" ", "\t")):
+                    in_run = False
+                    continue
+                if line.strip().startswith(("uses:", "- name:", "with:")):
+                    in_run = False
+                    continue
+                steps.append(line)
+        return "\n".join(steps)
+
+    def test_the_release_workflow_does_not_build(self):
+        body = self.run_steps(self.workflow("release.yml"))
+        self.assertNotIn("python -m build", body,
+                         "release.yml must not build; it must consume CI's artefacts")
+
+    def test_the_publish_workflow_does_not_build(self):
+        body = self.run_steps(self.workflow("publish.yml"))
+        self.assertNotIn("python -m build", body,
+                         "publish.yml must not build; it must consume CI's artefacts")
+
+    def test_both_download_the_ci_artifact(self):
         for name in ("release.yml", "publish.yml"):
-            text = self.read(os.path.join(".github", "workflows", name))
-            self.assertIn("SOURCE_DATE_EPOCH", text,
-                          "%s does not set SOURCE_DATE_EPOCH" % name)
+            self.assertIn("gh run download", self.workflow(name),
+                          "%s does not download the CI artefact" % name)
+            self.assertIn("-n dist", self.workflow(name),
+                          "%s does not download the 'dist' artifact" % name)
+
+    def test_the_publish_workflow_can_request_an_oidc_token(self):
+        self.assertIn("id-token: write", self.workflow("publish.yml"))
+
+    def test_the_release_workflow_refuses_to_run_without_a_ci_build(self):
+        text = self.workflow("release.yml")
+        self.assertIn("refusing to build here", text)
+        self.assertIn("gh run watch", text)
+
+    def test_the_release_workflow_has_a_dry_run(self):
+        self.assertIn("dry_run", self.workflow("release.yml"))

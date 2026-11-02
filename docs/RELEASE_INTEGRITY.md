@@ -137,6 +137,42 @@ destinations* rather than "rebuild and hope". Byte-identity across two builds wo
 additionally require normalising `umask` and tar ownership, which setuptools does
 not do.
 
+## 2d. One builder, enforced
+
+`release.yml` used to run `python -m build` itself, at the same moment CI was
+building the same commit. That is how v0.10.1 shipped a release sdist that differed
+from the CI build — the duplicate had to be deleted and replaced by hand.
+
+Cleaning it up once would have left the same trap for the next release, so the
+workflow was changed structurally:
+
+| Workflow | Before | Now |
+|---|---|---|
+| `ci.yml` | builds, uploads `dist` | builds, uploads `dist` — **the only builder** |
+| `release.yml` | built again, attached its own files | waits for CI's run for the tag, downloads `dist`, verifies, attaches those files |
+| `publish.yml` | built again, uploaded its own files | downloads the same `dist`, verifies, uploads those files |
+
+`release.yml` now:
+
+1. resolves the tag to its commit and checks the version agrees with `pyproject.toml`
+   and `install.sh`;
+2. waits up to ten minutes for a CI run for that commit to appear, then
+   `gh run watch --exit-status` so a red CI fails the release;
+3. **fails with "refusing to build here"** if no CI run exists — it will not fall
+   back to building;
+4. downloads the `dist` artifact, runs the Silica packaging check on it, smoke-tests
+   the downloaded wheel in a clean venv, and attaches those exact files.
+
+A `workflow_dispatch` with `dry_run: true` (the default) exercises the whole path —
+wait, download, verify, smoke test — without creating or modifying a release.
+
+Six tests enforce it: neither `release.yml` nor `publish.yml` contains
+`python -m build` in any run step (a comment does not count), both download the
+`dist` artifact, the publish workflow can request an OIDC token, the release
+workflow refuses to proceed without a CI build, and it keeps the dry-run switch.
+`SOURCE_DATE_EPOCH` is asserted on `ci.yml` only, because it is now the only place
+a build happens.
+
 ## 3. Why even a rebuild of the *tag* does not reproduce the published bytes
 
 Built from tag `v0.10.0` (`2153329`) — the exact commit the release was cut from:

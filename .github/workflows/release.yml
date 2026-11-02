@@ -1,9 +1,14 @@
 name: Release
 
-# Builds the wheel and sdist for a tag, generates SHA256SUMS.txt and attaches all
-# three to the GitHub release. install.sh downloads the checksum file first and
-# refuses to install without it, so a release is only usable once every asset is
-# present — which is why this job uploads them in one step.
+# Attaches the artefacts CI already built to the GitHub release.
+#
+# This workflow does not build. It waits for the CI run of the tagged commit,
+# downloads the `dist` artifact, verifies it with the Silica packaging check, smoke
+# tests the wheel, and attaches those exact files. The publish workflow downloads
+# the same artifact, so GitHub and PyPI serve identical bytes.
+#
+# It used to run `python -m build` itself, which produced a second, byte-different
+# build — the duplicate-asset problem that had to be cleaned up by hand for v0.10.1.
 
 on:
   push:
@@ -12,11 +17,16 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing tag to build a release for (e.g. v0.3.0)"
+        description: "Tag whose CI build should be released (e.g. v0.10.1)"
         required: true
+      dry_run:
+        description: "Verify only: download and check the artefacts, publish nothing"
+        type: boolean
+        default: true
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   release:
@@ -25,22 +35,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install build tooling and test dependencies
+      - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install ".[dev]"
-
-      - name: Test before publishing anything
-        run: |
-          python -m unittest discover -s tests -t .
-          python -m silica test tests
-          python -m silica fmt --check examples/*.sc tests/silica/*.sc benchmarks/silica/*.sc
 
       - name: Check the version matches the tag
         run: |
@@ -52,29 +57,55 @@ jobs:
           [ "$WANT" = "$HAVE" ] || { echo "tag and package version disagree"; exit 1; }
           [ "$WANT" = "$SCRIPT" ] || { echo "tag and install.sh default disagree"; exit 1; }
 
-      - name: Build wheel and sdist
+      - name: Wait for the CI build of this commit
+        id: ci
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          # Reproducible wheels: same commit, same bytes.
-          export SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
-          python -m build
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          SHA=$(git rev-parse "$TAG^{commit}")
+          echo "shipping commit: $SHA"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+          # The tag push starts CI and this workflow at the same time, so the run
+          # may not exist yet. Wait for it rather than building anything here.
+          RUN=""
+          for attempt in $(seq 1 40); do
+            RUN=$(gh run list --workflow=ci.yml --commit="$SHA" --limit 1 \
+                    --json databaseId --jq '.[0].databaseId // empty')
+            if [ -n "$RUN" ]; then break; fi
+            echo "attempt $attempt: no CI run for $SHA yet, waiting 15s"
+            sleep 15
+          done
+          if [ -z "$RUN" ]; then
+            echo "no CI run appeared for $SHA — refusing to build here" >&2
+            exit 1
+          fi
+          echo "watching CI run $RUN"
+          gh run watch "$RUN" --exit-status --interval 10
+          echo "run=$RUN" >> "$GITHUB_OUTPUT"
+
+      - name: Download the artefacts CI built
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "${{ steps.ci.outputs.run }}" -n dist -D dist
+          ls -l dist/
+
       - name: Verify the packages (Silica)
         run: |
           python tools/package/facts.py --dist-dir dist --out build/packaging/facts.json
           python -m silica run --allow-fs-read . --allow-fs-write . tools/package/sums.sc
           python -m silica run --allow-fs-read . --allow-fs-write . tools/package/verify.sc
 
-
-      - name: Generate checksums
-        run: cd dist && sha256sum *.whl *.tar.gz > SHA256SUMS.txt && cat SHA256SUMS.txt
-
-      - name: Smoke-test the built wheel in a clean environment
+      - name: Smoke-test the downloaded wheel in a clean environment
         run: |
           python -m venv /tmp/check
           /tmp/check/bin/pip install --quiet dist/*.whl
           cd /tmp
           /tmp/check/bin/silica --version
           printf 'sfn main() {\n    sprint("ok")\n}\n' > /tmp/ok.sc
-          /tmp/check/bin/silica /tmp/ok.sc
+          /tmp/check/bin/silica run /tmp/ok.sc
 
       - name: Write the release notes from the changelog
         run: |
@@ -90,16 +121,32 @@ jobs:
           else:
               print(match.group(0).strip())
           PY
-          echo "---"
+          echo ""
           echo "### Artifacts"
-          echo 'Wheel, sdist and `SHA256SUMS.txt`. The installer verifies the checksums before installing.'
+          echo ""
+          echo "These files are the ones CI built for this commit, uploaded to PyPI"
+          echo "unchanged. The installer verifies the checksums before installing."
           echo ""
           echo '```bash'
           echo "curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | sh"
           echo '```'
+          echo ""
+          echo "### Checksums"
+          echo ""
+          echo '```'
+          cat dist/SHA256SUMS.txt
+          echo '```'
           cat release-body.md
 
+      - name: Show what would be published (dry run)
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        run: |
+          echo "DRY RUN — no release created. Artefacts verified:"
+          cat dist/SHA256SUMS.txt
+          head -30 release-body.md
+
       - name: Publish the release
+        if: ${{ github.event.inputs.dry_run != 'true' }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
@@ -107,7 +154,6 @@ jobs:
           body_path: release-body.md
           draft: false
           prerelease: false
-          generate_release_notes: true
           files: |
             dist/*.whl
             dist/*.tar.gz
