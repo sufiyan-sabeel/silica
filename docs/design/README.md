@@ -7,6 +7,15 @@ This applies to everything: demos, prototypes, throwaway scripts that end up in
 `examples/`, and changes to an existing application (in which case the LLD describes
 the current architecture and the proposed change before it is made).
 
+## Platform architecture
+
+The LLD policy above governs applications. Cross-cutting design work sits
+alongside it and is reviewed the same way — as a document first:
+
+| Document | Status | Scope |
+|---|---|---|
+| [SILICA_PLATFORM_ARCHITECTURE.md](SILICA_PLATFORM_ARCHITECTURE.md) | approved direction, revised for review | how Silica targets web, desktop, Android, GUI/TUI and system software; the recorded decisions on error model, concurrency, desktop backend, WASM, packaging; and the design for first-class functions and closures |
+
 ## Where they live
 
 ```
