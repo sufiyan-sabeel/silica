@@ -53,3 +53,4 @@ Known language limits worth checking first: no index assignment (`list[i] = v`,
 | `examples/calculator_app.sc` | [calculator_app-LLD.md](calculator_app-LLD.md) | none |
 | `examples/task_manager.sc` | [task_manager-LLD.md](task_manager-LLD.md) | `fs.read`, `fs.write` |
 | `examples/data_report.sc` | [data_report-LLD.md](data_report-LLD.md) | `fs.read`, `fs.write` |
+| `examples/scientific_calculator.sc` | [scientific_calculator-LLD.md](scientific_calculator-LLD.md) | `fs.read`, `fs.write` |

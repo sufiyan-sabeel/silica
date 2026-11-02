@@ -107,7 +107,16 @@ class DesignMatchesCodeTests(unittest.TestCase):
 
     def test_the_declared_capabilities_match_the_imports(self):
         for name, lld in index_entries():
-            source = read(os.path.join(EXAMPLES, name + ".sc"))
+            example = os.path.join(EXAMPLES, name + ".sc")
+            if not os.path.exists(example):
+                # designed but not built yet: the design must say so, and there is
+                # no code to disagree with
+                self.assertIn("not implemented",
+                              read(os.path.join(DESIGN, lld)).lower(),
+                              "%s has no example and its design does not say it is "
+                              "unimplemented" % lld)
+                continue
+            source = read(example)
             design = read(os.path.join(DESIGN, lld)).lower()
             uses_fs = any(re.search(r"^use %s\b" % mod, source, re.M)
                           for mod in CAPABILITY_MODULES)
