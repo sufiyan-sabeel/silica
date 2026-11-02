@@ -43,7 +43,7 @@ jobs:
       # step that runs it. Without this the installer steps failed with
       # "cannot open ../install.sh".
       - name: Check out the installer
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 

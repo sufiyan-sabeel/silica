@@ -36,7 +36,7 @@ jobs:
       id-token: write
       actions: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # the tag must exist locally for `git rev-parse v0.10.1^{commit}`
           fetch-depth: 0
