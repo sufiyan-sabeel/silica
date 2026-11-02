@@ -439,6 +439,8 @@ tests/             1273 tests
 examples/          runnable .sc programs
 docs/              language spec, bytecode, security, audit, IDE, UI, voice,
                    packaging, supply chain
+docs/design/       LLDs for the shipped applications, plus the platform
+                   architecture proposal
 benchmarks/        benchmarks against CPython
 ```
 
@@ -446,6 +448,14 @@ Documentation worth reading: [`docs/AUDIT.md`](docs/AUDIT.md) (measured state an
 roadmap), [`docs/IDE.md`](docs/IDE.md), [`docs/LANGUAGE_SPEC.md`](docs/LANGUAGE_SPEC.md),
 [`docs/BYTECODE.md`](docs/BYTECODE.md), [`SECURITY.md`](SECURITY.md),
 [`CHANGELOG.md`](CHANGELOG.md).
+
+Design work: [`docs/design/`](docs/design/README.md) holds an LLD for every
+shipped application, and
+[`docs/design/SILICA_PLATFORM_ARCHITECTURE.md`](docs/design/SILICA_PLATFORM_ARCHITECTURE.md)
+is the platform architecture proposal — how Silica reaches web, desktop, Android,
+GUI/TUI and eventually system software, with the recorded decisions on the error
+model, concurrency, desktop backends, WASM, packaging and the closure design.
+Nothing in it is implemented; it is a proposal awaiting review.
 
 ---
 
