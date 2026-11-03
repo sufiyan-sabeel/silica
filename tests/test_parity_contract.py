@@ -199,13 +199,17 @@ class RunnerSelfTests(unittest.TestCase):
         self.assertTrue(any("exit code" in p for p in problems), problems)
 
     def test_it_reports_an_xpass(self):
+        # The corpus no longer contains a known defect, so this test creates one:
+        # mark a case strict in the copy, then make its expectation match reality.
         name = "float_negative_zero_intern"
-        # Make the expectation match what the VM produces today: the case is then
-        # an XPASS and the runner must say so.
-        _stdout, _stderr, _code = execute(self.corpus, name)
-        path = os.path.join(self.corpus, name + ".expected")
-        with open(path, "w", encoding="utf-8") as handle:
-            handle.write("-0.0\n-0.0\n")
+        source_path = os.path.join(self.corpus, name + ".sc")
+        source = read(source_path)
+        with open(source_path, "w", encoding="utf-8") as handle:
+            handle.write(STRICT_XFAIL + " self-test\n" + source)
+        stdout, _stderr, _code = execute(self.corpus, name)
+        with open(os.path.join(self.corpus, name + ".expected"), "w",
+                  encoding="utf-8") as handle:
+            handle.write(stdout)
         problems = compare(self.corpus, name)
         self.assertTrue(any("XPASS" in p for p in problems), problems)
 
