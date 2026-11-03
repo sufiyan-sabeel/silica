@@ -209,7 +209,9 @@ python3 -c "import sysconfig; print(sysconfig.get_paths()['include'])"   # M2 / 
 python3 -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR'))" # M2 / PyO3
 ```
 
-**Ready** means: `rustc` and `cargo` both answer with a version ≥ 1.70, `cc` or `gcc`
+**Ready** means: `rustc` and `cargo` both answer with a version ≥ 1.85 (the workspace
+MSRV — M1's own code would build on 1.70, but M2's PyO3 requires 1.85, so there is one
+number to meet, not two), `cc` or `gcc`
 is present, and for M2 the Python include path exists and contains `Python.h`.
 
 ---
