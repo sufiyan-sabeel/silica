@@ -189,7 +189,18 @@ def constant_tag(value):
 
 
 def constant_key(value):
-    return (constant_tag(value), value)
+    """Identity of a constant inside the pool.
+
+    Floats are keyed by their IEEE-754 bit pattern, not by equality: `0.0 == -0.0`
+    is True and the two hash the same, so an equality key gives both one pool slot
+    and whichever was inserted first decides the sign that every equal-valued
+    constant prints as. Bit patterns keep them distinct, and keep distinct NaN
+    payloads distinct too.
+    """
+    tag = constant_tag(value)
+    if tag == TAG_FLOAT:
+        return (tag, struct.pack(">d", value))
+    return (tag, value)
 
 
 class Function:
