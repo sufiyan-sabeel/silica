@@ -173,7 +173,14 @@ class VM:
                 op, operands, offset = instrs[ip]
                 ip += 1
 
-                if op == 0x01:  # CONST
+                if op == 0x00:  # NOP
+                    # The instruction pointer already advanced past this
+                    # instruction before dispatch. NOP must touch nothing else:
+                    # no stack effect, no state, no diagnostics. It exists so that
+                    # the opcode contract, the verifier and a hand-built .sbc file
+                    # agree; the compiler never emits it.
+                    pass
+                elif op == 0x01:  # CONST
                     stack.append(constants[operands[0]])
                 elif op == 0x02:  # UNIT
                     stack.append(None)
