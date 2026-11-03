@@ -17,7 +17,7 @@ commands to prove it. No Rust code has been written.
 | Implementation readiness | `docs/design/SILICA_R1_IMPLEMENTATION_READINESS.md` | decisions recorded |
 | Parity contract | `tests/parity/` (29 files, 14 cases) + `tests/test_parity_contract.py` | frozen, no xfail cases |
 | NOP regression | `tests/test_nop.py` | merged (PR #8) |
-| Reference VM | `silica/` | unchanged since PR #8; 1,364 tests green on the stabilization branch (1,352 on `main`, one stale-skip-list failure — see the readiness report §2.8) |
+| Reference VM | `silica/` | unchanged since PR #8; 1,368 tests green on the stabilization branch (1,352 on `main`, one stale-skip-list failure — see the readiness report §2.8) |
 
 The harness is only reproducible because its program is committed: the `.sbc` is
 produced from `benchmarks/silica/gate_bench.sc` by the Python compiler, never
