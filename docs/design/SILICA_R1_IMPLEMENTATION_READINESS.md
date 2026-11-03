@@ -41,7 +41,7 @@ only a Python-free dispatch loop. That is a real limitation of the phase and it 
 stated in §8 rather than hidden.
 
 **Effort, assuming one engineer familiar with the codebase:** 12–18 engineer-days to
-the end of M2 (the gate that matters), 25–35 to all 42 opcodes with the bridge. §11
+the end of M2 (the gate that matters), 25–35 to all 43 opcodes with the bridge. §11
 gives the breakdown and the assumptions behind it.
 
 ---
