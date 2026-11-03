@@ -1,1 +1,158 @@
-IyBTaWxpY2Eg4oCUIFIxIEVudmlyb25tZW50IEhhbmRvZmYKCioqU3RhdHVzOioqIHBoYXNlIGNsb3NlZCDigJQgd2FpdGluZyBmb3IgY29uZmlybWF0aW9uIG9mIGEgUnVzdC1jYXBhYmxlIG1hY2hpbmUKKipEb2N1bWVudCB2ZXJzaW9uOioqIDEuMCDCtyAyMDI2LTExLTAzCioqU2NvcGU6Kiogd2hhdCBpcyBmcm96ZW4gb24gYG1haW5gLCB3aGF0IHRoZSBidWlsZCBtYWNoaW5lIG11c3QgcHJvdmlkZSwgYW5kIHRoZSBleGFjdApjb21tYW5kcyB0byBwcm92ZSBpdC4gTm8gUnVzdCBjb2RlIGhhcyBiZWVuIHdyaXR0ZW4uCgotLS0KCiMjIDEuIFdoYXQgaXMgb24gYG1haW5gLCBhbmQgc3RheXMgdGhlcmUKCnwgQXJ0ZWZhY3QgfCBQYXRoIHwgU3RhdGUgfAp8LS0tfC0tLXwtLS18CnwgQmVuY2htYXJrIHJlcG9ydCB8IGBkb2NzL2Rlc2lnbi9TSUxJQ0FfUjFfQkVOQ0hNQVJLX1JFQURJTkVTUy5tZGAgfCBhcHByb3ZlZCwgZnJvemVuIHwKfCBHYXRlIGhhcm5lc3MgfCBgYmVuY2htYXJrcy9nYXRlLnB5YCB8IGFwcHJvdmVkLCBmcm96ZW4gfAp8IEdhdGUgYmVuY2htYXJrIHNvdXJjZSB8IGBiZW5jaG1hcmtzL3NpbGljYS9nYXRlX2JlbmNoLnNjYCB8IGZyb3plbiDigJQgcHJpbnRzIGAxNDk5OTk3NTAwMDAwYCB8CnwgSW1wbGVtZW50YXRpb24gcmVhZGluZXNzIHwgYGRvY3MvZGVzaWduL1NJTElDQV9SMV9JTVBMRU1FTlRBVElPTl9SRUFESU5FU1MubWRgIHwgZGVjaXNpb25zIHJlY29yZGVkIHwKfCBQYXJpdHkgY29udHJhY3QgfCBgdGVzdHMvcGFyaXR5L2AgKDI5IGZpbGVzLCAxNCBjYXNlcykgKyBgdGVzdHMvdGVzdF9wYXJpdHlfY29udHJhY3QucHlgIHwgZnJvemVuLCBubyB4ZmFpbCBjYXNlcyB8CnwgTk9QIHJlZ3Jlc3Npb24gfCBgdGVzdHMvdGVzdF9ub3AucHlgIHwgbWVyZ2VkIChQUiAjOCkgfAp8IFJlZmVyZW5jZSBWTSB8IGBzaWxpY2EvYCB8IHVuY2hhbmdlZCBzaW5jZSBQUiAjODsgMSwzMjkgdGVzdHMgZ3JlZW4gfAoKVGhlIGhhcm5lc3MgaXMgb25seSByZXByb2R1Y2libGUgYmVjYXVzZSBpdHMgcHJvZ3JhbSBpcyBjb21taXR0ZWQ6IHRoZSBgLnNiY2AgaXMKcHJvZHVjZWQgZnJvbSBgYmVuY2htYXJrcy9zaWxpY2EvZ2F0ZV9iZW5jaC5zY2AgYnkgdGhlIFB5dGhvbiBjb21waWxlciwgbmV2ZXIKaGFuZC1lZGl0ZWQsIGFuZCB0aGUgcGlubmVkIHN0ZG91dCBoYXNoIHByb3ZlcyB0aGUgcnVuIGlzIHRoZSByaWdodCBydW4uCgotLS0KCiMjIDIuIE0xIHRvb2xjaGFpbiByZXF1aXJlbWVudHMKCk0xIGlzICoqcHVyZSBgc3RkYCBSdXN0IHdpdGggemVybyBjcmF0ZSBkZXBlbmRlbmNpZXMqKiwgc28gaXQgYnVpbGRzIGZ1bGx5IG9mZmxpbmUuClRoYXQgaXMgZGVsaWJlcmF0ZTogaXQgcmVtb3ZlcyBjcmF0ZXMuaW8sIHZlbmRvcmluZyBhbmQgbG9ja2ZpbGUgcXVlc3Rpb25zIGZyb20gdGhlCmZpcnN0IGdhdGUuCgp8IFJlcXVpcmVtZW50IHwgRGV0YWlsIHwKfC0tLXwtLS18CnwgYHJ1c3RjYCArIGBjYXJnb2AgfCBzdGFibGUgY2hhbm5lbCwgKiriiaUgMS43MCoqIGZvciBNMSdzIG93biBjb2RlIChlZGl0aW9uIDIwMjEsIGBsZXQtZWxzZWAsIGBPbmNlTG9ja2ApIHwKfCBMaW5rZXIgfCBgY2NgIG9yIGBnY2NgIHByZXNlbnQg4oCUIHRoZSBgeDg2XzY0LXVua25vd24tbGludXgtZ251YCB0YXJnZXQgbGlua3MgdGhyb3VnaCBpdCB8CnwgSG9zdCB0YXJnZXQgaW5zdGFsbGVkIHwgYHJ1c3R1cCB0YXJnZXQgbGlzdCAtLWluc3RhbGxlZCBzaG93cyB0aGUgaG9zdCB0cmlwbGUgfAp8IENyYXRlIHJlZ2lzdHJ5IHwgKipub3QgbmVlZGVkIGZvciBNMSoqIChubyBkZXBlbmRlbmNpZXMpIHwKfCBQeXRob24gfCAzLjkrIHRvIHJ1biB0aGUgcmVmZXJlbmNlIHNpZGUgb2YgdGhlIGdhdGUgYW5kIGNvbXBpbGUgdGhlIGAuc2JjYCB8CgoqKlRoZSBmbG9vciByaXNlcyBhdCBNMi4qKiBQeU8zIDAuMzAuMSByZXF1aXJlcyAqKlJ1c3Qg4omlIDEuODUqKiwgc28gdGhlIHdvcmtzcGFjZSBNU1JWCnNob3VsZCBiZSBzZXQgdG8gMS44NSBmcm9tIHRoZSBzdGFydCBldmVuIHRob3VnaCBNMSBhbG9uZSBuZWVkcyBsZXNzIOKAlCBvdGhlcndpc2UgTTIKZm9yY2VzIGEgdG9vbGNoYWluIHVwZ3JhZGUgbWlkLXNwaWtlLgoKLS0tCgojIyAzLiBNMiByZXF1aXJlbWVudHMg4oCUIFB5dGhvbiBoZWFkZXJzIGFuZCBQeU8zCgp8IFJlcXVpcmVtZW50IHwgRGV0YWlsIHwKfC0tLXwtLS18CnwgUHlPMyB8IDAuMzAueCAoY3VycmVudDogMC4zMC4xKSwgZmVhdHVyZSBgYWJpMy1weTM5YCB8CnwgUnVzdCB8ICoq4omlIDEuODUqKiAoUHlPMyYjMzk7cyBNU1JWLCBub3Qgb3VycykgfAp8IENQeXRob24gfCAqKuKJpSAzLjkqKiDigJQgbWF0Y2hlcyBTaWxpY2EncyBkZWNsYXJlZCBmbG9vcjsgYGFiaTMtcHkzOWAgcHJvZHVjZXMgb25lIHdoZWVsIHBlciBPUy9hcmNoIGZvciBldmVyeSBQeXRob24g4omlIDMuOSB8CnwgUHl0aG9uIGhlYWRlcnMgfCBgUHl0aG9uLmg`IGZvciB0aGUgYnVpbGQgaW50ZXJwcmV0ZXI6IGBweXRob24zLWRldmAgKERlYmlhbi9VYnVudHUpLCBgcHl0aG9uMy1kZXZlbGAgKEZlZG9yYS9SSEVMKSwgaW5jbHVkZWQgaW4gdGhlIG9mZmljaWFsIFdpbmRvd3MgaW5zdGFsbGVyLCBgeGNvZGUtc2VsZWN0IC0taW5zdGFsbGAgKyBhIGZyYW1ld29yayBidWlsZCBvbiBtYWNPUyB8CnwgQyB0b29sY2hhaW4gfCBhIGNvbXBpbGVyICoqYW5kKiogbGlua2VyIOKAlCBQeU8zIGJ1aWxkcyBDIGdsdWUgYW5kIGxpbmtzIGFnYWluc3QgbGlicHl0aG9uIHwKfCBXaGVlbCBidWlsZGVyIHwgYG1hdHVyaW5gIChjdXJyZW50IHJlbGVhc2UpIGZvciBgYWJpM2Agd2hlZWxzOyBgc2V0dXB0b29scy1ydXN0YCBpcyB0aGUgYWx0ZXJuYXRpdmUgfAp8IEludGVycHJldGVyIHNlbGVjdGlvbiB8IGBQWU8zX1BZVEhPTj0vcGF0aC90by9weXRob24zYCB3aGVuIHNldmVyYWwgYXJlIGluc3RhbGxlZCB8CgpgYWJpM2Agbm90ZTogdGhlIHBsYWluIGBhYmkzYCBmZWF0dXJlIG5lZWRzIGEgaG9zdCBpbnRlcnByZXRlciBwcmVzZW50IGFuZCBjYW5ub3QKY3Jvc3MtY29tcGlsZTsgYGFiaTMtcHkzOWAgY2FuIGJlIHVzZWQgd2l0aG91dCBvbmUsIHdoaWNoIGlzIHdoYXQgbWFrZXMKY3Jvc3MtY29tcGlsZWQgd2hlZWxzIHBvc3NpYmxlIGxhdGVyLgoKLS0tCgojIyA0LiBFeGFjdCBjb21tYW5kcyB0byBydW4gb24gdGhlIGJ1aWxkIG1hY2hpbmUKCiMjIyA0LjEgUHJvdmUgdGhlIHRvb2xjaGFpbiB3b3JrcwoKYGBgYmFzaApydXN0YyAtLXZlcnNpb24gICAgICAgICAgICAjIGV4cGVjdCA+PSAxLjg1IChvciA+PSAxLjcwIGZvciBNMSBvbmx5KQpjYXJnbyAtLXZlcnNpb24KcnVzdHVwIHRhcmdldCBsaXN0IC0taW5zdGFsbGVkCmNjIC0tdmVyc2lvbiB8fCBnY2MgLS12ZXJzaW9uCnB5dGhvbjMgLS12ZXJzaW9uICAgICAgICAgICMgZXhwZWN0ID49IDMuOQpgYGAKCkEgdmVyc2lvbiBpcyBub3QgcHJvb2YgdGhhdCBsaW5raW5nIHdvcmtzLCBzbyBidWlsZCBzb21ldGhpbmcgYW5kIHJ1biBpdDoKCmBgYGJhc2gKY2QgIiQobWt0ZW1wIC1kKSIgJiYgY2FyZ28gbmV3IC0tcXVpZXQgbGlua2NoZWNrICYmIGNkIGxpbmtjaGVjawpjYXJnbyBydW4gLS1xdWlldCAgICAgICAgICAjIG11c3QgcHJpbnQ6IEhlbGxvLCB3b3JsZCEKYGBgCgpJZiB0aGF0IHByaW50cywgdGhlIHRvb2xjaGFpbiBjYW4gY29tcGlsZSAqKmFuZCBsaW5rKiog4oCUIHdoaWNoIGlzIHRoZSBwcm9wZXJ0eSB0aGUKZ2F0ZSBkZXBlbmRzIG9uLiBJZiBpdCBmYWlscyBhdCB0aGUgbGluayBzdGVwLCB0aGUgdG9vbGNoYWluIGlzIGluY29tcGxldGUgYW5kIE0xCmNhbm5vdCBzdGFydC4KCiMjIyA0LjIgUnVuIHRoZSByZWZlcmVuY2Ugc2lkZSBvZiB0aGUgZ2F0ZQoKRnJvbSB0aGUgcmVwb3NpdG9yeSByb290LCB3aXRoIHRoZSBQeXRob24gVk0gaW5zdGFsbGVkIChgcGlwIGluc3RhbGwgLWUgLmAgb3Igb24KYFBZVEhPTlBBVEhgKToKCmBgYGJhc2gKcHl0aG9uMyAtbSBzaWxpY2EgY29tcGlsZSBiZW5jaG1hcmtzL3NpbGljYS9nYXRlX2JlbmNoLnNjIC1vIGJ1aWxkL2dhdGVfYmVuY2guc2JjCnB5dGhvbjMgYmVuY2htYXJrcy9nYXRlLnB5IC0tc2JjIGJ1aWxkL2dhdGVfYmVuY2guc2JjCmBgYAoKRXhwZWN0ZWQ6IGBzdGRvdXRfbWF0Y2hlc19yZWZlcmVuY2UgVHJ1ZWAsIGBzdGRvdXRfc2hhMjU2YCBiZWdpbm5pbmcgYDJjMjBkZDE3YCwKYGV4aXQgMGAsIGFuZCBhIG1lZGlhbiBhcm91bmQgNy4x4oCTNy4zIHMgb24geDg2XzY0ICh0aGUgZXhhY3QgdmFsdWUgaXMgbWFjaGluZS1zcGVjaWZpYwphbmQgaXMgcmVjb21wdXRlZCBhdCBydW4gdGltZSDigJQgbmV2ZXIgaGFyZGNvZGVkKS4KCk5vdGU6IGBzaWxpY2EgY29tcGlsZWAgaGFzIG5vIGAtLWhlbHBgOyBpdHMgdXNhZ2UgaXMKYHNpbGljYSBjb21waWxlIDxmaWxlLnNjPiBbLW8gb3V0LnNiY11gLgoKIyMjIDQuMyBSdW4gdGhlIGdhdGUgb25jZSB0aGUgUnVzdCBWTSBleGlzdHMKCmBgYGJhc2gKY2FyZ28gYnVpbGQgLS1yZWxlYXNlCnB5dGhvbjMgYmVuY2htYXJrcy9nYXRlLnB5IC0tc2JjIGJ1aWxkL2dhdGVfYmVuY2guc2JjIFwKICAgIC0tY29tcGFyZSB0YXJnZXQvcmVsZWFzZS9zaWxpY2EgLS1qc29uCmBgYAoKUGFzcyBjb25kaXRpb246IGAicGFzc2VzX2dhdGUiOiB0cnVlYCwgaS5lLiB0aGUgaW50ZXJsZWF2ZWQgcmF0aW8gaXMgKiriiaUgMy4wKiosIHdpdGgKYHN0ZG91dF9tYXRjaGVzX3JlZmVyZW5jZWAgdHJ1ZS4KCi0tLQoKIyMgNS4gQW5kcm9pZC9UZXJtdXggdmVyc3VzIGEgZnVsbCBidWlsZCBlbnZpcm9ubWVudAoKfCBXb3JrIHwgVGVybXV4IChBUk02NCBBbmRyb2lkKSB8IExpbnV4IC8gbWFjT1MgLyBXaW5kb3dzIHwKfC0tLXwtLS18LS0tfAp8IFB5dGhvbiBzaWRlOiBnYXRlIGhhcm5lc3MsIHBhcml0eSBjb3JwdXMsIGRvY3MgfCAqKnllcyoqIOKAlCBvcmRpbmFyeSBQeXRob24gMyB8IHllcyB8CnwgTTEgUnVzdCBzb3VyY2UgKHB1cmUgYHN0ZGAsIG5vIGRlcHMpIHwgKipwb3NzaWJsZSBidXQgdW52ZXJpZmllZCoqIOKAlCBUZXJtdXggc2hpcHMgYHJ1c3RgIHRhcmdldGluZyBgYWFyY2g2NC1saW51eC1hbmRyb2lkYDsgd2hldGhlciBpdHMgdmVyc2lvbiBhbmQgbGlua2VyIGFyZSBzdWZmaWNpZW50IGlzIHVudGVzdGVkIHwgeWVzIHwKfCBNMSBnYXRlIG1lYXN1cmVtZW50IHwgKip2YWxpZCBvbmx5IGlmIGJvdGggVk1zIHJ1biBvbiB0aGUgc2FtZSBkZXZpY2UqKiDigJQgdGhlIGhhcm5lc3MgY29tcGFyZXMgdGhlbSBpbiBvbmUgc2Vzc2lvbiwgc28gYW4gQVJNIHJlZmVyZW5jZSBhZ2FpbnN0IGFuIEFSTSBSdXN0IHJ1biBpcyBhIGZhaXIgcmF0aW87IGFuIEFSTSByZWZlcmVuY2UgYWdhaW5zdCBhbiB4ODYgUnVzdCBydW4gaXMgbm90IHwgeWVzLCBwcmVmZXJyZWQgfAp8IE0yIC8gUHlPMyB8ICoqZG8gbm90IHBsYW4gb24gaXQqKiDigJQgbmVlZHMgQ1B5dGhvbiBoZWFkZXJzIGZvciB0aGUgQW5kcm9pZCBBQkkgcGx1cyB0aGUgTkRLOyB1bnZlcmlmaWVkIGFuZCBmcmFnaWxlIHwgeWVzIHwKfCBgYWJpM2Agd2hlZWxzIGZvciBkaXN0cmlidXRpb24gfCBubyB8ICoqeWVzKiog4oCUIG9uZSBidWlsZCBwZXIgT1MvYXJjaCB8CnwgV2luZG93cyBidWlsZCB8IG5vIHwgKip5ZXMqKiDigJQgbmVlZHMgdGhlIE1TVkMgYnVpbGQgdG9vbHMsIG5vdCBqdXN0IHJ1c3R1cCB8CnwgbWFjT1MgYnVpbGQgKHg4Nl82NCArIGFybTY0IG9yIHVuaXZlcnNhbDIpIHwgbm8gfCAqKnllcyoqIOKAlCBuZWVkcyBYY29kZSBDTFQgfAoKKipQcmFjdGljYWwgc3BsaXQ6KiogZGV2ZWxvcCBhbmQgcmV2aWV3IE0xIGFueXdoZXJlLCBpbmNsdWRpbmcgVGVybXV4LCBidXQgbWVhc3VyZSB0aGUKZ2F0ZSBvbiBvbmUgbWFjaGluZSB3aXRoIGJvdGggVk1zIHByZXNlbnQsIGFuZCBidWlsZCBNMiBhbmQgYW55IHdoZWVscyBvbiBhIGRlc2t0b3AgT1MuClRoZSBBbmRyb2lkICJubyBQeXRob24gb24gdGhlIGRldmljZSIgc3RvcnkgZG9lcyBub3QgZXhpc3QgYXQgTTIgZWl0aGVyIOKAlCBQeU8zIGVtYmVkcwpDUHl0aG9uIOKAlCBzbyBBbmRyb2lkIGlzIG5vdCBhIHRhcmdldCBmb3IgdGhpcyBzcGlrZS4KCi0tLQoKIyMgNi4gRnJvemVuLCBhbmQgbm90IHRvIGJlIGNoYW5nZWQKCnwgQ29udHJhY3QgfCBXaGVyZSB8IFJ1bGUgfAp8LS0tfC0tLXwtLS18CnwgR2F0ZSB8IMKnMyBvZiB0aGUgYmVuY2htYXJrIHJlcG9ydCB8IOKJpTPDlyBleGVjdXRpb24tb25seSwgaW50ZXJsZWF2ZWQsIG1lZGlhbiBvZiA1IGFmdGVyIDEgd2FybS11cCwgdGFyZ2V0IGRlcml2ZWQgYXQgcnVuIHRpbWUgfAp8IEJlbmNobWFyayBwcm9ncmFtIGFuZCBvdXRwdXQgfCBgYmVuY2htYXJrcy9zaWxpY2EvZ2F0ZV9iZW5jaC5zY2AgfCBgMTQ5OTk5NzUwMDAwMFxuYCwgU0hBLTI1NiBgMmMyMGRkMTfigKZgIHwKfCBQYXJpdHkgY29ycHVzIHwgYHRlc3RzL3Bhcml0eS9gIHwgMTQgY2FzZXMsIHN0ZG91dC9zdGRlcnIvZXhpdC1jb2RlIGV4YWN0LCBubyB4ZmFpbCB8CnwgYC5zYmNgIGZvcm1hdCB8IGBzaWxpY2EvYnl0ZWNvZGUucHlgIHwgbWFnaWMgYFNJTElDQUJDYCwgZm9ybWF0IDEuMCwgMTctYnl0ZSBoZWFkZXIgfAp8IE9wY29kZSBjb250cmFjdCB8IGBPUFNgIHwgNDMgb3Bjb2RlcywgYWxsIGltcGxlbWVudGVkIChOT1Agc2luY2UgUFIgIzgpIHwKfCBEZWZhdWx0IFZNIHwgYHNpbGljYS9jbGkucHlgIHwgc3RheXMgUHl0aG9uOyBSdXN0IGlzIG9wdC1pbiB8CgpOb3RoaW5nIGluIHRoaXMgaGFuZG9mZiBjaGFuZ2VzIHRoZSBQeXRob24gcmVmZXJlbmNlIFZNLCB0aGUgZGVmYXVsdCBWTSwgb3IgYC5zYmNgLgoKLS0tCgojIyA3LiBXYWl0aW5nIGZvcgoKQ29uZmlybWF0aW9uIHRoYXQgYSBtYWNoaW5lIGhhcyBhIHdvcmtpbmcgUnVzdCB0b29sY2hhaW4gKMKnNC4xIHByaW50cwpgSGVsbG8sIHdvcmxkIWAgZnJvbSBgY2FyZ28gcnVuYCksIGFuZCB0aGUgcmVjb3JkZWQgb3V0cHV0IG9mIHRob3NlIGNvbW1hbmRzLiBPbgpyZWNlaXB0LCBNMSBiZWdpbnMgYXMgc3BlY2lmaWVkIGluIMKnMTQgb2YgdGhlIGltcGxlbWVudGF0aW9uLXJlYWRpbmVzcyBkb2N1bWVudC4gTm8KTTIsIG5vIFIyLCBhbmQgbm8gY2hhbmdlcyB0byB0aGUgcmVmZXJlbmNlIFZNIHVudGlsIHRoZW4uCg==
+# Silica — R1 Environment Handoff
+
+**Status:** phase closed — waiting for confirmation of a Rust-capable machine
+**Document version:** 1.0 · 2026-11-03
+**Scope:** what is frozen on `main`, what the build machine must provide, and the exact
+commands to prove it. No Rust code has been written.
+
+---
+
+## 1. What is on `main`, and stays there
+
+| Artefact | Path | State |
+|---|---|---|
+| Benchmark report | `docs/design/SILICA_R1_BENCHMARK_READINESS.md` | approved, frozen |
+| Gate harness | `benchmarks/gate.py` | approved, frozen |
+| Gate benchmark source | `benchmarks/silica/gate_bench.sc` | frozen — prints `1499997500000` |
+| Implementation readiness | `docs/design/SILICA_R1_IMPLEMENTATION_READINESS.md` | decisions recorded |
+| Parity contract | `tests/parity/` (29 files, 14 cases) + `tests/test_parity_contract.py` | frozen, no xfail cases |
+| NOP regression | `tests/test_nop.py` | merged (PR #8) |
+| Reference VM | `silica/` | unchanged since PR #8; 1,329 tests green |
+
+The harness is only reproducible because its program is committed: the `.sbc` is
+produced from `benchmarks/silica/gate_bench.sc` by the Python compiler, never
+hand-edited, and the pinned stdout hash proves the run is the right run.
+
+---
+
+## 2. M1 toolchain requirements
+
+M1 is **pure `std` Rust with zero crate dependencies**, so it builds fully offline.
+That is deliberate: it removes crates.io, vendoring and lockfile questions from the
+first gate.
+
+| Requirement | Detail |
+|---|---|
+| `rustc` + `cargo` | stable channel, **≥ 1.70** for M1's own code (edition 2021, `let-else`, `OnceLock`) |
+| Linker | `cc` or `gcc` present — the `x86_64-unknown-linux-gnu` target links through it |
+| Host target installed | `rustup target list --installed` shows the host triple |
+| Crate registry | **not needed for M1** (no dependencies) |
+| Python | 3.9+ to run the reference side of the gate and compile the `.sbc` |
+
+**The floor rises at M2.** PyO3 0.30.1 requires **Rust ≥ 1.85**, so the workspace MSRV
+should be set to 1.85 from the start even though M1 alone needs less — otherwise M2
+forces a toolchain upgrade mid-spike.
+
+---
+
+## 3. M2 requirements — Python headers and PyO3
+
+| Requirement | Detail |
+|---|---|
+| PyO3 | 0.30.x (current: 0.30.1), feature `abi3-py39` |
+| Rust | **≥ 1.85** (PyO3's MSRV, not ours) |
+| CPython | **≥ 3.9** — matches Silica's declared floor; `abi3-py39` produces one wheel per OS/arch for every Python ≥ 3.9 |
+| Python headers | `Python.h` for the build interpreter: `python3-dev` (Debian/Ubuntu), `python3-devel` (Fedora/RHEL), included in the official Windows installer, `xcode-select --install` + a framework build on macOS |
+| C toolchain | a compiler **and** linker — PyO3 builds C glue and links against libpython |
+| Wheel builder | `maturin` (current release) for `abi3` wheels; `setuptools-rust` is the alternative |
+| Interpreter selection | `PYO3_PYTHON=/path/to/python3` when several are installed |
+
+`abi3` note: the plain `abi3` feature needs a host interpreter present and cannot
+cross-compile; `abi3-py39` can be used without one, which is what makes
+cross-compiled wheels possible later.
+
+---
+
+## 4. Exact commands to run on the build machine
+
+### 4.1 Prove the toolchain works
+
+```bash
+rustc --version            # expect >= 1.85 (or >= 1.70 for M1 only)
+cargo --version
+rustup target list --installed
+cc --version || gcc --version
+python3 --version          # expect >= 3.9
+```
+
+A version is not proof that linking works, so build something and run it:
+
+```bash
+cd "$(mktemp -d)" && cargo new --quiet linkcheck && cd linkcheck
+cargo run --quiet          # must print: Hello, world!
+```
+
+If that prints, the toolchain can compile **and link** — which is the property the
+gate depends on. If it fails at the link step, the toolchain is incomplete and M1
+cannot start.
+
+### 4.2 Run the reference side of the gate
+
+From the repository root, with the Python VM installed (`pip install -e .` or on
+`PYTHONPATH`):
+
+```bash
+python3 -m silica compile benchmarks/silica/gate_bench.sc -o build/gate_bench.sbc
+python3 benchmarks/gate.py --sbc build/gate_bench.sbc
+```
+
+Expected: `stdout_matches_reference True`, `stdout_sha256` beginning `2c20dd17`,
+`exit 0`, and a median around 7.1–7.3 s on x86_64 (the exact value is machine-specific
+and is recomputed at run time — never hardcoded).
+
+Note: `silica compile` has no `--help`; its usage is
+`silica compile <file.sc> [-o out.sbc]`.
+
+### 4.3 Run the gate once the Rust VM exists
+
+```bash
+cargo build --release
+python3 benchmarks/gate.py --sbc build/gate_bench.sbc \
+    --compare target/release/silica --json
+```
+
+Pass condition: `"passes_gate": true`, i.e. the interleaved ratio is **≥ 3.0**, with
+`stdout_matches_reference` true.
+
+---
+
+## 5. Android/Termux versus a full build environment
+
+| Work | Termux (ARM64 Android) | Linux / macOS / Windows |
+|---|---|---|
+| Python side: gate harness, parity corpus, docs | **yes** — ordinary Python 3 | yes |
+| M1 Rust source (pure `std`, no deps) | **possible but unverified** — Termux ships `rust` targeting `aarch64-linux-android`; whether its version and linker are sufficient is untested | yes |
+| M1 gate measurement | **valid only if both VMs run on the same device** — the harness compares them in one session, so an ARM reference against an ARM Rust run is a fair ratio; an ARM reference against an x86 Rust run is not | yes, preferred |
+| M2 / PyO3 | **do not plan on it** — needs CPython headers for the Android ABI plus the NDK; unverified and fragile | yes |
+| `abi3` wheels for distribution | no | **yes** — one build per OS/arch |
+| Windows build | no | **yes** — needs the MSVC build tools, not just rustup |
+| macOS build (x86_64 + arm64 or universal2) | no | **yes** — needs Xcode CLT |
+
+**Practical split:** develop and review M1 anywhere, including Termux, but measure the
+gate on one machine with both VMs present, and build M2 and any wheels on a desktop OS.
+The Android "no Python on the device" story does not exist at M2 either — PyO3 embeds
+CPython — so Android is not a target for this spike.
+
+---
+
+## 6. Frozen, and not to be changed
+
+| Contract | Where | Rule |
+|---|---|---|
+| Gate | §3 of the benchmark report | ≥3× execution-only, interleaved, median of 5 after 1 warm-up, target derived at run time |
+| Benchmark program and output | `benchmarks/silica/gate_bench.sc` | `1499997500000\n`, SHA-256 `2c20dd17…` |
+| Parity corpus | `tests/parity/` | 14 cases, stdout/stderr/exit-code exact, no xfail |
+| `.sbc` format | `silica/bytecode.py` | magic `SILICABC`, format 1.0, 17-byte header |
+| Opcode contract | `OPS` | 43 opcodes, all implemented (NOP since PR #8) |
+| Default VM | `silica/cli.py` | stays Python; Rust is opt-in |
+
+Nothing in this handoff changes the Python reference VM, the default VM, or `.sbc`.
+
+---
+
+## 7. Waiting for
+
+Confirmation that a machine has a working Rust toolchain (§4.1 prints
+`Hello, world!` from `cargo run`), and the recorded output of those commands. On
+receipt, M1 begins as specified in §14 of the implementation-readiness document. No
+M2, no R2, and no changes to the reference VM until then.
