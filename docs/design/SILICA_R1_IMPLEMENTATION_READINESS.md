@@ -1,8 +1,9 @@
 # Silica — R1 Rust VM Implementation-Readiness Review
 
-**Status:** review for decision — no Rust code written, nothing implemented
-**Reviewed commit:** `da6180130f9d12e4a840f394347719cb8766a93d` (`main`, after PR #7)
-**Document version:** 1.0 · 2026-11-03
+**Status:** decisions recorded — Decision A (NOP) implemented; Decision B (bounded
+M1+M2 spike) approved; no Rust code written
+**Reviewed commit:** `84e6d1ca9acedb669fc0057c4d73a89cd572c574` (`main`, after PR #8)
+**Document version:** 1.1 · 2026-11-03
 **Scope:** whether Silica should begin R1 of the optional Rust VM, and in what shape
 
 Every number below was produced by running something against the checked-out tree;
@@ -186,30 +187,48 @@ index 1 `0.0`). There are **no remaining xfail cases** — the corpus is fully e
 $ python3 -m unittest discover -s tests -t .
 ...................................................................
 ----------------------------------------------------------------------
-Ran 1318 tests in 137.820s
+Ran 1329 tests in 153.636s
 
 OK (skipped=7)
 ```
 
 Environment: Python 3.12.13, `pytest` 9.2.0, `build`/`setuptools`/`wheel`, git working
-tree. 1,311 pass, 7 skipped, 0 failures, 0 expected failures.
+tree. 1,322 pass, 7 skipped, 0 failures, 0 expected failures. The count rose from 1,318
+because `NOP` now has 11 regression tests (§2.9).
 
 ### 2.9 Where the document and the source disagree
 
-**`NOP` is unimplemented.** The architecture document says "43 opcodes"; the table has
-43 and the VM executes 42. Reproduced directly:
+**`NOP` was unimplemented — now fixed.** The architecture document says "43 opcodes";
+the table had 43 and the VM executed 42. Reproduced directly at review time:
 
 ```
 verifier accepts NOP: yes
 VM rejects NOP: SilicaRuntimeError unknown opcode 0x00
 ```
 
-The compiler never emits `NOP`, so no source program can reach it — but `.sbc` is a
-documented, versioned artefact, and a third-party or hand-built chunk containing
-`NOP` verifies cleanly and then fails at run time. **Decision needed:** implement
-`NOP` in the Python VM (one line) and keep 43, or remove it from `OPS`/`STACK_EFFECT`
-and document 42. Either way the Rust VM must match, and it must be decided *before*
-R1 freezes the opcode contract.
+The compiler never emits `NOP`, so no source program could reach it — but `.sbc` is a
+documented, versioned artefact, and a third-party or hand-built chunk containing `NOP`
+verified cleanly and then failed at run time.
+
+**Decision A: implement it, keep 43.** Landed as PR #8, merge commit
+`84e6d1ca9acedb669fc0057c4d73a89cd572c574`. The dispatch chain gained one branch at its
+head:
+
+```python
+if op == 0x00:  # NOP
+    pass
+elif op == 0x01:  # CONST
+```
+
+The instruction pointer has already advanced before dispatch, so `NOP` advances
+execution and changes nothing else. `tests/test_nop.py` holds **11 regression tests**,
+assembling bytecode **by hand** because the compiler cannot produce it: contract values
+(`OPS["NOP"] == 0x00`, stack effect `(0, 0)`), verifier acceptance in every position,
+unchanged abstract stack depth, a jump targeting a `NOP` boundary, the runtime actually
+executing it, the operand stack untouched, the instruction pointer advancing (eight
+`NOP`s = eight bytes at offsets 0–7), semantic invisibility under a differential test,
+and a **hand-written `.sbc` file** that serialises, loads through `load_bytecode` and
+runs. The container format is unchanged (magic `SILICABC`, format 1.0, 17-byte header).
 
 **`sprint` has two paths.** `core.sprint` exists as a native, but the statement form
 compiles to the `PRINT` opcode:
@@ -337,12 +356,34 @@ Three gates. Each proves something specific and each is independently reviewable
 
 | Gate | Opcodes | Natives | What it proves | Corpus it must pass |
 |---|---|---|---|---|
-| **M1 — decode and dispatch** | 20: `CONST UNIT TRUE FALSE LOAD_LOCAL STORE_LOCAL LOAD_GLOBAL STORE_GLOBAL POP ADD SUB MUL DIV MOD NEG EQ NE LT LE GT GE JUMP JUMP_IF_FALSE CALL RET PRINT DIT HALT_OK HALT_POP` | **none** | bytecode decoding, frames, arithmetic, branching, printing — the whole loop, with no FFI | a hand-built subset corpus: arithmetic, loops, recursion, printing, error cases |
+| **M1 — decode and dispatch** | **30**: `NOP CONST UNIT TRUE FALSE LOAD_LOCAL STORE_LOCAL LOAD_GLOBAL STORE_GLOBAL POP ADD SUB MUL DIV MOD NEG EQ NE LT LE GT GE JUMP JUMP_IF_FALSE CALL RET PRINT DIT HALT_OK HALT_POP` | **none** | bytecode decoding, frames, arithmetic, branching, printing — the whole loop, with no FFI | a hand-built subset corpus: arithmetic, loops, recursion, printing, error cases |
 | **M2 — data and the bridge** | + `MAKE_LIST MAKE_MAP INDEX_GET LEN ITER_START ITER_NEXT CALL_NATIVE` | forwarded to Python via PyO3 | collections, iteration, and the native ABI + capability choke point | **the full parity corpus (14 cases)** plus every `examples/*.sc` that needs no capability |
 | **M3 — full surface** | all 42 (or 43, per the `NOP` decision) | all | records, methods, `FREEZE`, the long tail | the full differential suite over `tests/silica/` and `examples/` |
 
 M1 deliberately excludes `CALL_NATIVE`, which is 12.9% of real instructions but 100%
 of the FFI risk. It answers "can Rust run the loop?" without touching PyO3 at all.
+Those 30 opcodes cover ≈81% of the instructions in the corpus; what they exclude is
+`CALL_NATIVE` (12.9%), the collection opcodes (4.7%) and the record opcodes (0.9%).
+
+**The M1 benchmark program, verified against the opcode set.** Compiled with the
+Python compiler, it uses **12** distinct opcodes — `ADD CONST JUMP JUMP_IF_FALSE
+LOAD_LOCAL LT MUL PRINT RET STORE_LOCAL SUB UNIT` — all inside M1, in 25 instructions:
+
+```silica
+sfn main() {
+    let total: Int = 0
+    let i: Int = 0
+    tant i < 1000000 {
+        total = total + i * 3 - 1
+        i = i + 1
+    }
+    sprint(total)
+}
+```
+
+It prints `1499997500000`, which is checkable by hand: `3·(999999·1000000/2) − 1000000`.
+On the reference VM it takes **7.17 s** of execution (median 7.45 s wall over three
+runs, less the 0.285 s startup), i.e. ≈7.2 µs per iteration.
 M2 is the gate that matters commercially, because it is where the bridge cost appears.
 
 **Explicitly out of scope for R1:** closures (they do not exist in the language yet),
@@ -406,13 +447,21 @@ native-heavy workload (200k `math.sqrt` calls) purely to measure the bridge.
 - **Statistics:** median of 3, min, max, and the ratio `python / rust`; state the
   machine (CPU, RAM, OS, Python and Rust versions). No p-values — these are not
   samples from a distribution.
-- **Acceptance thresholds (set before measuring, so they cannot be fitted later):**
-  - M1 must be **≥3× faster** than the Python VM on the arithmetic loop, else the
-    dispatch-loop hypothesis is falsified and R1 stops at M1.
-  - M2 must be **no slower** than the Python VM on the native-heavy workload, else the
-    bridge dominates and the recommendation becomes "stop at M1, keep it optional".
-  - The 2.35 µs native-call figure is the **reference**, not a target: a PyO3 call is
-    expected to cost more, and the report must say by how much.
+- **Pre-registered acceptance thresholds.** Fixed here, before any Rust code exists,
+  so they cannot be fitted to whatever the spike produces:
+  - **Primary gate:** ≥**3× faster dispatch** on the M1 arithmetic benchmark above,
+    measured as execution time with startup subtracted. Against the reference VM's
+    7.17 s, that means **≤2.39 s** for the same program and the same output
+    (`1499997500000`).
+  - **No generalisation.** That single result may not be reported as "Silica is 3×
+    faster". Representative workloads (recursion, collections, strings) are reported
+    alongside it, and a speedup claim is scoped to the workload it was measured on.
+  - **M2 gate:** the native-heavy workload must be **no slower** than the Python VM,
+    else the bridge dominates and the recommendation becomes "stop at M1, keep the
+    Rust VM optional".
+  - The **2.35 µs** native-call figure is a *reference*, not a target: a PyO3 call is
+    expected to cost more, and the report must state by how much rather than rounding
+    it away.
 
 **No numbers are predicted here.** §2.11 gives the reference measurements; §16.14.3 of
 the architecture document keeps the four R1 figures marked *not measured* until a
@@ -479,7 +528,7 @@ two time scales, and they are the reason the parity corpus exists.
 
 ## 10. Go / no-go recommendation
 
-**Conditional GO, narrowed.**
+**Approved — bounded, narrowed, and reversible.** (Decision B, recorded in §13.)
 
 - **GO for M1 and M2** as a time-boxed spike (12–18 engineer-days), because the loop
   is 617 lines, the contract is executable, and the gate results are falsifiable.
@@ -487,8 +536,8 @@ two time scales, and they are the reason the parity corpus exists.
 - **NO-GO on any of these:** changing `.sbc`, changing default behaviour, migrating
   `fs` or the security path, adding closures, starting R2 automatically, or quoting a
   speedup before the four measurements exist.
-- **Blocked until the `NOP` decision is made.** The opcode contract must be settled
-  before a second implementation encodes it.
+- **Unblocked:** the `NOP` decision is made and implemented (§2.9), so the opcode
+  contract is settled before a second implementation encodes it.
 
 **Is R1 worth funding?** On the evidence: yes for the spike, because the cost is
 bounded and the answer is binary — either the dispatch loop is ≥3× faster (and the
@@ -566,7 +615,167 @@ or a figure borrowed from another project is not a measurement.
 
 ---
 
-## 13. What this review did not do
+### 12.4 M1 stop-gate items
+
+The M1 review (§14.5) must report: opcodes implemented and exercised, parity tests
+passed by name, benchmark validity and reproducibility, preliminary dispatch
+performance, and whether the ≥3× target still looks achievable. §14.6 lists the
+conditions that end the project instead.
+
+## 13. Recorded decisions
+
+### Decision A — `NOP` is implemented; the 43-opcode contract stands
+
+| | |
+|---|---|
+| Decision | Implement `NOP` in the Python reference VM rather than removing it |
+| Rationale | The verifier already accepts it and `.sbc` is a versioned artifact; removing an opcode breaks the contract for any file that contains it |
+| Behaviour | Advances the instruction pointer (already done before dispatch); no stack effect, no state, no diagnostics |
+| Regression test | `tests/test_nop.py`, 11 tests, hand-built bytecode including a hand-written `.sbc` file |
+| Landed | PR #8, merge commit `84e6d1ca9acedb669fc0057c4d73a89cd572c574` |
+| Format impact | None — magic `SILICABC`, format 1.0, 17-byte header unchanged |
+| Baseline after | 1,329 tests, 7 skipped, 0 failures |
+
+### Decision B — bounded M1+M2 feasibility spike, three crates
+
+| | |
+|---|---|
+| Decision | Approve a bounded spike estimated at 12–18 engineer-days, three-crate structure |
+| Not approved | A full VM rewrite; nine crates; any change to `.sbc`, default behaviour or the Python fallback |
+| Authority | The Python VM remains authoritative; Rust remains opt-in; natives stay in Python behind PyO3 for the spike |
+| Stop conditions | §12.4 — a failed M1 gate ends the project, it does not trigger a redesign |
+| What it does not deliver | A Python-free runtime (§15) |
+
+---
+
+## 14. M1 implementation plan
+
+This is the plan to review **before** any Rust is written. M1 answers one question —
+can a Rust decoder, verifier and dispatch loop reproduce the reference VM on a
+non-trivial program from an unmodified `.sbc`? — and nothing else.
+
+### 15.1 Scope
+
+| | |
+|---|---|
+| In | `.sbc` decode, verifier, value model, frames, 30-opcode dispatch loop, `PRINT`/`DIT` formatting, error text, exit codes, CLI flag `--vm=rust` |
+| Out | `CALL_NATIVE`, PyO3, collections, records, methods, closures, async, WASM, the front end, `fs`, any change to `.sbc` |
+| Consequence | M1 can run arithmetic, control flow, function calls and printing; it cannot run anything that calls `len`, `str`, `range`, `math.*` or any other native |
+
+### 15.2 Files, in build order
+
+```
+silica-rust/
+  Cargo.toml                     workspace: 3 members, resolver 2, no external deps
+  crates/silica-vm/
+    Cargo.toml                   no dependencies (no PyO3, no serde, no thiserror)
+    src/lib.rs                   #![forbid(unsafe_code)], module wiring
+    src/error.rs                 VmError { kind, message, line, col, filename, hint }
+                                 rendered exactly as "file:line:col: kind: message"
+                                 plus the two-space "  hint: …" line
+    src/value.rs                 Value enum, struct/iterator placeholders, and the
+                                 formatting routines that PRINT/DIT use (parity §16.3)
+    src/bytecode.rs              header, varint reader, decode, verifier
+                                 (port of verify_function: operand ranges, jump
+                                 boundaries, stack-depth analysis, limit checks)
+    src/frames.rs                Frame { fn_index, ip, locals, stack }, max_frames 4096
+    src/exec.rs                  the dispatch loop, one arm per opcode
+  crates/silica-cli/
+    Cargo.toml
+    src/main.rs                  argv, .sbc loading, run, stdout/stderr, exit code
+  crates/silica-native/          created empty in M1 (M2 fills it)
+```
+
+The two crates that matter for M1 are `silica-vm` (pure, testable with no CPython in
+the process) and `silica-cli` (process concerns only). `silica-native` exists as an
+empty member so the workspace shape is fixed before M2 needs it.
+
+### 15.3 Opcode order inside M1
+
+Implemented in corpus-frequency order so the runnable set grows fastest, and each
+step is committed only when its tests pass:
+
+| Step | Opcodes | Runnable after |
+|---|---|---|
+| 1 | `CONST LOAD_LOCAL STORE_LOCAL RET UNIT PRINT NOP` | printing a literal |
+| 2 | `ADD SUB MUL DIV MOD NEG` | integer/float arithmetic, wrapping |
+| 3 | `EQ NE LT LE GT GE` | comparisons |
+| 4 | `TRUE FALSE JUMP JUMP_IF_FALSE` | `si`, `tant`, `per` over ranges |
+| 5 | `CALL POP HALT_OK HALT_POP` | functions, recursion, exit codes → **the M1 benchmark runs** |
+| 6 | `LOAD_GLOBAL STORE_GLOBAL DIT` | globals, `dit` |
+
+### 15.4 Test plan
+
+| Test | What it asserts |
+|---|---|
+| Decoder parity | every `.sbc` the Python compiler emits in the corpus decodes to the same instruction stream (offset, opcode, operands) as Python's `decode` |
+| Verifier parity | the same accept/reject decision as `verify_chunk` on the corpus **and** on a mutation corpus (truncated payload, bad CRC, bad magic, unknown opcode, bad jump target, stack underflow) |
+| Value parity | `format_value` equivalence: ints, floats (1,000-double corpus), `oui`/`nein`, strings, `Point(x: 3, y: 4)`, `{"a": 1}`, `[]` |
+| Error parity | `file:line:col: message` plus the hint line, byte for byte |
+| Execution parity | the M1 benchmark and a subset corpus produce identical stdout and exit code |
+| Startup separation | process start, decode, execution timed separately |
+
+### 15.5 The M1 stop gate — what the report must contain
+
+Before M2 is discussed, the report states, for each item, a number or a verdict:
+
+1. Which opcodes are implemented, and which of the 30 are exercised by the passing tests.
+2. Which parity tests pass — named, with counts, not "parity looks good".
+3. Whether the arithmetic benchmark is valid and reproducible: same output
+   (`1499997500000`), median of 3, machine named, startup subtracted.
+4. Preliminary dispatch performance, as a ratio against the reference VM's 7.17 s.
+5. Whether the **≥3×** target still appears achievable (i.e. ≤2.39 s), and if not,
+   what the measurement suggests instead.
+
+### 15.6 Stop conditions
+
+R1 stops, and is reported as a negative result, if **any** of these holds:
+
+| # | Condition |
+|---|---|
+| 1 | The M1 benchmark is **not ≥3×** faster than the reference VM |
+| 2 | Decoder or verifier parity cannot be reached on the corpus (a decision differs) |
+| 3 | Exact error text cannot be reproduced without contorting the design |
+| 4 | The dispatch loop needs `unsafe` in `silica-vm` to be fast enough |
+| 5 | The work exceeds the 12–18 day bound without reaching the gate |
+| 6 | Any requirement forces a change to `.sbc`, the Python VM's semantics, or the default VM |
+
+Stopping is a valid outcome. It is reported with the measurements that caused it, and
+it does not trigger a redesign, a second attempt, or R2.
+
+---
+
+## 15. What the spike does not deliver
+
+Stated plainly, because the most expensive misunderstanding available here is
+believing R1 removes the Python dependency:
+
+- **Not a Python-free runtime.** M1 uses no Python at all — but only because it cannot
+  call a single native. M2 brings PyO3 back, so the shipped result still embeds
+  CPython. `len`, `str`, `range`, `math.*`, `fs`, `ui`, `tui`, `gui`, `speech` all
+  remain Python.
+- **Not a performance claim.** One benchmark, one workload, one machine. If it passes
+  the gate, the claim is "3× faster on this arithmetic loop", not "Silica is faster".
+- **Not Android or desktop readiness.** PyO3 needs a CPython for the target ABI, so the
+  "no Python on the device" story still fails at the end of M2.
+- **Not a full VM.** 30 of 43 opcodes at M1, 37 at M2; collections and records arrive
+  later, and the front end never moves in this phase.
+- **Not a commitment to R2.** A green M2 is evidence, not authorisation.
+
+---
+
+## 16. What this review did not do
+
+- No Rust code was written; no toolchain exists in the review environment.
+- `.sbc` was not changed, the Python VM's semantics were not changed beyond
+  implementing the already-declared `NOP`, the default VM was not changed, no closure
+  syntax was added, `fs` and the security path were not migrated, and the Python
+  fallback was not removed.
+- No performance improvement is claimed. The only performance numbers here are
+  measurements of the **Python** VM, taken to define the baseline.
+- R2 was not started.
+
+
 
 - No Rust code was written; no toolchain exists in the review environment.
 - `.sbc` was not changed, the Python VM's semantics were not changed, the default VM
