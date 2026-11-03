@@ -381,9 +381,12 @@ sfn main() {
 }
 ```
 
-It prints `1499997500000`, which is checkable by hand: `3·(999999·1000000/2) − 1000000`.
-On the reference VM it takes **7.17 s** of execution (median 7.45 s wall over three
-runs, less the 0.285 s startup), i.e. ≈7.2 µs per iteration.
+It prints `1499997500000`, verified three ways: closed form `3·(n(n−1)/2) − n`,
+an independent Python loop, and the VM itself. On the reference VM it takes
+**7.14–7.28 s** of execution only, in-process, median of 5 after one warm-up — about
+7.2 µs per iteration. Compilation is 1.0 ms and decode+verify 0.37 ms, both excluded
+from the gate; process startup (0.341 s) is reported separately. See
+`docs/design/SILICA_R1_BENCHMARK_READINESS.md`.
 M2 is the gate that matters commercially, because it is where the bridge cost appears.
 
 **Explicitly out of scope for R1:** closures (they do not exist in the language yet),
@@ -449,10 +452,14 @@ native-heavy workload (200k `math.sqrt` calls) purely to measure the bridge.
   samples from a distribution.
 - **Pre-registered acceptance thresholds.** Fixed here, before any Rust code exists,
   so they cannot be fitted to whatever the spike produces:
-  - **Primary gate:** ≥**3× faster dispatch** on the M1 arithmetic benchmark above,
-    measured as execution time with startup subtracted. Against the reference VM's
-    7.17 s, that means **≤2.39 s** for the same program and the same output
-    (`1499997500000`).
+  - **Primary gate:** ≥**3× faster dispatch** on the M1 arithmetic benchmark,
+    measured as **execution only** — excluding compile (1.0 ms), decode+verify
+    (0.37 ms), process start and imports (0.341 s). Reference: **7.14–7.28 s** median
+    in-process. The target is derived at run time as `python_median / 3` (≈2.38 s),
+    not hardcoded, so a slower machine does not silently weaken the gate. The exact
+    command, run count, warm-up and statistic are frozen in
+    `docs/design/SILICA_R1_BENCHMARK_READINESS.md`, and `benchmarks/gate.py` is the
+    executable form: both VMs are measured by it, interleaved, in one session.
   - **No generalisation.** That single result may not be reported as "Silica is 3×
     faster". Representative workloads (recursion, collections, strings) are reported
     alongside it, and a speedup claim is scoped to the workload it was measured on.
@@ -723,9 +730,12 @@ Before M2 is discussed, the report states, for each item, a number or a verdict:
 2. Which parity tests pass — named, with counts, not "parity looks good".
 3. Whether the arithmetic benchmark is valid and reproducible: same output
    (`1499997500000`), median of 3, machine named, startup subtracted.
-4. Preliminary dispatch performance, as a ratio against the reference VM's 7.17 s.
-5. Whether the **≥3×** target still appears achievable (i.e. ≤2.39 s), and if not,
-   what the measurement suggests instead.
+4. Preliminary dispatch performance, as a ratio measured by `benchmarks/gate.py`
+   against the reference VM in the same session.
+5. Whether the **≥3×** target still appears achievable, and if not, what the
+   measurement suggests instead. The gate definition is frozen in
+   `docs/design/SILICA_R1_BENCHMARK_READINESS.md`; it is not renegotiable after the
+   fact.
 
 ### 14.6 Stop conditions
 
