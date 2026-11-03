@@ -1,0 +1,2 @@
+int_literal_range.sc:3:12: type error: integer literal 9223372036854775808 does not fit in Int (64-bit)
+  hint: Int is signed 64-bit: -9223372036854775808 to 9223372036854775807
