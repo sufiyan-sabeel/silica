@@ -10,6 +10,7 @@ the optimiser's own arithmetic. This compares against the VM instead.
 """
 
 import io
+import math
 import os
 import subprocess
 import sys
@@ -208,21 +209,16 @@ if __name__ == "__main__":
 
 
 class ConstantInterningTests(unittest.TestCase):
-    """Float constants must be interned by bit pattern, not by equality.
+    """Float constants are keyed by IEEE-754 bit pattern, not by equality.
 
-    `0.0 == -0.0` is True in IEEE-754, so an interning table keyed on `==` cannot
-    tell the two apart: whichever sign was inserted first is what every
-    equal-valued constant prints as. That is a real defect in the folder, not in
-    the VM — with folding off the same program is correct.
+    `0.0 == -0.0` is True and the two hash the same, so an equality key gives both
+    one pool slot and the first insertion decides the sign that every
+    equal-valued constant prints as. That was a real defect: `sprint(-0.0)`
+    followed by `sprint(0.0 - 0.0)` printed `-0.0` twice, while `SILICA_NO_OPT=1`
+    printed the correct `0.0`. It is fixed in `bytecode.constant_key`, which now
+    keys floats on `struct.pack(">d", value)`.
 
-    These tests pin it in both directions:
-
-    * `test_the_defect_is_present_and_documented` asserts today's output, so an
-      accidental change is noticed;
-    * `test_ieee_negative_zero_is_preserved` asserts the *correct* output and is
-      marked `expectedFailure`. Under `python -m unittest` a fix turns it into an
-      unexpected success, which fails the run — strict xfail semantics, no pytest
-      required. Fixing the defect means updating both tests, deliberately.
+    These tests keep it fixed, and they are the reason it cannot come back:
     """
 
     PROGRAM = (
@@ -232,21 +228,29 @@ class ConstantInterningTests(unittest.TestCase):
         "}\n"
     )
 
-    def test_the_defect_is_present_and_documented(self):
-        # Folded: 0.0 - 0.0 resolves to the earlier -0.0 constant.
+    def test_negative_zero_survives_the_constant_pool(self):
         out, error = run_source(self.PROGRAM)
         self.assertIsNone(error)
-        self.assertEqual(out, "-0.0\n-0.0\n")
+        self.assertEqual(out, "-0.0\n0.0\n")
 
-    def test_without_folding_the_vm_is_correct(self):
-        # Proves the defect is in the optimizer: the VM keeps the sign.
+    def test_folding_agrees_with_no_folding(self):
+        # The invariant that would have caught the defect in the first place:
+        # the optimiser may not change what a program prints.
         with mock.patch.dict(os.environ, {"SILICA_NO_OPT": "1"}):
-            out, error = run_source(self.PROGRAM)
-        self.assertIsNone(error)
-        self.assertEqual(out, "-0.0\n0.0\n")
+            off, error_off = run_source(self.PROGRAM)
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("SILICA_NO_OPT", None)
+            on, error_on = run_source(self.PROGRAM)
+        self.assertIsNone(error_off)
+        self.assertIsNone(error_on)
+        self.assertEqual(on, off)
 
-    @unittest.expectedFailure
-    def test_ieee_negative_zero_is_preserved(self):
-        out, error = run_source(self.PROGRAM)
-        self.assertIsNone(error)
-        self.assertEqual(out, "-0.0\n0.0\n")
+    def test_the_pool_keeps_both_zeros(self):
+        # Directly on the pool, so a regression names the cause rather than only
+        # the printed output.
+        chunk = compile_source(self.PROGRAM, "<test>").chunk
+        zeros = [c for c in chunk.constants
+                 if isinstance(c, float) and c == 0.0]
+        self.assertEqual(len(zeros), 2, "the two zeros share one pool slot")
+        self.assertLess(math.copysign(1.0, zeros[0]), 0)
+        self.assertGreater(math.copysign(1.0, zeros[1]), 0)
