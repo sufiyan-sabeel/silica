@@ -3,7 +3,7 @@
 **Status:** revised for review — design direction approved, decisions recorded,
 Rust migration designed (not approved)
 **Applies to:** Silica 0.10.0 (`sufiyan-sabeel/silica`)
-**Document version:** 1.2 · 2026-11-03
+**Document version:** 1.3 · 2026-11-03
 **Scope:** how Silica becomes able to build web, desktop, Android, GUI/TUI and
 eventually system software — without breaking anything that works today — and how
 its VM moves to Rust without a rewrite
@@ -15,6 +15,7 @@ its VM moves to Rust without a rewrite
 | 1.0 | Initial audit and proposal; six open decisions raised |
 | 1.1 | Decisions 1–6 recorded (§12); first-class functions and closures designed (§13); trade-offs that remain open (§14) |
 | 1.2 | Rust VM migration strategy (§16); closure memory model without CPython (§13.10); runtime-neutral closure representation (§13.5); parity hazards named as contract terms (§16.3) |
+| 1.3 | Parity hazards measured against the running VM and pinned by executable tests (§16.3, §16.13); one optimizer defect found and recorded (§16.13.5); R1 boundary and acceptance criteria fixed (§16.14) |
 
 Nothing in this document is implemented. No closure, async, WASM, platform backend
 or Rust code may be written until this revision is approved.
@@ -1051,21 +1052,178 @@ Runtime errors abort the program; there is no unwinding (§12, decision 1).
 **The Rust VM must reproduce these strings byte-for-byte** — they are part of the
 contract, and the differential suite compares them exactly.
 
-### 16.3 Parity hazards — where a Rust VM silently diverges
+### 16.3 Parity hazards — measured, not assumed
 
-These are the places a straightforward port goes wrong. Each is a contract term
-and a differential test.
+These are the places a second implementation silently diverges. Every value in
+the "Silica behaviour" column below was **measured by running the reference VM**
+on 2026-11-03, not inferred from the source, and each is pinned by an executable
+case in `tests/parity/` (`tests/test_parity_contract.py`).
 
-| Hazard | Silica's behaviour (measured) | What Rust does by default | Required |
+| Hazard | Silica behaviour (measured) | Pinned by | What Rust does by default |
 |---|---|---|---|
-| Float printing | `0.1 + 0.2` → `0.30000000000000004` (Python shortest round-trip) | `{}` prints `0.30000000000000004` but `Display` for f64 differs in edge cases | one shared formatting routine, tested against a corpus of 1,000 doubles |
-| String length/index | `len("héllo")` → 5; `s[1]` → `é` (characters) | `String::len()` is bytes; indexing by byte | index and measure by Unicode scalar values |
-| Map order | insertion order (Python dict) | `HashMap` is unordered | an insertion-ordered map (`IndexMap`) |
-| Int overflow | wraps (64-bit signed) | `+` panics in debug, wraps in release | explicit wrapping arithmetic everywhere |
-| Struct printing | `Point(x: 3, y: 4)` | derived `Debug` differs | one shared renderer per type |
-| Bool printing | `oui` / `nein` | `true` / `false` | shared renderer |
-| Division | `Int / Int` truncates toward zero; `%` keeps dividend sign | `i64::div` truncates; `%` matches | verify with negative operands |
-| Iteration during mutation | documented behaviour per `docs/STDLIB` | borrow checker will not allow it | interior mutability at the heap level, not in `Value` |
+| Int overflow | `9223372036854775807 + 1` → `-9223372036854775808`; `max * 2` → `-2` — **wraps, 64-bit signed** | `int_overflow_add` | `+` panics in debug, wraps in release |
+| Int literal range | `9223372036854775808` is a **compile error**, not a wrap: `type error: integer literal … does not fit in Int (64-bit)` with a range hint | `int_literal_range` | `i64` literal overflow is a compile error too, but the message differs |
+| Division | `-7 / 2` → `-3`, `7 / -2` → `-3` — **truncates toward zero** | `int_division` | `i64::div` truncates — matches |
+| Modulo | `-7 % 2` → `-1`, `7 % -2` → `1` — **sign follows the dividend (C-style)**; this is **not** Python's `%` | `int_division` | Rust `%` matches; a Python-shaped implementation would not |
+| Conversions | `int("42")` → 42, `int(3.9)` → 3, `int(-3.9)` → -3 (truncation), `float(2)` → 2.0, `str(oui)` → `oui`, `int(oui)` → runtime error | `int_conversions` | each needs an explicit case |
+| String length | `len("héllo")` → **5**, `len("😀")` → **1**, `len("e" + U+0301)` → **2** — code points, no grapheme clustering | `unicode_len_index` | `String::len()` is **bytes** |
+| String index | `"héllo"[1]` → `é`, `"😀"[0]` → `😀`, `-1` → runtime error `string index -1 out of range (length 3)` | `unicode_len_index`, `unicode_negative_index` | byte indexing; negative indices would panic or wrap |
+| Slicing | **does not exist** — `s[1:3]` is `parse error: expected ']' but found ':'` | `unicode_slicing` | n/a |
+| Float printing | `0.1 + 0.2` → `0.30000000000000004`; `1e300` → `1e+300`; `1e-7` → `1e-07`; `1e16` → `1e+16`; `1/3.0` → `0.3333333333333333` — Python shortest round-trip, **two-digit exponents** | `float_format` | `Display` differs in exponent formatting and precision |
+| Negative zero | `-0.0` prints `-0.0`; `0.0 - 0.0` in variables prints `0.0` | `float_negative_zero` | same, but only if constants are keyed by bits (see §16.13.5) |
+| Special floats | `float("inf")` → `inf`, `float("-inf")` → `-inf`, `float("nan")` → `nan`; `inf + 1.0` → `inf`; `inf - inf` → `nan` | `float_specials` | same text, but they are only reachable through `float(String)` |
+| Float division by zero | **runtime error** `division by zero` with a hint — never `inf` | `float_div_by_zero` | IEEE would give `inf`; Silica does not |
+| Map order | insertion order in printing, `keys()` and `per` iteration | `map_order` | `HashMap` is unordered |
+| Map indexing | `m["k"] = v` is a **parse error** (no index assignment); a missing key is a runtime error | `map_missing_key` | n/a |
+
+The consequence for R1 is stated plainly: **a straightforward port fails at least
+eight of these**, and the corpus is the only thing that will catch it.
+
+
+### 16.13 Measured contract facts
+
+Everything here was produced by running the reference VM. The commands are given
+so each figure can be re-derived, and each fact has a case in `tests/parity/`.
+
+#### 16.13.1 Integers
+
+| Question | Measured answer |
+|---|---|
+| Width | 64-bit signed; literals must fit or the program does not compile |
+| Addition overflow | **wraps** — `9223372036854775807 + 1` → `-9223372036854775808` |
+| Multiplication overflow | **wraps** — `9223372036854775807 * 2` → `-2` |
+| Division | truncates toward zero: `-7 / 2` → `-3`, `7 / -2` → `-3` |
+| Modulo | sign follows the **dividend**: `-7 % 2` → `-1`, `7 % -2` → `1` |
+| `int(String)` | decimal only: `int("42")` → `42` |
+| `int(Float)` | truncates toward zero: `int(3.9)` → `3`, `int(-3.9)` → `-3` |
+| `int(Bool)` | runtime error: `int expects a String, Float or Int, got Bool` |
+| `float(Int)` | `2` → `2.0` |
+
+The modulo rule is the one to note: **it is C semantics, not Python's**. A port
+that reuses Python's `%` produces `1` where Silica produces `-1`.
+
+#### 16.13.2 Unicode
+
+| Question | Measured answer |
+|---|---|
+| `len("héllo")` | `5` — code points, not bytes |
+| `"héllo"[1]` | `é` |
+| Supplementary plane | `len("😀")` → `1`; `"😀"[0]` → `😀` — one code point, not a surrogate pair |
+| Combining sequence | `len("e" + U+0301)` → `2`; index 0 → `e`, index 1 → the combining mark — **no grapheme clustering** |
+| Slicing | **unsupported**: `s[1:3]` is a parse error (`expected ']' but found ':'`) |
+| Negative index | runtime error: `string index -1 out of range (length 3)` |
+
+So Silica follows **Python 3 `str` semantics**: indexing and length are in code
+points. Rust must index by `char`, not by byte, and must not normalise or cluster.
+
+#### 16.13.3 Floating point
+
+| Expression | Output |
+|---|---|
+| `0.1 + 0.2` | `0.30000000000000004` |
+| `1e300` | `1e+300` |
+| `1e-7` | `1e-07` |
+| `1.0e16` | `1e+16` |
+| `1.0e17` | `1e+17` |
+| `1.0 / 3.0` | `0.3333333333333333` |
+| `2.0` | `2.0` — an integral float keeps its `.0` |
+| `-0.0` | `-0.0` |
+| `0.0 - 0.0` (via variables) | `0.0` |
+| `float("inf")`, `float("-inf")`, `float("nan")` | `inf`, `-inf`, `nan` |
+| `inf + 1.0` / `inf - inf` | `inf` / `nan` |
+| `1.0 / 0.0` | **runtime error** `division by zero` — never `inf` |
+
+Formatting is Python's shortest round-trip representation, with a **two-digit
+minimum exponent** (`1e-07`, not `1e-7`). Infinity and NaN are reachable only
+through `float(String)`; arithmetic cannot produce them, because division by zero
+is an error. A Rust implementation needs one shared formatting routine and a
+1,000-double corpus, not `Display`.
+
+#### 16.13.4 Maps
+
+| Question | Measured answer |
+|---|---|
+| Insertion order | preserved — `{"zebra": 1, "apple": 2, "mango": 3}` prints and iterates in that order |
+| `keys(m)` | same order |
+| `per k in m` | same order |
+| Updating a key | **not expressible**: `m["k"] = v` is a parse error (no index assignment) |
+| Missing key | runtime error `map key 'b' not found`, with a `has` hint |
+
+Because there is no index assignment, a map's order is fixed at construction and
+cannot be disturbed. Rust still needs an insertion-ordered map, because `HashMap`
+would not even reproduce construction order.
+
+#### 16.13.5 A defect found while measuring: float constants are interned by `==`
+
+Measuring §16.13.3 surfaced a real bug in the Python VM:
+
+```
+$ silica run negzero.sc            # sprint(-0.0) then sprint(0.0 - 0.0)
+-0.0
+-0.0                              # wrong: IEEE says 0.0
+$ SILICA_NO_OPT=1 silica run negzero.sc
+-0.0
+0.0                               # correct
+```
+
+**Cause.** The optimizer folds `0.0 - 0.0` to the constant `0.0` and interns
+constants by equality. Since `0.0 == -0.0` is `True`, both expressions resolve to
+the *first* constant inserted, and its sign bit wins. The reverse order shows the
+same defect in the other direction.
+
+**Why it matters for this design.** It is exactly the class of bug a second
+implementation will either inherit or silently disagree with. The contract cannot
+say "match the bug", so:
+
+- the **correct** behaviour is IEEE-754: `-0.0` and `0.0` are distinct values that
+  print differently;
+- the constant pool must be keyed on the **bit pattern** (`struct.pack(">d", v)` in
+  Python, `f64::to_bits` in Rust), not on `==`;
+- `tests/parity/float_negative_zero_intern.sc` records the correct expectation and
+  is marked `# xfail:`, so the suite stays green today, fails loudly when the
+  defect is fixed, and the Rust VM is required to pass it from the start.
+
+This is a **recommended fix to the Python VM** before R1 freezes parity, and it is
+the only known divergence between the documented contract and the current
+implementation.
+
+### 16.14 R1 acceptance criteria
+
+R1 is "read-and-run": the Rust VM executes unmodified `.sbc`, with every native
+still in Python through PyO3, behind `--vm=rust`. It is accepted only when every
+row below is true and the evidence is attached to the pull request. R2 does not
+begin automatically.
+
+| # | Criterion | How it is checked |
+|---|---|---|
+| 1 | Consumes unmodified `.sbc` | `silica compile x.sc` with the **Python** compiler, then run `x.sbc` on the Rust VM; identical stdout |
+| 2 | Parity corpus matches | all 14 cases in `tests/parity/` pass under the Rust VM (13 enforced, 1 `# xfail:` which the Rust VM **must** pass) |
+| 3 | Differential corpus matches | `tests/silica/*.sc` + `examples/*.sc`: identical stdout, stderr (including `hint:` lines) and exit code |
+| 4 | Capability denials match | every gated native, run without its grant, returns the documented capability error — not a panic, not an empty value |
+| 5 | GC stress passes | the whole differential corpus passes with `SILICA_GC_STRESS=1` |
+| 6 | No changes to the Python side | `git diff --stat` touches nothing under `silica/`; `.sbc` format unchanged |
+| 7 | Not the default | `silica run` still uses the Python VM; `--vm=rust` is required |
+| 8 | No security migration | no Rust `fs` native; capability logic untouched |
+| 9 | Performance reported | four workloads, median of 3, machine named, ratio against the Python VM |
+| 10 | Build size reported | wheel size, binary size, per platform built |
+| 11 | Bridge overhead reported | measured PyO3 call cost against the **2.2 µs** Python-VM native-call baseline (below) |
+| 12 | Platform constraints stated | OS/architecture actually built and tested, and what was not |
+| 13 | Maintenance cost stated | lines of Rust, crates, CI minutes added, who owns them |
+| 14 | Scope respected | no closures, no async, no WASM, no new modules |
+
+**The bridge baseline (criterion 11).** Measured on the reference VM, 200,000
+iterations of a loop containing one `math.sqrt` call:
+
+| Program | Wall time | Per iteration |
+|---|---|---|
+| empty program (startup + compile) | 0.322 s | — |
+| 200,000 iterations, no native call | 1.856 s | ≈ 7.7 µs |
+| 200,000 iterations, one `math.sqrt` each | 2.295 s | ≈ 9.9 µs |
+
+So a native call currently costs ≈ **2.2 µs** through the Python path. R1 must
+report its own figure; if a PyO3 call lands in the tens of microseconds, the
+bridge — not the dispatch loop — becomes the measurement, and the R1 benchmark
+must say so rather than attributing the difference to the VM.
 
 ### 16.4 Rust crate structure
 
@@ -1183,6 +1341,10 @@ falls back to the Python VM with a warning — never a hard failure.
   an improvement factor that will be fixed *after* the first honest measurement —
   not guessed now. If the measured speedup does not justify the maintenance cost,
   the recommendation is to stop at R1 and keep the Rust VM as an optional engine.
+- **The R1 report must contain four numbers, not one:** measured performance
+  (§16.14 row 9), build size (row 10), bridge overhead against the 2.2 µs baseline
+  (row 11), and maintenance cost (row 13). A speedup quoted without the other
+  three is not a result.
 
 ### 16.10 What moves first, and what stays Python
 
@@ -1204,10 +1366,8 @@ falls back to the Python VM with a warning — never a hard failure.
 
 **R1 — read-and-run.** Rust VM executes existing `.sbc`, all natives via PyO3,
 `--vm=rust` behind a flag.
-*Acceptance:* the whole differential corpus matches on stdout, stderr and exit
-code; the Rust VM accepts the Python compiler's `.sbc` with no recompilation; the
-capability-denial corpus matches; `SILICA_GC_STRESS=1` passes; startup time and
-memory measured and recorded.
+*Acceptance:* the fourteen criteria in §16.14, in full. R2 does not begin until
+they are met and the report is reviewed.
 
 **R2 — natives in Rust.** Seven pure modules ported, one at a time, each gated by
 its own tests plus the differential suite. `fs` still Python.
