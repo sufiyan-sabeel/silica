@@ -1,0 +1,2 @@
+float_div_by_zero.sc:5: runtime error: division by zero
+  hint: guard the divisor with 'si' before dividing
