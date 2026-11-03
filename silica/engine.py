@@ -85,7 +85,7 @@ def run_source(source, filename="<source>", stdin=None, stdout=None, stderr=None
     return vm.run(verify=False)
 
 
-def _open_source(path):
+def read_source_file(path):
     """Read a source file, converting filesystem errors into SilicaError.
 
     Every path-taking entry point goes through here so that a missing file or a
@@ -105,8 +105,8 @@ def _open_source(path):
         raise SilicaError("cannot read: %s" % (exc.strerror or exc), filename=path)
 
 
-def _open_bytes(path):
-    """The bytecode counterpart of `_open_source`."""
+def read_bytecode_file(path):
+    """The bytecode counterpart of `read_source_file`."""
     try:
         with open(path, "rb") as handle:
             return handle.read()
@@ -121,12 +121,12 @@ def _open_bytes(path):
 
 
 def compile_file(path):
-    source = _open_source(path)
+    source = read_source_file(path)
     return compile_source(source, path)
 
 
 def load_bytecode(path):
-    data = _open_bytes(path)
+    data = read_bytecode_file(path)
     chunk = deserialize(data, path)
     verify_chunk(chunk, path)
     return chunk
@@ -163,7 +163,8 @@ def is_bytecode(path):
 
 __all__ = [
     "CompileResult", "check_source", "compile_ast", "compile_source",
-    "compile_file", "load_bytecode", "run_source", "run_chunk", "run_chunk_vm",
+    "compile_file", "load_bytecode", "read_source_file", "read_bytecode_file",
+    "run_source", "run_chunk", "run_chunk_vm",
     "default_output_path", "is_bytecode", "Chunk", "serialize", "ast",
     "SilicaError", "CapabilitySet",
 ]
