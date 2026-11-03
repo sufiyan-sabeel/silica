@@ -454,8 +454,9 @@ shipped application, and
 [`docs/design/SILICA_PLATFORM_ARCHITECTURE.md`](docs/design/SILICA_PLATFORM_ARCHITECTURE.md)
 is the platform architecture proposal — how Silica reaches web, desktop, Android,
 GUI/TUI and eventually system software, with the recorded decisions on the error
-model, concurrency, desktop backends, WASM, packaging and the closure design.
-Nothing in it is implemented; it is a proposal awaiting review.
+model, concurrency, desktop backends, WASM, packaging, the closure design and the
+migration to a Rust VM. Nothing in it is implemented; it is a proposal awaiting
+review.
 
 ---
 
