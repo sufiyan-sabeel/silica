@@ -197,7 +197,7 @@ tree. **1,344 pass, 7 skipped, 1 failure** — and the failure is a defect in th
 not the language: `test_the_examples_still_run` ran `examples/scientific_calculator.sc`
 without the `fs.read`/`fs.write` grants it needs, because commit `16d76ac` added the
 example without adding it to that test's skip list. Fixed on the stabilization branch,
-where the suite is 1,364 tests and fully green.
+where the suite is 1,368 tests and fully green.
 
 An earlier figure of 1,329 was measured on a stale extraction that predated `16d76ac`
 and is superseded by the numbers above.
