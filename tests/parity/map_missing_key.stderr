@@ -1,0 +1,2 @@
+map_missing_key.sc:3: runtime error: map key 'b' not found
+  hint: check the key with 'has' before indexing
