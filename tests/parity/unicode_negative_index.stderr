@@ -1,0 +1,1 @@
+unicode_negative_index.sc:3: runtime error: string index -1 out of range (length 3)
