@@ -169,9 +169,14 @@ def cmd_run(args):
     caps, args = _parse_capabilities(args)
     if not args:
         return _fail("usage: silica run <file.sc|file.sbc> [capability flags]", 2)
+    if args[0] in ("-h", "--help"):
+        sys.stdout.write("usage: silica run <file.sc|file.sbc> [capability flags]\n")
+        return 0
     path = args[0]
     if not os.path.exists(path):
         return _fail("error: no such file: %s" % path)
+    if os.path.isdir(path):
+        return _fail("error: %s is a directory, not a file" % path)
     try:
         if is_bytecode(path):
             chunk = load_bytecode(path)
@@ -215,6 +220,9 @@ def cmd_check(args):
 def cmd_compile(args):
     if not args:
         return _fail("usage: silica compile <file.sc> [-o out.sbc]", 2)
+    if args[0] in ("-h", "--help"):
+        sys.stdout.write("usage: silica compile <file.sc> [-o out.sbc]\n")
+        return 0
     path = args[0]
     out = None
     if "-o" in args:
