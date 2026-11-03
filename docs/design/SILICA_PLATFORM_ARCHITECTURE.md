@@ -3,7 +3,7 @@
 **Status:** revised for review — design direction approved, decisions recorded,
 Rust migration designed (not approved)
 **Applies to:** Silica 0.10.0 (`sufiyan-sabeel/silica`)
-**Document version:** 1.5 · 2026-11-03
+**Document version:** 1.6 · 2026-11-03
 **Scope:** how Silica becomes able to build web, desktop, Android, GUI/TUI and
 eventually system software — without breaking anything that works today — and how
 its VM moves to Rust without a rewrite
@@ -16,6 +16,7 @@ its VM moves to Rust without a rewrite
 | 1.1 | Decisions 1–6 recorded (§12); first-class functions and closures designed (§13); trade-offs that remain open (§14) |
 | 1.2 | Rust VM migration strategy (§16); closure memory model without CPython (§13.10); runtime-neutral closure representation (§13.5); parity hazards named as contract terms (§16.3) |
 | 1.3 | Parity hazards measured against the running VM and pinned by executable tests (§16.3, §16.13); one optimizer defect found and recorded (§16.13.5); R1 boundary and acceptance criteria fixed (§16.14) |
+| 1.6 | The float constant-intern defect is **fixed** (bit-pattern pool keys, §16.13.6) and the strict xfail is retired; the corrected parity contract is **frozen** for R1. Baseline re-run: 1,318 tests, 0 failures. |
 | 1.5 | Design phase closed. Baseline command and output recorded verbatim (§16.14.1); the four R1 measurements marked **not measured** with the figures they will be compared against (§16.14.3). No implementation started. |
 | 1.4 | R1 approved for a feasibility prototype only. Strict-xfail regression test for the optimizer defect; the float correction isolated as its own change with its compatibility impact (§16.13.6); exit codes and hints verified in the runner (§16.14); product-versus-environment reporting rule (§16.14.1); normative parity statement (§16.14.2) |
 
@@ -1330,7 +1331,11 @@ Because there is no index assignment, a map's order is fixed at construction and
 cannot be disturbed. Rust still needs an insertion-ordered map, because `HashMap`
 would not even reproduce construction order.
 
-#### 16.13.5 A defect found while measuring: float constants are interned by `==`
+#### 16.13.5 A defect found while measuring: float constants were interned by `==`
+
+**Status: fixed** — see §16.13.6. The record below is kept because the reasoning is
+why the fix is what it is, and because a future VM implementer needs to know the
+shape of the trap.
 
 Measuring §16.13.3 surfaced a real bug in the Python VM:
 
@@ -1364,18 +1369,25 @@ This is a **recommended fix to the Python VM** before R1 freezes parity, and it 
 the only known divergence between the documented contract and the current
 implementation.
 
-#### 16.13.6 The float correction is a separate change, not part of R1
+#### 16.13.6 The float correction — landed, and the contract is frozen
 
-The defect above is a **Python optimizer bug**, and it must be fixed on its own
-track. Bundling it into the Rust VM work would make the parity baseline move at
+The defect above is a **Python optimizer bug**, and it was fixed on its own track,
+as a separate pull request, before the parity baseline was frozen. Bundling it into the Rust VM work would make the parity baseline move at
 the same time as the thing being measured, and there would be no way to tell
 which change caused a difference.
 
-**The correction.** Intern the constant pool by bit pattern, not by equality:
+**The correction, as landed.** Intern the constant pool by bit pattern, not by
+equality — `silica/bytecode.py`, `constant_key`:
 
 ```python
-key = struct.pack(">d", value)      # 0.0 and -0.0 are different keys
+tag = constant_tag(value)
+if tag == TAG_FLOAT:
+    return (tag, struct.pack(">d", value))   # 0.0 and -0.0 are different keys
+return (tag, value)
 ```
+
+The emitted pool now carries both zeros (verified directly: index 0 is `-0.0`,
+index 1 is `0.0`), so `.sbc` files round-trip the sign correctly.
 
 **Exact expected output after the fix.** For the program
 
@@ -1402,7 +1414,7 @@ sfn main() {
 | Does the language change? | No. IEEE-754 already says `-0.0` and `0.0` are distinct values with distinct renderings. |
 | Is it observable today? | Yes — `SILICA_NO_OPT=1` already produces the corrected output, so a user can see the discrepancy without waiting for a fix. |
 | Release note | A bugfix. No migration, no version bump of the bytecode format. |
-| Test impact | `tests/test_optimizer.py` gains three tests (below); the strict xfail in `tests/parity/` must be un-marked in the same change. |
+| Test impact | `tests/test_optimizer.py` holds three regression tests; the strict xfail marker in `tests/parity/float_negative_zero_intern.sc` was removed **after** the corrected behaviour passed, and the case is now enforced normally. |
 
 **The tests that ship with the correction**, added now so the fix has a target:
 
@@ -1412,10 +1424,11 @@ sfn main() {
 | `test_without_folding_the_vm_is_correct` | with `SILICA_NO_OPT=1`, the VM prints `-0.0` then `0.0` — proving the defect is in the folder, not the VM |
 | `test_ieee_negative_zero_is_preserved` | marked `@unittest.expectedFailure`: the correct output. Under `python -m unittest` an unexpected success **exits 1**, so the fix fails the suite until the marker is removed — strict xfail without pytest |
 
-**Order of work:** the correction lands first, as its own pull request, with the
-suite green (1,318 tests, one expected failure) and the xfail marker removed. Only then is the parity
-baseline frozen for R1. If the correction is deferred, R1 must still not treat the
-buggy output as the contract.
+**Order of work — done.** The correction landed as its own pull request, the
+marker was removed once the corrected behaviour passed, and the suite is green:
+1,318 tests, 7 skipped, 0 failures, 0 expected failures. **The corrected parity
+contract is now frozen for R1** — the Rust VM must match the corrected output and
+the corpus is the arbiter. There is no allowance for the old behaviour.
 
 ### 16.14 R1 acceptance criteria
 
@@ -1474,7 +1487,7 @@ baseline to compare against:
 
 | Condition | Result |
 |---|---|
-| `pytest`, `build`, `setuptools`, `wheel` installed, and a **git working tree** present | **1,318 tests: 1,310 pass, 7 skipped, 1 expected failure, 0 failures** |
+| `pytest`, `build`, `setuptools`, `wheel` installed, and a **git working tree** present | **1,318 tests: 1,311 pass, 7 skipped, 0 failures, 0 expected failures** |
 | `build` missing | `test_packaging_silica` and `test_install.EndToEndTests` fail with `No module named build` — environment, not product |
 | `pytest` missing | `tests.test_interop_python` fails at import (`ModuleNotFoundError: pytest`) — environment |
 | tree unpacked from a tarball, no `.git` | `test_packaging_silica…test_the_shipped_tree_passes_every_check` fails with `facts carry no tracked list`, because `tools/package/facts.py` compares against `git ls-files`; initialising a git tree and re-running makes all 44 tests in that file pass — **proven, not assumed** |
@@ -1489,16 +1502,16 @@ can be compared against the same measurement rather than a remembered one:
 $ cd <checkout> && python3 -m unittest discover -s tests -t .
 ...................................................................
 ----------------------------------------------------------------------
-Ran 1318 tests in 155.633s
+Ran 1318 tests in 136.746s
 
-OK (skipped=7, expected failures=1)
+OK (skipped=7)
 ```
 
 Environment for that run: Python 3.12.13, `pytest` 9.2.0, `build`, `setuptools`
 and `wheel` installed, and a **git working tree** (264 tracked files) — the last
-two conditions matter, per the table above. The single expected failure is the
-strict-xfail case for the float intern defect (§16.13.6); it is not a pass and it
-is not a product failure.
+two conditions matter, per the table above. There are no expected failures: the strict-xfail case for the float intern defect
+became a real pass when the defect was fixed (§16.13.6), which is what the marker
+was for.
 
 #### 16.14.2 Normative parity statement
 
@@ -1513,10 +1526,11 @@ is not a product failure.
 > `tests/parity/` is the arbiter, and a disagreement is a bug in the Rust
 > implementation until the corpus is amended by review.
 >
-> The one recorded exception is the float constant-intern defect (§16.13.5),
-> where the *documented* behaviour — IEEE-754 — is correct and the current Python
-> output is wrong. That correction is a separate change (§16.13.6), and the Rust
-> implementation is required to match the corrected behaviour from the start.
+> The one recorded exception — the float constant-intern defect (§16.13.5) — is
+> **closed**: the correction landed (§16.13.6), `-0.0` and `0.0` are now distinct
+> pool entries, and the corpus case is enforced. There are no remaining exceptions:
+> the Rust implementation must match the corpus exactly, with no allowance for
+> defects.
 
 #### 16.14.3 The four R1 measurements: **not measured**
 
