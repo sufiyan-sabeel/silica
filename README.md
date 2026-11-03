@@ -455,8 +455,10 @@ shipped application, and
 is the platform architecture proposal — how Silica reaches web, desktop, Android,
 GUI/TUI and eventually system software, with the recorded decisions on the error
 model, concurrency, desktop backends, WASM, packaging, the closure design and the
-migration to a Rust VM. Nothing in it is implemented; it is a proposal awaiting
-review.
+migration to a Rust VM. Its parity contract is executable:
+`tests/parity/` pins the exact integer, Unicode, float and map behaviour a second
+VM implementation must reproduce. Nothing else in it is implemented; it is a
+proposal awaiting review.
 
 ---
 
