@@ -188,11 +188,11 @@ class RegressionTests(unittest.TestCase):
                         "tui_dashboard.sc", "gui_demo.sc", "ui_tasks.sc",
                         "ui_hello.sc", "ui_animate.sc",
                         "calculator_app.sc", "task_manager.sc",
-                        "data_report.sc", "scientific_calculator.sc"):
-                # these need stdin, capabilities or a display. The applications
-                # are executed, with input and grants, by tests/test_apps.py and
-                # tests/test_calculator_app.py — which check their output, not
-                # just the exit code.
+                        "data_report.sc"):
+                # these need stdin, capabilities or a display. The three
+                # applications are executed, with input and grants, by
+                # tests/test_apps.py — which checks their output, not just the
+                # exit code.
                 continue
             with self.subTest(example=name):
                 completed = subprocess.run(
@@ -205,3 +205,48 @@ class RegressionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ConstantInterningTests(unittest.TestCase):
+    """Float constants must be interned by bit pattern, not by equality.
+
+    `0.0 == -0.0` is True in IEEE-754, so an interning table keyed on `==` cannot
+    tell the two apart: whichever sign was inserted first is what every
+    equal-valued constant prints as. That is a real defect in the folder, not in
+    the VM — with folding off the same program is correct.
+
+    These tests pin it in both directions:
+
+    * `test_the_defect_is_present_and_documented` asserts today's output, so an
+      accidental change is noticed;
+    * `test_ieee_negative_zero_is_preserved` asserts the *correct* output and is
+      marked `expectedFailure`. Under `python -m unittest` a fix turns it into an
+      unexpected success, which fails the run — strict xfail semantics, no pytest
+      required. Fixing the defect means updating both tests, deliberately.
+    """
+
+    PROGRAM = (
+        "sfn main() {\n"
+        "    sprint(-0.0)\n"
+        "    sprint(0.0 - 0.0)\n"
+        "}\n"
+    )
+
+    def test_the_defect_is_present_and_documented(self):
+        # Folded: 0.0 - 0.0 resolves to the earlier -0.0 constant.
+        out, error = run_source(self.PROGRAM)
+        self.assertIsNone(error)
+        self.assertEqual(out, "-0.0\n-0.0\n")
+
+    def test_without_folding_the_vm_is_correct(self):
+        # Proves the defect is in the optimizer: the VM keeps the sign.
+        with mock.patch.dict(os.environ, {"SILICA_NO_OPT": "1"}):
+            out, error = run_source(self.PROGRAM)
+        self.assertIsNone(error)
+        self.assertEqual(out, "-0.0\n0.0\n")
+
+    @unittest.expectedFailure
+    def test_ieee_negative_zero_is_preserved(self):
+        out, error = run_source(self.PROGRAM)
+        self.assertIsNone(error)
+        self.assertEqual(out, "-0.0\n0.0\n")
