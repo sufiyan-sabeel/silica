@@ -5,8 +5,8 @@ import os
 import tempfile
 import unittest
 
-from silica.engine import (compile_source, default_output_path, is_bytecode,
-                           load_bytecode, run_source)
+from silica.engine import (compile_file, compile_source, default_output_path,
+                           is_bytecode, load_bytecode, run_source)
 from silica.errors import SilicaError
 
 
@@ -83,3 +83,44 @@ class BytecodeFileTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FileEntryPointTests(unittest.TestCase):
+    """The engine's path entry points raise SilicaError, never OSError.
+
+    Regression: `compile_file` and `load_bytecode` opened the path directly, so a
+    missing file or a directory escaped as FileNotFoundError / IsADirectoryError
+    and the CLI printed a Python traceback. Every caller is fixed by converting at
+    this boundary, so the contract is asserted here rather than only at the CLI.
+    """
+
+    def test_compile_file_reports_a_missing_file(self):
+        with self.assertRaises(SilicaError) as ctx:
+            compile_file(os.path.join(tempfile.gettempdir(), "silica-absent.sc"))
+        self.assertIn("no such file", str(ctx.exception))
+
+    def test_compile_file_reports_a_directory(self):
+        directory = tempfile.mkdtemp(prefix="silica-dir-")
+        self.addCleanup(os.rmdir, directory)
+        with self.assertRaises(SilicaError) as ctx:
+            compile_file(directory)
+        self.assertIn("is a directory", str(ctx.exception))
+
+    def test_load_bytecode_reports_a_missing_file(self):
+        with self.assertRaises(SilicaError) as ctx:
+            load_bytecode(os.path.join(tempfile.gettempdir(), "silica-absent.sbc"))
+        self.assertIn("no such file", str(ctx.exception))
+
+    def test_load_bytecode_reports_a_directory(self):
+        directory = tempfile.mkdtemp(prefix="silica-dir-")
+        self.addCleanup(os.rmdir, directory)
+        with self.assertRaises(SilicaError) as ctx:
+            load_bytecode(directory)
+        self.assertIn("is a directory", str(ctx.exception))
+
+    def test_the_error_carries_the_path_as_its_location(self):
+        path = os.path.join(tempfile.gettempdir(), "silica-absent.sc")
+        with self.assertRaises(SilicaError) as ctx:
+            compile_file(path)
+        self.assertIn(path, ctx.exception.format())
+        self.assertEqual(ctx.exception.format().count(path), 1)
