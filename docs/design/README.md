@@ -14,7 +14,7 @@ alongside it and is reviewed the same way — as a document first:
 
 | Document | Status | Scope |
 |---|---|---|
-| [SILICA_PLATFORM_ARCHITECTURE.md](SILICA_PLATFORM_ARCHITECTURE.md) | approved direction, revised for review | how Silica targets web, desktop, Android, GUI/TUI and system software; the recorded decisions on error model, concurrency, desktop backend, WASM, packaging; the design for first-class functions and closures; and the Rust VM migration strategy |
+| [SILICA_PLATFORM_ARCHITECTURE.md](SILICA_PLATFORM_ARCHITECTURE.md) | approved direction, revised for review | how Silica targets web, desktop, Android, GUI/TUI and system software; the recorded decisions on error model, concurrency, desktop backend, WASM, packaging; the design for first-class functions and closures; and the Rust VM migration strategy; parity contract pinned in `tests/parity/` |
 
 ## Where they live
 
