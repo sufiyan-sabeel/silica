@@ -14,6 +14,7 @@ alongside it and is reviewed the same way — as a document first:
 
 | Document | Status | Scope |
 |---|---|---|
+| [SILICA_R1_BENCHMARK_READINESS.md](SILICA_R1_BENCHMARK_READINESS.md) | ready for approval | the R1 dispatch gate frozen before implementation: verified benchmark value, measurement policy, pinned output bytes, toolchain requirements |
 | [SILICA_R1_IMPLEMENTATION_READINESS.md](SILICA_R1_IMPLEMENTATION_READINESS.md) | review for decision | whether to begin R1 of the Rust VM: audited VM facts, crate-structure comparison, MVP scope, benchmark methodology, packaging, risk register and acceptance criteria |
 | [SILICA_PLATFORM_ARCHITECTURE.md](SILICA_PLATFORM_ARCHITECTURE.md) | approved direction, revised for review | how Silica targets web, desktop, Android, GUI/TUI and system software; the recorded decisions on error model, concurrency, desktop backend, WASM, packaging; the design for first-class functions and closures; and the Rust VM migration strategy; parity contract pinned in `tests/parity/` |
 
