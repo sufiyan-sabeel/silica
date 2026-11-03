@@ -17,7 +17,7 @@ commands to prove it. No Rust code has been written.
 | Implementation readiness | `docs/design/SILICA_R1_IMPLEMENTATION_READINESS.md` | decisions recorded |
 | Parity contract | `tests/parity/` (29 files, 14 cases) + `tests/test_parity_contract.py` | frozen, no xfail cases |
 | NOP regression | `tests/test_nop.py` | merged (PR #8) |
-| Reference VM | `silica/` | unchanged since PR #8; 1,329 tests green |
+| Reference VM | `silica/` | unchanged since PR #8; 1,364 tests green on the stabilization branch (1,352 on `main`, one stale-skip-list failure — see the readiness report §2.8) |
 
 The harness is only reproducible because its program is committed: the `.sbc` is
 produced from `benchmarks/silica/gate_bench.sc` by the Python compiler, never
@@ -33,7 +33,7 @@ first gate.
 
 | Requirement | Detail |
 |---|---|
-| `rustc` + `cargo` | stable channel, **≥ 1.70** for M1's own code (edition 2021, `let-else`, `OnceLock`) |
+| `rustc` + `cargo` | stable channel, **≥ 1.85**. M1's own code would build on 1.70, but the workspace pins one MSRV and M2's PyO3 requires 1.85 — meet 1.85 once |
 | Linker | `cc` or `gcc` present — the `x86_64-unknown-linux-gnu` target links through it |
 | Host target installed | `rustup target list --installed` shows the host triple |
 | Crate registry | **not needed for M1** (no dependencies) |
@@ -68,7 +68,7 @@ cross-compiled wheels possible later.
 ### 4.1 Prove the toolchain works
 
 ```bash
-rustc --version            # expect >= 1.85 (or >= 1.70 for M1 only)
+rustc --version            # expect >= 1.85 (the workspace MSRV)
 cargo --version
 rustup target list --installed
 cc --version || gcc --version
@@ -92,6 +92,7 @@ From the repository root, with the Python VM installed (`pip install -e .` or on
 `PYTHONPATH`):
 
 ```bash
+mkdir -p build
 python3 -m silica compile benchmarks/silica/gate_bench.sc -o build/gate_bench.sbc
 python3 benchmarks/gate.py --sbc build/gate_bench.sbc
 ```
