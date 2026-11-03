@@ -1,10 +1,12 @@
 # Silica Platform Architecture
 
-**Status:** revised for review — design direction approved, decisions recorded
+**Status:** revised for review — design direction approved, decisions recorded,
+Rust migration designed (not approved)
 **Applies to:** Silica 0.10.0 (`sufiyan-sabeel/silica`)
-**Document version:** 1.1 · 2026-11-02
+**Document version:** 1.2 · 2026-11-03
 **Scope:** how Silica becomes able to build web, desktop, Android, GUI/TUI and
-eventually system software — without breaking anything that works today
+eventually system software — without breaking anything that works today — and how
+its VM moves to Rust without a rewrite
 
 **Revision history**
 
@@ -12,9 +14,10 @@ eventually system software — without breaking anything that works today
 |---|---|
 | 1.0 | Initial audit and proposal; six open decisions raised |
 | 1.1 | Decisions 1–6 recorded (§12); first-class functions and closures designed (§13); trade-offs that remain open (§14) |
+| 1.2 | Rust VM migration strategy (§16); closure memory model without CPython (§13.10); runtime-neutral closure representation (§13.5); parity hazards named as contract terms (§16.3) |
 
-Nothing in this document is implemented. No closure, async, WASM or platform
-backend code may be written until this revision is approved.
+Nothing in this document is implemented. No closure, async, WASM, platform backend
+or Rust code may be written until this revision is approved.
 
 ---
 
@@ -35,14 +38,17 @@ The core claim of this proposal is unchanged:
 > uses. The VM never gains the ability to touch a raw pointer, a file
 > descriptor, a JNI reference or a browser object directly.
 
-The single largest blocker is not any platform SDK. It is that **Silica has no
-first-class functions**, which makes real event handling, callbacks, and any
-async model impossible to express in the language. §13 now specifies that work in
-full, because it gates everything after it.
+Two things gate everything after the front end:
 
-Recommended order: **web → desktop → Android → system**, with the compiler and
-runtime work sequenced so that no phase requires a breaking change to the
-language.
+1. **Silica has no first-class functions**, which makes real event handling,
+   callbacks and any async model impossible to express. §13 designs that work.
+2. **The runtime is CPython**, which blocks standalone binaries, makes desktop
+   and Android packaging expensive, and costs 46.9×–111.1× versus CPython on the
+   recorded benchmarks. §16 designs a migration to a Rust VM that consumes the
+   *existing* compiler output — no rewrite, no fork of the semantics.
+
+Both are design-only. The Python VM remains the semantic reference
+implementation throughout, permanently.
 
 ---
 
@@ -62,11 +68,10 @@ It is **not** a promise, a schedule, or a statement that any of this is easy. It
 is a proposal with acceptance criteria, written so that a reviewer can reject
 individual phases.
 
-Two existing documents are load-bearing here and are not repeated:
-`docs/INTEROPERABILITY.md` (the bridge protocol, handles, C ABI, WASI) and
-`docs/SECURITY_MODEL.md` (what the capability checks do and do not guarantee).
-This document extends them to platforms; where they already decide something,
-they win.
+Three existing documents are load-bearing and are not repeated here:
+`docs/INTEROPERABILITY.md` (bridge protocol, handles, C ABI, WASI),
+`docs/SECURITY_MODEL.md` (what capability checks do and do not guarantee) and
+`docs/BYTECODE.md` (the `.sbc` container). Where they decide something, they win.
 
 ---
 
@@ -85,8 +90,8 @@ they win.
 | VM | `silica/vm.py` | stack machine, explicit frames, `max_frames=4096` |
 | Engine | `silica/engine.py` | ties the stages together for the CLI |
 
-43 opcodes. The VM is single-threaded and re-entrant only in the sense that a
-native may call back into it (the GUI click handler does exactly that).
+43 opcodes (§16.2). The VM is single-threaded and re-entrant only in the sense
+that a native may call back into it (the GUI click handler does exactly that).
 
 ### 2.2 Standard library — 29 modules, 316 natives
 
@@ -152,6 +157,7 @@ That is the pattern every platform bridge in this proposal copies.
 | Native code (C ABI), JNI, WASM | **unsupported** | designed in `INTEROPERABILITY.md`, not built |
 | User packages, registry, lockfile | **unsupported** | `use` resolves built-ins only |
 | Standalone binary, app packaging | **unsupported** | pure-Python wheel + `install.sh` |
+| Rust VM | **unsupported** | §16 designs it; no code exists |
 | Self-hosting | **unsupported** | `docs/BOOTSTRAP.md`: plan only |
 
 ### 2.6 Per-target matrix today
@@ -171,33 +177,26 @@ That is the pattern every platform bridge in this proposal copies.
 Each of these is a real constraint with a consequence, not a to-do item.
 
 1. **CPython is the runtime.** No standalone binary; the user needs Python 3.9+.
-   *Consequence:* every desktop/Android target needs either an embedded CPython
-   or a different execution backend. Embedding is the cheap path; a Rust VM is
-   the honest long-term one (`docs/BOOTSTRAP.md`).
+   *Consequence:* desktop/Android packaging needs either an embedded CPython or a
+   different execution backend. §16 is the path to the latter.
 2. **Speed: 46.9×–111.1× slower than CPython** on the recorded benchmarks
-   (`docs/PERFORMANCE.md`, 2026-10-28). *Consequence:* a browser-side VM written
-   in JavaScript/WASM must not be a port of this interpreter if it is to run
-   interactive UI; it should compile to something the browser executes natively.
+   (`docs/PERFORMANCE.md`, 2026-10-28). *Consequence:* a browser-side runtime
+   must not be a port of this interpreter if it is to run interactive UI; and any
+   Rust VM must be measured, not assumed (§16.9).
 3. **No first-class functions.** Handlers are names. *Consequence:* no
    callbacks, no middleware, no closures over UI state — the single biggest
    blocker for real applications. §13 designs the fix.
-4. **Single-threaded, no concurrency primitives.** No threads, no async, no
-   timers, no promises. *Consequence:* a server cannot serve two requests; a
-   GUI cannot do work without freezing; a network call blocks everything.
-5. **No exceptions or error values.** A failure aborts the program. *Consequence:*
-   any real I/O layer (HTTP, JNI, file pickers) needs a `Result`-shaped value
-   before it can be used by application code. Decision 1 fixes the shape (§12).
-6. **No FFI.** There is no way to declare or call a C function. *Consequence:*
-   platform APIs are reachable only through a bridge process that someone
-   maintains, or through a new `extern` mechanism.
-7. **No user packages.** `use` resolves the built-in registry only.
-   *Consequence:* no ecosystem; every project copies code.
-8. **No byte type.** Binary protocols are represented as hex/URL-safe text.
-   *Consequence:* networking and image work pay a conversion tax; acceptable for
-   v1, documented in `docs/STANDARD_LIBRARY.md`.
-9. **The VM is not a sandbox.** Stated in `docs/SECURITY_MODEL.md` and repeated
-   here: capability checks stop a *program* from asking for a file; they do not
-   stop a malicious *engine build*, and they are not an OS boundary.
+4. **Single-threaded, no concurrency primitives.** *Consequence:* a server cannot
+   serve two requests; a GUI cannot do work without freezing.
+5. **No exceptions or error values.** A failure aborts the program.
+   *Consequence:* any real I/O layer needs a `Result`-shaped value. Decision 1.
+6. **No FFI.** Platform APIs are reachable only through a maintained bridge
+   process, or through a new `extern` mechanism.
+7. **No user packages.** No ecosystem; every project copies code.
+8. **No byte type.** Binary protocols are hex/URL-safe text; a conversion tax.
+9. **The VM is not a sandbox.** Capability checks stop a *program* from asking
+   for a file; they do not stop a malicious *engine build*, and they are not an
+   OS boundary.
 10. **No debugger protocol.** Line tables exist; nothing consumes them.
 
 ---
@@ -211,8 +210,6 @@ logic runs, and what has to be true before the target may be called supported.
 
 **Definition of done:** `silica build --target web` produces a directory that a
 static host serves, and the application's *logic* runs in the browser.
-
-Two sub-targets, deliberately separate:
 
 | | `web.static` | `web.app` |
 |---|---|---|
@@ -231,7 +228,9 @@ directory or archive that runs on a machine with no Python installed.
 
 Per decision 3, tkinter **stays** as the desktop backend for now, and the work is
 to put a toolkit-independent interface in front of it so a native backend can be
-added later without touching application logic. There is no rewrite in this plan.
+added later without touching application logic. A Rust VM (§16) removes the
+CPython dependency from the *execution* side; the UI toolkit remains a separate
+question.
 
 ### 4.3 Android
 
@@ -239,10 +238,8 @@ added later without touching application logic. There is no rewrite in this plan
 in `.sc` files compiled to bytecode, executed by an embedded runtime, and
 platform APIs reached over JNI through the same handle protocol.
 
-This is the most expensive target and the least reversible: it requires a JNI
-bridge, an Android lifecycle adapter, an asset/manifest pipeline, and an
-acceptance test on a real device or emulator in CI. It is scheduled after web
-and desktop for exactly that reason.
+A Rust VM is the realistic embedding target here; CPython-in-an-APK is a
+prototype, not a shipping plan (§5.3).
 
 ### 4.4 GUI / TUI
 
@@ -255,12 +252,11 @@ can call back into Silica code — which is §13.
 
 ### 4.5 Operating system
 
-**Definition of done:** there isn't one that can be claimed in this decade. A
-Silica OS requires a freestanding runtime (no CPython), a memory model without a
-host GC, drivers, and a boot path. What this document commits to is only this:
-**nothing in phases 1–6 may make an eventual freestanding runtime harder** — no
-dependency on CPython object identity in the bytecode, no host-pointer values in
-the VM, handles everywhere.
+**Definition of done:** there isn't one that can be claimed in this decade. What
+this document commits to is only this: **nothing in phases 1–6 or the Rust
+migration may make an eventual freestanding runtime harder** — no dependency on
+CPython object identity in the bytecode, no host-pointer values in the VM,
+handles everywhere, and a value model that is already arena-based (§13.10).
 
 ---
 
@@ -283,8 +279,6 @@ reuses it rather than inventing one.
 
 ### 5.2 Keeping logic in `.sc`
 
-The requirement is that application logic stays in Silica files. That holds if:
-
 - the `.sc` sources compile to bytecode for host targets and to a browser
   artifact for the web target — one front end, two back ends;
 - platform APIs appear as ordinary Silica modules (`web.*`, `desktop.*`,
@@ -295,14 +289,13 @@ The requirement is that application logic stays in Silica files. That holds if:
 
 ### 5.3 What is explicitly rejected
 
-- **Transpiling Silica to Kotlin/Java/Swift source.** It forks the semantics:
-  the checker's guarantees would no longer describe the program that runs.
-- **Running the Python VM inside an Android app as the primary path.** It works
-  and it is a legitimate *prototype*, but it ships a CPython interpreter, a
-  process boundary and a ~50–110× slowdown into a phone. If it is built at all,
-  it is a stepping stone behind a flag, documented as such.
-- **Exposing Python objects as Silica values.** Already forbidden; restated
-  because platform bridges make the temptation larger.
+- **Transpiling Silica to Kotlin/Java/Swift source.** It forks the semantics.
+- **Running the Python VM inside an Android app as the primary path.** It is a
+  legitimate prototype, but it ships a CPython interpreter and a process boundary
+  into a phone.
+- **Exposing Python objects as Silica values.** Already forbidden.
+- **A full Rust rewrite up front.** Rejected by the reviewer, and rejected here
+  on the merits: it would fork the semantics with no oracle to check against.
 
 ---
 
@@ -315,7 +308,7 @@ existing program**; `tests/test_compat_093.py` and the full suite are the gate.
 |---|---|---|---|
 | P0 | Bridges only; no language change | none | unchanged |
 | P1 | Module system + package manifest | new `use pkg` resolution | unchanged |
-| P2 | First-class functions, closures (§13) | new: function values, capture rules | **minor bump**: `MAKE_CLOSURE`, `CALL_VALUE` |
+| P2 | First-class functions, closures (§13) | new: function values, capture rules | **minor bump**: `MAKE_CLOSURE`, `CALL_VALUE`, upvalue ops |
 | P3 | `Result` error values (decision 1) | new: one value type, no unwinding | minor bump if a new tag is needed |
 | P4 | Concurrency — async/await (decision 2) | new keywords | bump |
 | P5 | `extern` declarations for C ABI | new declaration form | bump |
@@ -324,6 +317,11 @@ existing program**; `tests/test_compat_093.py` and the full suite are the gate.
 **Ordering is fixed by decision 2:** function values, closures, capture semantics
 and their VM representation come first; the event loop and async model are
 designed *on top of* that representation, not before it.
+
+**The Rust VM is a parallel track, not a language phase.** Its stages (R1–R5,
+§16.11) can run alongside P1 and P2 but must never change `.sbc`, `.sc` or any
+observable behaviour. The closure representation in §13.5 is specified so that
+the Python VM and the Rust VM implement the *same* semantics from day one.
 
 **Bytecode policy.** `FORMAT_MAJOR` changes only for an incompatible layout;
 adding opcodes bumps `FORMAT_MINOR` and keeps older readers able to *reject*
@@ -334,8 +332,6 @@ table, and the round-trip tests in the same commit.
 
 ## 7. Standard-library roadmap
 
-Ordered by what unlocks a target, not by what is interesting.
-
 | Order | Modules | Unlocks | Notes |
 |---|---|---|---|
 | 1 | `process`, `log` | desktop, CLI tools | `process` behind a capability; no shell interpolation |
@@ -343,13 +339,12 @@ Ordered by what unlocks a target, not by what is interesting.
 | 3 | `crypto` (hash, HMAC, AEAD) | auth, tokens | never invent primitives; wrap a vetted library |
 | 4 | `async` (decision 2 model) | servers, UI responsiveness | must not leak host futures into Silica |
 | 5 | `regex` | text tools | define the dialect before implementing |
-| 6 | `test` | CI for user projects | `silica test` exists for `.sc` files; this is the assertion library |
+| 6 | `test` | CI for user projects | assertion library on top of `silica test` |
 | 7 | `web.*`, `desktop.*`, `android.*` | platform APIs | thin, typed, one native per documented behaviour |
 | 8 | `ai` | later | out of scope for the platform phases |
 
-Rule carried over from 0.10.0: a module is either implemented and documented
-with tests, or it stays in `PLANNED_MODULES` and fails loudly. There is no third
-state.
+Rule carried over from 0.10.0: a module is either implemented and documented with
+tests, or it stays in `PLANNED_MODULES` and fails loudly. There is no third state.
 
 ---
 
@@ -390,22 +385,18 @@ silica add <git-url>              # resolve to a pinned commit, verify checksum,
 silica build --target web         # emit dist/web
 silica build --target desktop     # emit dist/desktop
 silica run --capabilities silica.toml
+silica run --vm=rust              # §16.8, until the Rust VM is the default
 silica test
 ```
 
 Resolution is deterministic and offline-verifiable: `silica.lock` pins every
 dependency to a commit and a checksum, and `silica add --locked` must fail if a
 remote commit no longer matches its recorded hash. Artifacts are deterministic:
-same inputs, same bytes. `docs/SUPPLY_CHAIN.md` already sets that bar for wheels;
-app builds inherit it.
+same inputs, same bytes.
 
 ---
 
 ## 9. Security model per target
-
-The existing model — deny by default, capability checked at native dispatch, path
-containment, opaque handles — carries over unchanged. What changes is *what the
-capabilities mean* on each platform:
 
 | Target | Additional capabilities | Explicitly not guaranteed |
 |---|---|---|
@@ -417,18 +408,20 @@ capabilities mean* on each platform:
 
 Two new rules for platform work:
 
-1. A bridge must validate **shape and length** before dispatch — the frame
-   limits in `INTEROPERABILITY.md` §9 apply to every new bridge.
-2. A capability may never be granted implicitly by a platform (for example, an
-   Android permission in the manifest must not auto-grant the Silica
-   capability). Both must be requested, and the docs must say so.
+1. A bridge must validate **shape and length** before dispatch — the frame limits
+   in `INTEROPERABILITY.md` §9 apply to every new bridge.
+2. A capability may never be granted implicitly by a platform (an Android
+   permission in the manifest must not auto-grant the Silica capability).
+
+A third rule applies to the Rust VM and is specified in §16.6: **the capability
+check is a property of the native dispatch path, not of the VM implementation**,
+and no Rust-side optimisation may skip it.
 
 ---
 
 ## 10. Phased plan with acceptance criteria
 
-Every phase has a gate that is a command and an expected result. A phase is done
-only when its gate passes in CI.
+Every phase has a gate that is a command and an expected result.
 
 ### Phase 0 — this document *(current)*
 
@@ -442,50 +435,44 @@ only when its gate passes in CI.
 
 **Acceptance:** `silica new demo && cd demo && silica run` prints the scaffolded
 greeting; a project depending on a local package builds; `silica add --locked`
-fails when a checksum no longer matches; **all 1,201 existing tests still pass**;
+fails when a checksum no longer matches; **all existing tests still pass**;
 `silica fmt --check examples/*.sc` exits 0.
 
 ### Phase 2 — first-class functions and closures *(the hinge, §13)*
 
-- Function values, closures, capture rules, `MAKE_CLOSURE`, `CALL_VALUE`.
+- Function values, closures, capture rules, `MAKE_CLOSURE`, `CALL_VALUE`, upvalue
+  opcodes.
 - Checker: function types, capture analysis, arity through values.
 - `gui.on_click` and `tui` handlers accept a function value; the name form keeps
   working unchanged.
 
-**Gate before code:** §13 approved, including the capture and lifetime rules.
+**Gate before code:** §13 approved, including capture, lifetime and the
+memory-management model in §13.10.
 
-**Acceptance:** the per-iteration binding case behaves as specified (tested); a
-closure escaping its defining function keeps its captures alive; arity and type
+**Acceptance:** the per-iteration binding case behaves as specified; a closure
+escaping its defining function keeps its captures alive; arity and type
 mismatches are compile errors; `.sbc` round-trips a program with closures;
 `tests/test_compat_093.py` and the full suite pass; `FORMAT_MINOR` bumped with
 verifier tests.
 
 ### Phase 3a — WASM feasibility prototype *(decision 4: prove, then decide)*
 
-- A prototype that compiles the existing bytecode representation to WASM for a
-  narrow subset (arithmetic, calls, structs, loops) and runs it under Node and in
-  a browser.
-- No new standard-library surface, no UI, no build command in the CLI.
+- Compiles the existing bytecode representation to WASM for a narrow subset
+  (arithmetic, calls, structs, loops) and runs it under Node and in a browser.
+- No new standard-library surface, no UI, no CLI build command.
 
 **Acceptance:** the prototype reproduces the documented output of five existing
-`examples/*.sc` programs byte-for-byte; a written comparison against the
-alternatives (bytecode-to-WASM lifter vs. new WASM back end vs. JS interpreter)
-with measured size and startup numbers. **The full backend is approved only
-after this report is reviewed.**
+`examples/*.sc` byte-for-byte; a written comparison against the alternatives with
+measured size and startup numbers. The full backend is approved only after that
+report is reviewed.
 
 ### Phase 3b — web target (`web.app`)
 
-- Back end chosen by 3a; JS host supplies `ui.*` and `web.fetch`.
-
 **Acceptance:** `examples/calculator_app.sc` builds and runs in a headless
-Chromium in CI with **zero console errors**; the same program produces identical
-stdout under `silica run`; artifact set asserted by a test; no `.sc` file changes
-between targets.
+Chromium in CI with **zero console errors**; identical stdout under `silica run`;
+artifact set asserted by a test; no `.sc` file changes between targets.
 
 ### Phase 4 — desktop target
-
-- Toolkit-independent UI interface over the existing tkinter backend (decision
-  3); native host for dialogs, menus, tray; `silica build --target desktop`.
 
 **Acceptance:** built app runs on a machine **without Python installed**; opens a
 window, reads a file through a granted capability, and refuses it when not
@@ -494,17 +481,11 @@ existing `gui` tests pass unchanged.
 
 ### Phase 5 — Android target
 
-- Kotlin host, JNI bridge over the existing frame protocol, lifecycle adapter,
-  manifest generator, emulator test in CI.
-
 **Acceptance:** APK installs on an emulator; the app starts, handles a lifecycle
 event, calls one platform API through a handle, and returns a value; a denied
 capability produces the documented error, not a crash.
 
 ### Phase 6 — native FFI (`extern`)
-
-- `extern` declarations, C ABI host, typed signatures, ownership rules from
-  `INTEROPERABILITY.md` §11.
 
 **Acceptance:** a documented C library is called through a declared signature;
 passing a wrong type is a compile error; a length-bounded buffer test passes.
@@ -512,7 +493,6 @@ passing a wrong type is a compile error; a length-bounded buffer test passes.
 ### Phase 7 — system software *(research, not scheduled)*
 
 No acceptance criteria are defined, because none can be honestly promised.
-Phase 7 exists so that phases 1–6 keep its door open.
 
 ---
 
@@ -520,43 +500,37 @@ Phase 7 exists so that phases 1–6 keep its door open.
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Two back ends to keep in step | divergence between host and web behaviour | one front end, shared checker, differential tests on every example |
-| Embedding CPython makes desktop builds large and slow to start | 30–60 MB, slow cold start | acceptable for v1; the Rust VM is the long-term answer |
+| Two back ends to keep in step | divergence between host and web behaviour | one front end, shared checker, differential tests (§16.7) |
+| Two VMs to keep in step | semantic drift between Python and Rust | Python stays the oracle; differential suite is the gate (§16.7) |
+| Embedding CPython makes desktop builds large and slow to start | 30–60 MB, slow cold start | the Rust VM is the long-term answer (§16) |
 | Android work is unbounded | months, device-specific bugs | strict gate: one app, one lifecycle event, one API |
-| First-class functions change semantics subtly | silent behaviour drift | written capture rules + differential tests before the bump (§13) |
-| Capability model fragments per platform | security claims become untrue | one capability registry, platform namespaces only add names |
-| The 46–111× performance gap makes desktop apps feel broken | user-visible | do not claim performance; measure and publish per phase |
+| First-class functions change semantics subtly | silent behaviour drift | written capture rules + differential tests (§13.9) |
+| Capability model fragments per platform | security claims become untrue | one capability registry; single dispatch choke point (§16.6) |
+| The 46–111× performance gap makes desktop apps feel broken | user-visible | measure and publish per phase; no performance claim before a benchmark |
 | `Result` everywhere makes ordinary code noisy | developer friction | a narrow, documented set of helpers; no exceptions smuggled back in |
+| Rust GC pauses appear under load | latency spikes | threshold-triggered collection, stress mode in tests, nursery later (§13.10) |
 
 **Alternatives considered and rejected:** transpile-to-Kotlin (§5.3); a
-JavaScript interpreter of Silica bytecode in the browser (slow, and it makes the
-browser a second VM to maintain); building all targets at once (the brief
-forbids it, and it would ship five half-working backends).
+JavaScript interpreter of Silica bytecode in the browser; building all targets at
+once; a full Rust rewrite before the semantics are pinned (§16.1).
 
 ---
 
 ## 12. Recorded decisions
 
-These were the six open questions in v1.0. Each is now decided; what follows is
-the decision, the reasoning as understood, and what it commits the project to.
-
 ### Decision 1 — Error model: `Result`, not exceptions
 
 **Decided:** expected failures — I/O, network, interop — return a `Result`-shaped
-value. Exceptions are **not** added, not even as an optimisation for
-programming errors.
-
-**Programming errors versus recoverable errors.** The distinction is now a
-design requirement, not a convention:
+value. Exceptions are **not** added.
 
 | Class | Examples | Behaviour |
 |---|---|---|
-| Programming error | wrong type (already a compile error), out-of-range index, missing map key, division by zero, arity mismatch | **aborts** with a located diagnostic, as today. Not catchable, not a `Result`. |
+| Programming error | wrong type (already a compile error), out-of-range index, missing map key, division by zero, arity mismatch | **aborts** with a located diagnostic. Not catchable, not a `Result`. |
 | Recoverable failure | file missing, permission denied, connection refused, timeout, malformed JSON from a peer, bridge call rejected | returned as a **failed `Result`** with a stable machine-readable code and a human message. |
 
 **Consequence:** the language needs a `Result` representation before any I/O
-module ships. Its syntax, construction and propagation must be specified in a
-separate design document (§14, open item 1) and approved before Phase 3.
+module ships; its syntax and propagation must be specified in a separate design
+document (§14, open item 1) and approved before Phase 3.
 
 ### Decision 2 — Concurrency: async/await, deferred until after closures
 
@@ -565,69 +539,67 @@ Function values, closures, capture semantics and their VM representation come
 first (§13). The event loop and async model are designed *around* that
 representation.
 
-**Consequence:** the `async` module stays reserved and failing. No keyword is
+**Consequence:** the `async` module stays reserved and failing; no keyword is
 reserved in the parser until the design exists.
 
 ### Decision 3 — Desktop: keep tkinter, add a toolkit-independent interface
 
-**Decided:** tkinter remains the desktop backend. The work is to define a
-toolkit-independent UI interface (widget tree, layout, event dispatch, theming)
-that the current renderer implements, so a native backend can be added later
-without changing Silica application logic.
+**Decided:** tkinter remains the desktop backend; the work is to define a
+toolkit-independent UI interface that the current renderer implements, so a native
+backend can be added later without changing application logic.
 
 **Explicitly not decided:** rewriting the UI system. `docs/UI.md`'s rule stands —
 a target is "supported" only when an acceptance test renders it.
 
-**Consequence:** `gui` keeps its 22 natives and its name-based handlers until
-Phase 2; the interface is extracted underneath them, not around them.
-
 ### Decision 4 — WASM: a prototype before a commitment
 
-**Decided:** WASM is a proposed strategy. A small feasibility prototype must
-prove that the existing compiler representation can target WASM while preserving
-Silica semantics, and it must be compared against the alternatives with measured
-numbers, before any full backend is approved.
+**Decided:** WASM is a proposed strategy; a feasibility prototype must prove that
+the existing compiler representation can target WASM while preserving semantics,
+and it must be compared against alternatives with measured numbers before any full
+backend is approved.
 
-**Consequence:** Phase 3 is split into 3a (prototype + written report) and 3b
-(backend, only after the report is reviewed).
+**Consequence:** Phase 3 splits into 3a (prototype + report) and 3b (backend,
+after review).
 
 ### Decision 5 — Packages: lockfile, pinned commits, checksums; no registry
 
-**Decided:** start with a lockfile, pinned Git commit references and checksums.
-No public registry. Deterministic resolution and integrity verification first.
-
-**Consequence:** `silica add` resolves a Git URL to an immutable commit and
-records its hash; `silica add --locked` fails on a mismatch. A registry, if it
-ever exists, is a service layered on this, not a prerequisite.
+**Decided:** lockfile, pinned Git commits, checksums. No public registry.
+Deterministic resolution and integrity verification first.
 
 ### Decision 6 — Minimum CPython version: unchanged
 
 **Decided:** the declared minimum stays as published. Raising it requires a
-compatibility audit, test evidence, and a documented reason.
+compatibility audit, test evidence and a documented reason.
 
-**Consequence:** no `match` statements, no 3.11-only standard-library calls, and
-CI keeps testing the declared floor.
+### Decision 7 — Rust VM: designed now, approved separately *(new in 1.2)*
+
+**Decided:** a Rust VM is the intended long-term runtime; an immediate full
+rewrite is **not** approved. The migration is designed in §16 as a
+consume-the-existing-bytecode strategy with the Python VM as a permanent semantic
+reference. No Rust code may be written until §16 is approved on its own.
 
 ---
 
 ## 13. First-class functions and closures (Phase 2 design)
 
-This section is the gate for Phase 2. It is a **design**, not an implementation:
-no syntax here has been added to the parser, and every rule below must be
-accepted or amended before code is written.
+This section is the gate for Phase 2. It is a **design**: no syntax here has been
+added to the parser, and every rule below must be accepted or amended before code
+is written.
 
-The goal is narrow and specific: make a Silica function a value that can be
-stored, passed, returned and called — with captures that behave the way a reader
-expects, and without changing what any existing program does.
+The goal is narrow: make a Silica function a value that can be stored, passed,
+returned and called — with captures that behave the way a reader expects, and
+without changing what any existing program does. The design is
+**runtime-neutral**: the Python VM and the planned Rust VM (§16) must implement
+the same observable rules.
 
 ### 13.1 Function values and calling conventions
 
-**Value form.** A function value is a first-class value carrying code, an arity,
-and a capture list. Named functions declared with `sfn` remain what they are
-today: callable by name, unchanged. Used as a value, a named function produces a
-closure with **zero captures** — a "static function value", the cheap case.
+**Value form.** A function value carries code, an arity, and a capture list.
+Named functions declared with `sfn` remain callable by name, unchanged. Used as a
+value, a named function produces a closure with **zero captures** — a "static
+function value", the cheap case.
 
-**Type syntax (proposed).** A function type is written
+**Type syntax (proposed).**
 
 ```
 Fn(Int, String) -> Bool
@@ -635,9 +607,9 @@ Fn() -> Unit
 ```
 
 `Fn` is a built-in type form, parsed only in type position, so it cannot collide
-with an identifier. It is deliberately not `Fn<T>`: function types are not
-generic parameters, and reusing the generic syntax would make
-`Fn(Int) -> Int` ambiguous with type arguments.
+with an identifier. It is deliberately not `Fn<T>`: function types are not generic
+parameters, and reusing that syntax would make `Fn(Int) -> Int` ambiguous with
+type arguments.
 
 **Calling.** Two call forms, both explicit in bytecode:
 
@@ -647,23 +619,20 @@ generic parameters, and reusing the generic syntax would make
 | through a value | `f(1, 2)` where `f` holds a function value | `CALL_VALUE` (new) |
 
 The checker resolves which form applies from the binding's type, so the compiler
-never guesses. `CALL_VALUE` pops the callee and the arguments, checks the arity
-against the closure's recorded arity (a mismatch is a *runtime* error only when
-the value came through `Any`; otherwise it is a compile error).
+never guesses. `CALL_VALUE` pops the callee and arguments and checks the arity
+against the closure's recorded arity; a mismatch is a *runtime* error only when
+the value arrived through `Any`, otherwise it is a compile error.
 
-**Calling convention.** Unchanged frame layout: `n_locals` slots, arguments in
-the first `arity` slots. A closure call pushes a frame whose locals begin with
-its captured cells (see §13.5), so a closure body addresses captures exactly like
-locals.
+**Calling convention.** Unchanged frame layout: `n_locals` slots, arguments in the
+first `arity` slots. A closure call pushes a frame whose locals begin with its
+captured cells, so a closure body addresses captures exactly like locals.
 
 ### 13.2 Closure capture semantics
 
-**Lexical, static, and decided by the compiler.** A nested function captures the
-free variables it references; the set is computed by free-variable analysis in
-the checker and recorded on the chunk. There is no dynamic scoping, no implicit
+**Lexical, static, decided by the compiler.** A nested function captures the free
+variables it references; the set is computed by free-variable analysis in the
+checker and recorded on the chunk. There is no dynamic scoping, no implicit
 `self`, and no way for a function to reach a binding it did not name.
-
-**Capture is by cell for mutable bindings, by value for constants.** Concretely:
 
 | Captured binding | Captured as | Mutation visible in the enclosing scope |
 |---|---|---|
@@ -672,48 +641,39 @@ the checker and recorded on the chunk. There is no dynamic scoping, no implicit
 | parameter `x: Int` | a shared cell | yes, if the parameter is reassigned |
 | `struct`/`class` value | the reference | field mutation is visible (identity), regardless of `let`/`const` |
 
-**Loop bodies create a fresh binding per iteration.** `per` and `tant` bodies
-that declare a binding capture *that iteration's* cell, so a list of closures
-built in a loop captures `1, 2, 3` and not `3, 3, 3`. This is the classic
-"closure in a loop" trap and it is specified here so it cannot be decided by
-accident. It is the single most important test in §13.9.
+**Loop bodies create a fresh binding per iteration.** `per` and `tant` bodies that
+declare a binding capture *that iteration's* cell, so a list of closures built in
+a loop captures `1, 2, 3` and not `3, 3, 3`. This is specified so it cannot be
+decided by accident, and it is test #3 in §13.9.
 
 **What is not captured.** Globals are not captured — they are looked up at call
-time through `LOAD_GLOBAL`, so a closure always sees the current global. Module
-members are resolved the same way.
+time through `LOAD_GLOBAL`, so a closure always sees the current global.
 
 ### 13.3 Mutable and immutable captures
 
 - A mutable capture is a **shared cell**: writing inside the closure writes the
   enclosing binding. Reads and writes inside the closure are ordinary
   `LOAD_LOCAL`/`STORE_LOCAL` against the cell slot.
-- An immutable capture is **copied** at closure creation. This is not an
-  optimisation: it is the observable rule, and it means a `const` read inside a
-  closure cannot change because of something the enclosing function did later.
+- An immutable capture is **copied** at closure creation. This is the observable
+  rule: a `const` read inside a closure cannot change because of something the
+  enclosing function did later.
 - `const` freezing extends to captures: capturing a `const` struct does not
-  unfreeze it, and a frozen struct cannot be mutated through a closure any more
-  than through the original binding.
+  unfreeze it.
 - **No capture-by-copy for `let`.** Copying mutable captures would make two
-  closures over the same variable disagree, which is worse than the sharing
-  rule above.
+  closures over the same variable disagree, which is worse than sharing.
 
 ### 13.4 Lifetime and memory management
 
 - **Lifetime is reachability.** A closure keeps its captured cells alive for as
   long as the closure is reachable; there is no `free`, no `release`, and no
   lifetime annotation in the language.
-- **Today's runtime is CPython**, so values are freed by reference counting and
-  reference cycles are collected by CPython's cycle collector. A closure stored
-  in a cell it captures is a cycle — legal, collected, and not a leak on this
-  runtime.
-- **A future non-refcounting VM must answer this explicitly.** If the Rust VM
-  uses an arena or a tracing collector, the rule above stays true but the
-  mechanism changes; that is a VM-design decision recorded in §14, open item 3,
-  and it must not leak into the language surface.
 - **Escaping closures are supported**: returning a closure that captures a local
   keeps that cell alive after the defining frame is gone. This is required for
-  handlers and is the reason captures are cells rather than frame slots.
+  handlers and is why captures are cells rather than frame slots.
 - **No finalisers.** A closure cannot run code when it is collected.
+- **The mechanism is not part of the language.** On the Python VM it is CPython
+  reference counting plus the cycle collector; on the Rust VM it is the arena and
+  collector in §13.10. Programs may not depend on either.
 
 ### 13.5 VM representation
 
@@ -723,98 +683,86 @@ Proposed shapes (names illustrative; the invariants are the commitment):
 Closure
   code_index : Int        # index into the chunk's function table
   arity      : Int
-  captures   : List[Cell]
+  captures   : List[Cell] # one entry per capture descriptor
   name       : String     # for diagnostics only
 
 Cell
   value      : Any        # one slot, shared by every closure that captured it
 ```
 
-- **Frame layout stays flat.** A function that has captured locals allocates
-  those slots as `Cell` objects at entry, decided at compile time; uncaptured
-  locals stay plain slots. The verifier enforces that a slot is never used both
-  ways inside one function.
-- **New opcodes** (three, `FORMAT_MINOR` bump):
-  - `MAKE_CLOSURE` — operand: code index, then capture descriptors (slot index
-    or upvalue index per capture).
-  - `CALL_VALUE` — operand: argument count.
-  - `LOAD_UPVALUE` / `STORE_UPVALUE` — or, equivalently, `LOAD_LOCAL` with a
-    cell flag. The design prefers **explicit upvalue opcodes**: the verifier can
-    then check capture indices against the recorded capture list instead of
+- **Frame layout stays flat.** A function with captured locals allocates those
+  slots as cells at entry, decided at compile time; uncaptured locals stay plain
+  slots. The verifier enforces that a slot is never used both ways in one
+  function.
+- **New opcodes** (`FORMAT_MINOR` bump):
+  - `MAKE_CLOSURE` — code index, then capture descriptors (slot index or upvalue
+    index per capture).
+  - `CALL_VALUE` — argument count.
+  - `LOAD_UPVALUE` / `STORE_UPVALUE` — explicit upvalue opcodes, so the verifier
+    can check capture indices against the recorded capture list instead of
     trusting a flag.
+- **Two implementations, one semantics.** The Python VM represents a cell as a
+  one-slot object; the Rust VM represents it as an index into a cell arena
+  (§13.10). Neither representation is observable: no Silica program can take the
+  address of a cell, compare two cells, or observe collection.
+- **No host pointers.** A `Closure` holds an index into the chunk, never a Python
+  callable or a Rust function pointer. This keeps bytecode portable and keeps
+  §4.5's promise to a future freestanding runtime.
 - **Serialization.** Closures are runtime values and are **not** constants: the
   constant pool records the *code* of nested functions and their capture
-  descriptors, never a live closure. A `.sbc` file therefore remains
-  deterministic and hashable.
-- **No host pointers.** A `Closure` holds an index into the chunk, never a
-  Python callable. This keeps the bytecode portable and keeps §4.5's promise to
-  a future freestanding runtime.
+  descriptors, never a live closure (§13.10.7).
 
 ### 13.6 Type checking
 
-- **Function types are checked, not erased**: `Fn(Int) -> Int` is a distinct
-  type. Passing `Fn(String) -> String` where `Fn(Int) -> Int` is expected is a
-  compile error.
-- **Arity is part of the type.** `Fn(Int, Int) -> Int` and `Fn(Int) -> Int` are
-  different types and do not unify.
-- **Named functions used as values take their declared signature.** An `sfn`
-  with an unannotated parameter yields `Any` for that position, consistent with
+- **Function types are checked, not erased**: `Fn(Int) -> Int` is a distinct type.
+- **Arity is part of the type**; `Fn(Int, Int) -> Int` and `Fn(Int) -> Int` do not
+  unify.
+- **Named functions used as values take their declared signature.** An `sfn` with
+  an unannotated parameter yields `Any` for that position, consistent with
   existing inference.
 - **Invariance, matching generics.** `Fn(Any) -> Unit` is not a supertype of
-  `Fn(Int) -> Unit`. Generics in 0.10.0 are invariant; function types follow, so
-  there is one rule to learn.
-- **`Any` still exists.** Assigning a function value to `Any` loses the
-  signature; the call is then checked at runtime and a mismatch is a runtime
-  error with a located diagnostic — the same shape as today's `Any` behaviour
-  for containers.
-- **Capture analysis is a checker responsibility.** A closure that references a
+  `Fn(Int) -> Unit`.
+- **`Any` still exists.** Assigning a function value to `Any` loses the signature;
+  the call is then checked at runtime, with a located diagnostic.
+- **Capture analysis is a checker responsibility.** A closure referencing a
   variable not in scope is a compile error naming the variable; a closure that
-  captures nothing is a static function value and is not boxed.
+  captures nothing is not boxed.
 
 ### 13.7 Serialization restrictions
-
-Explicit, because "a function is a value" invites "send it somewhere":
 
 | Situation | Rule |
 |---|---|
 | Closure as a `.sbc` constant | **forbidden** — closures are runtime values only |
-| Closure through `json` | **refused** with a named error (`json` serialises data, not code) |
-| Closure across the interop bridge | **refused** — `python.call` and every future bridge reject function values; a handle is never minted for one |
+| Closure through `json` | **refused** with a named error |
+| Closure across any bridge | **refused** — `python.call` and every future bridge reject function values; no handle is minted for one |
 | Closure stored in a struct field | **allowed**; the struct then cannot be JSON-serialised or bridged |
 | Closure printed with `sprint` | **allowed**, prints `<fn name>` — stable, documented text |
 | Closure compared with `==` | **identity only**; no structural equality, no ordering |
 | Closure reconstructed from text | **no such operation**; there is no `eval` and none is planned |
 
-The last two rows matter for security: a value that cannot be serialised, cannot
-be compared structurally and cannot be built from text cannot be smuggled across
-a trust boundary by accident.
-
 ### 13.8 Compatibility with existing named functions
 
-- **`sfn` declarations are unchanged.** Same syntax, same semantics, same
+- **`sfn` declarations are unchanged** — same syntax, same semantics, same
   bytecode (`CALL` by name).
 - **Name-based handlers keep working.** `gui.on_click(button, "handle_click")`
   and the TUI equivalents stay exactly as they are; accepting a function value is
-  an **added** form, not a replacement. Existing examples must run untouched.
+  an **added** form.
 - **No existing program changes meaning.** The checker only gains the ability to
-  accept programs it previously rejected; it must not reject anything it accepts
-  today. `tests/test_compat_093.py` is the guard, and the full suite runs in CI
-  on Python 3.9, 3.11 and 3.12.
-- **`type_of` reports `Fn`** for a function value. This is new output only for
-  values that could not exist before, so nothing existing changes.
+  accept programs it previously rejected. `tests/test_compat_093.py` is the guard.
+- **`type_of` reports `Fn`** for a function value — new output only for values
+  that could not exist before.
 - **Formatter round-trip.** `silica fmt` must print function types and closures
-  and re-parse to the same AST; without that, the formatter would corrupt files.
+  and re-parse to the same AST.
 
 ### 13.9 Regression tests
 
-The suite that must exist before Phase 2 is called done. Each row is a test in
-`tests/test_closures.py` unless noted.
+Each row is a test in `tests/test_closures.py` unless noted.
 
 | # | Case | Expected |
 |---|---|---|
 | 1 | closure captures a `let` and mutates it | enclosing scope observes the write |
-| 2 | closure captures a `const` | value copied; later enclosing mutation is impossible by construction |
-| 3 | **closures built in a loop capture per-iteration bindings** | a list of three closures returns `1, 2, 3` |
+| 2 | closure captures a `const` | value copied; later enclosing mutation impossible by construction |
+| 3 | **closures built in a loop capture per-iteration bindings** | three closures return `1, 2, 3` |
 | 4 | closure escapes its defining function | captures remain alive and readable |
 | 5 | two closures capture the same `let` | both observe each other's writes |
 | 6 | recursion through a function value | terminates, same result as the named form |
@@ -828,35 +776,165 @@ The suite that must exist before Phase 2 is called done. Each row is a test in
 | 14 | verifier rejects a hand-built `CALL_VALUE` with a bad capture index | rejected before execution |
 | 15 | `silica fmt` round-trip on closures and function types | byte-identical AST |
 | 16 | named handlers in `examples/gui_demo.sc` | unchanged behaviour (existing test) |
-| 17 | full suite on 3.9 / 3.11 / 3.12 | green, including `test_compat_093.py` |
+| 17 | **self-capturing cycle**: a closure stored in a cell it captures | collected; no leak; program still exits 0 (§13.10.5) |
+| 18 | **dropped closure releases its cells** | under `SILICA_GC_STRESS=1`, the cell count returns to baseline |
+| 19 | full suite on 3.9 / 3.11 / 3.12 | green, including `test_compat_093.py` |
+
+### 13.10 Memory management without CPython
+
+The closure design cannot lean on CPython's collector, because the target runtime
+is Rust (§16). This subsection answers the eight questions raised in review and is
+the part that must be right before Phase 2 starts.
+
+**13.10.1 Mutable captures as shared cells.** A cell is a one-slot indirection
+that both the closure and the enclosing scope reference. In the Python VM it is a
+small object with a `value` attribute. In the Rust VM it is a `CellId(u32)` index
+into a `Vec<CellSlot>` owned by the heap — **not** an `Rc<RefCell<Value>>`.
+Sharing is by index, so two closures over the same variable hold the same
+`CellId`, and no reference count is involved.
+
+**13.10.2 Immutable captures.** A `const` capture is a **copy of the `Value`**
+stored directly in the closure's capture vector, not a cell. For struct and class
+values the copied `Value` is a reference to the same object (identity preserved),
+so copying is cheap and does not duplicate the object graph.
+
+**13.10.3 Loop iteration bindings.** The compiler emits `NEW_CELL` at the top of a
+loop body for every binding that is captured, and it runs **once per iteration**.
+Each iteration therefore allocates a fresh `CellId`; a closure created in that
+iteration captures that id and keeps it after the loop advances. The Python VM
+does the same thing with a fresh cell object per iteration. This is why the
+`1, 2, 3` case in §13.9 is a language rule and not an implementation detail.
+
+**13.10.4 Retention and release.** Nothing is retained or released explicitly:
+
+- a closure is reachable if a value, a frame slot, a global, or a host root
+  reaches it;
+- a cell is reachable if a closure captures it, or a frame slot holds it;
+- when a closure becomes unreachable, its capture vector becomes unreachable with
+  it, and the cells it held are collected in the same sweep.
+
+**13.10.5 Cycle handling — and why `Rc`/`Arc` is not the answer.** The reviewer's
+warning is correct and is the reason this subsection exists. The object graph
+contains cycles that reference counting cannot break:
+
+```
+closure ──captures──▶ cell ──holds──▶ closure        (self-capturing closure)
+closure ──captures──▶ cell ──holds──▶ list ──holds──▶ closure
+```
+
+`Rc<T>` cannot collect either: each side keeps the other's strong count at ≥1, so
+the memory is never freed. `Arc` adds atomics and changes nothing about cycles.
+`Rc<RefCell<..>>` adds a second failure mode — a borrow conflict becomes a
+*panic at run time*, which is unacceptable in a language whose error model says
+programming errors abort with a diagnostic, not a crash in the host.
+
+The Rust VM therefore keeps the value graph **free of reference counting**:
+
+```
+Value = Unit | Bool(bool) | Int(i64) | Float(f64) | Str(StrId)
+      | List(ObjId) | Map(ObjId) | Instance(ObjId) | Closure(ObjId)
+
+Heap  = { objects: Vec<Option<Object>>, cells: Vec<Option<Value>>,
+          strings: StrArena, free_objects: Vec<ObjId>, free_cells: Vec<CellId> }
+
+Object = List(Vec<Value>) | Map(IndexMap<Key, Value>)
+       | Instance { type_id: u32, fields: Vec<Value> }
+       | Closure { fn_index: u32, captures: Vec<Capture> }
+Capture = Cell(CellId) | Value(Value)
+```
+
+Every reference is an index into an arena the VM owns. **Collection is
+mark-and-sweep**, not reference counting:
+
+1. **Roots**: global slots, every live frame's locals and operand stack, the value
+   in flight, and host-held roots registered by a bridge (a Silica handle held by
+   the Python interop worker is a root, and must be declared as one).
+2. **Mark**: trace `Value` → `ObjId`/`CellId` → children, with an explicit work
+   list (no recursion, so a deep list cannot blow the Rust stack).
+3. **Sweep**: drop unmarked objects and cells, return their ids to the free lists.
+
+Cycles are collected by construction: reachability from roots is what decides
+liveness, so a self-capturing closure that nothing else references is unreachable
+and is freed.
+
+**Why mark-sweep and not trial deletion (Bacon–Rajan).** Trial deletion is the
+other standard answer and is also correct, but it needs a write barrier, a
+candidate buffer and a second pass per collection; mark-sweep needs a root set and
+a free list. For a first correct implementation, mark-sweep has fewer moving parts
+and fewer invariants to violate. Trial deletion remains a legitimate later
+optimisation for a young generation, recorded in §14.
+
+**Pause behaviour.** Collection is stop-the-world and threshold-triggered
+(allocated-bytes or object-count since the last collection). The thresholds are
+tunable, and `SILICA_GC_STRESS=1` collects on every allocation so that the test
+suite can catch a missing root instead of waiting for a rare crash.
+
+**13.10.6 Does the lifetime model work without CPython?** Yes, and the reason is
+structural rather than hopeful:
+
+- no `Value` contains a raw pointer, a `Box`, an `Rc` or a host handle — only
+  plain scalars and arena indices;
+- ownership of every object is unambiguous: the `Heap` owns it, and nothing else
+  can free it;
+- liveness is defined by roots, and the root set is enumerable at every point
+  where the VM can pause (between instructions, never mid-opcode);
+- the one thing that must be added for a host embedding is root registration:
+  anything a bridge holds across a call must be registered before the next
+  collection. That is an API requirement on the bridge, not a language rule, and
+  §16.7 tests it.
+
+**13.10.7 Runtime closures versus compiled function definitions in `.sbc`.** They
+are different things and must not be confused:
+
+| | Function definition (in `.sbc`) | Closure (at run time) |
+|---|---|---|
+| What it is | code + arity + `n_locals` + `max_stack` + capture *descriptors* + line table | an object pairing a function index with a capture vector |
+| Persisted | yes, in the chunk's function table and constant pool | never |
+| Created by | the compiler, once per `sfn` | `MAKE_CLOSURE`, at the point the expression executes |
+| Contains | no values | `CellId`s and copied `Value`s |
+| Can be equal-compared | n/a | identity only |
+
+A capture *descriptor* says how many captures there are and whether each is a cell
+or a copy; it is metadata, not data. The verifier checks that a `LOAD_UPVALUE`
+index is inside the declared capture count, so a hand-edited `.sbc` cannot read
+past the capture vector.
+
+**13.10.8 Rejection at serialization and bridge boundaries.** Three enforcement
+points, in order of defence:
+
+1. **Bytecode writer**: there is no opcode that emits a closure into the constant
+   pool, and the verifier rejects a constant-pool entry of a function-value kind.
+2. **Data serializers**: the `json` encoder has no case for `Fn` and returns a
+   named error rather than writing a placeholder.
+3. **Bridge marshaller**: the value-to-JSON mapping in `INTEROPERABILITY.md` §2
+   has no entry for `Fn`; the marshaller rejects the value **before** a frame is
+   framed, so nothing reaches the worker, and no handle is minted for a closure.
+
+The consequence is stated as a rule, not an implementation detail: **a closure
+cannot cross a trust boundary in either direction.**
 
 ---
 
 ## 14. Unresolved trade-offs
 
-Recorded so they are not decided by accident during implementation.
-
 1. **`Result` syntax and propagation.** Needed before Phase 3. Options: a
-   `struct`-shaped `Result` with `ok`/`error` fields and `si`-based handling
-   (no new syntax), versus a dedicated `si ok = f() sino { ... }` binding form.
-   Recommendation: start with the struct and no new syntax; revisit only if
-   real code proves it unbearable.
+   struct-shaped `Result` with `ok`/`error` fields handled by `si` (no new
+   syntax), versus a dedicated binding form. Recommendation: the struct first.
 2. **Capture-by-cell versus capture-by-copy for `let`.** Decided as shared cell
-   (§13.2). Reversible only with a documented breaking change, so it needs to be
-   right now.
-3. **Cycle collection on a future VM.** CPython collects closure cycles today.
-   A Rust VM needs an explicit answer (arena-per-call-tree, tracing collector,
-   or a documented "cycles leak" limit). Language semantics do not change; the
-   runtime's promise does.
-4. **Function type ergonomics.** `Fn(Int) -> Int` is explicit but verbose in
-   parameter lists. A type alias form (`type Handler = Fn(Int) -> Unit`) is
-   attractive and is **not** in this design.
-5. **Closures in `const` bindings.** Whether `const f = sfn() { ... }` is
-   allowed, and what freezing means for a closure with mutable captures.
-   Recommendation: allow, and freeze the binding, not the captured cells.
-6. **Whether async/await needs `Fn` to be `Send`-like.** On a single-threaded
-   event loop, probably not; if green threads ever return, this becomes a real
-   question.
+   (§13.2). Reversible only with a documented breaking change.
+3. **GC strategy over time.** Mark-sweep is proposed (§13.10.5); trial deletion or
+   a nursery generation are later options if pauses become visible. The *language*
+   semantics do not change either way.
+4. **Function type ergonomics.** `Fn(Int) -> Int` is verbose in parameter lists. A
+   type alias form is attractive and is not in this design.
+5. **Closures in `const` bindings.** Recommendation: allow, and freeze the
+   binding, not the captured cells.
+6. **Whether async/await needs `Fn` to be thread-safe.** On a single-threaded
+   event loop, probably not; if green threads ever return, this becomes real.
+7. **Rust VM: whether natives move to Rust at all.** §16.5 proposes keeping
+   platform natives in Python indefinitely and moving only pure ones. The
+   alternative — porting everything — is faster in theory and unmaintainable in
+   practice.
 
 ---
 
@@ -866,9 +944,298 @@ Recorded so they are not decided by accident during implementation.
 - That any phase after Phase 0 is implemented.
 - That WASM is the chosen backend — decision 4 requires a prototype first.
 - That async/await exists, or will ship in any particular release.
+- **That a Rust VM will be faster.** It is expected to be, and it will be
+  measured (§16.9), but no ratio is promised here.
+- That the Rust VM has been approved — §16 is a design for separate review.
+- That closures behave as described today — §13 is a design awaiting approval.
 - That Android or system software will be delivered on any date.
 - That the current VM is a sandbox.
-- That closures behave as described here today — §13 is a design awaiting
-  approval, and no parser, checker or VM code for it has been written.
 
 The objective is a working, verifiable foundation — not APIs that look finished.
+
+---
+
+## 16. Rust VM migration
+
+**Status:** design for review. No Rust code exists, and none may be written until
+this section is approved on its own terms.
+
+The constraint that shapes everything below: **the compiler stays Python for now,
+and the Rust VM consumes the bytecode the existing compiler already produces.**
+That is what makes the migration incremental and testable — there is always an
+oracle to compare against.
+
+### 16.1 The Python VM is the semantic reference implementation, permanently
+
+- It defines what a program *means*: opcode behaviour, evaluation order, error
+  text, printing format, iteration order.
+- It is never deleted. `--vm=python` remains available after the Rust VM becomes
+  the default, because a reference implementation that no longer ships cannot be
+  used to adjudicate a disputed case.
+- It is the oracle for every differential test (§16.7). When the two disagree, the
+  Python VM is right until a written decision says otherwise — and that decision
+  is recorded in this document, not in a commit message.
+
+### 16.2 The stable internal contract
+
+This is what the Rust VM must implement. It is an internal contract: not a
+compatibility promise to users (the *language* is that), but the interface between
+two implementations.
+
+**Container.** `.sbc`: magic `SILICABC`, `FORMAT_MAJOR` 1, `FORMAT_MINOR` 0,
+CRC-32 over the payload, constant pool, per-function line table, verified before
+execution.
+
+**Function record** (`docs/BYTECODE.md`): `name`, `arity`, `n_locals`,
+`max_stack`, `ret_type`, `code`, `lines`.
+
+**Values.** `Unit`, `Bool`, `Int` (64-bit signed, **wraps on overflow**), `Float`
+(f64), `String`, `List`, `Map`, `Instance` (struct or class). Numbers follow
+Python's rules: `Int / Int` truncates toward zero, `%` keeps the dividend's sign,
+division by zero is a runtime error.
+
+**Frames.** `fn`, `index`, `ip`, `locals` (`n_locals` slots), `stack`
+(`max_stack` slots). Explicit frames, so recursion depth is bounded by
+`max_frames` (4096), not by the host stack.
+
+**Opcode set — 43 instructions.** The Rust VM implements exactly this table; the
+stack-effect column is the verifier's contract and the Rust decoder must enforce
+it identically.
+
+| Op | Name | Operands | Stack |
+|---|---|---|---|
+| 0x00 | `NOP` | — | 0 → 0 |
+| 0x01 | `CONST` | `u` pool index | 0 → 1 |
+| 0x02 | `UNIT` | — | 0 → 1 |
+| 0x03 | `TRUE` | — | 0 → 1 |
+| 0x04 | `FALSE` | — | 0 → 1 |
+| 0x05 | `LOAD_LOCAL` | `u` slot | 0 → 1 |
+| 0x06 | `STORE_LOCAL` | `u` slot | 1 → 0 |
+| 0x07 | `LOAD_GLOBAL` | `u` slot | 0 → 1 |
+| 0x08 | `STORE_GLOBAL` | `u` slot | 1 → 0 |
+| 0x09 | `POP` | — | 1 → 0 |
+| 0x0A–0x0E | `ADD` `SUB` `MUL` `DIV` `MOD` | — | 2 → 1 |
+| 0x0F | `NEG` | — | 1 → 1 |
+| 0x10 | `NOT` | — | 1 → 1 |
+| 0x11–0x16 | `EQ` `NE` `LT` `LE` `GT` `GE` | — | 2 → 1 |
+| 0x17 | `JUMP` | `j` target | 0 → 0 |
+| 0x18 | `JUMP_IF_FALSE` | `j` target | 1 → 0 |
+| 0x19 | `CALL` | `u` fn, `u` argc | argc → 1 |
+| 0x1A | `CALL_NATIVE` | `u` module, `u` name, `u` argc | argc → 1 |
+| 0x1B | `RET` | — | 1 → 0 |
+| 0x1C | `PRINT` | — | 1 → 0 |
+| 0x1D | `DIT` | — | 1 → 0 |
+| 0x1E | `MAKE_LIST` | `u` n | n → 1 |
+| 0x1F | `MAKE_MAP` | `u` n | 2n → 1 |
+| 0x20 | `INDEX_GET` | — | 2 → 1 |
+| 0x21 | `LEN` | — | 1 → 1 |
+| 0x22 | `ITER_START` | — | 1 → 1 |
+| 0x23 | `ITER_NEXT` | `j` exit | 1 → 1 |
+| 0x24 | `HALT_OK` | — | 0 → 0 |
+| 0x25 | `HALT_POP` | — | 1 → 0 |
+| 0x26 | `MAKE_STRUCT` | `u` type, `u` n | n → 1 |
+| 0x27 | `GET_FIELD` | `u` field | 1 → 1 |
+| 0x28 | `SET_FIELD` | `u` field | 2 → 0 |
+| 0x29 | `FREEZE` | — | 0 → 0 (peeks) |
+| 0x2A | `CALL_METHOD` | `u` name, `u` argc | argc+1 → 1 |
+
+**Error semantics.** Every diagnostic carries `file`, `line`, `col`, a message and
+an optional hint, rendered as:
+
+```
+file.sc:3:5: type error: cannot assign to 'x': it is a constant
+  hint: declare it with 'let' instead of 'const'
+```
+
+Runtime errors abort the program; there is no unwinding (§12, decision 1).
+**The Rust VM must reproduce these strings byte-for-byte** — they are part of the
+contract, and the differential suite compares them exactly.
+
+### 16.3 Parity hazards — where a Rust VM silently diverges
+
+These are the places a straightforward port goes wrong. Each is a contract term
+and a differential test.
+
+| Hazard | Silica's behaviour (measured) | What Rust does by default | Required |
+|---|---|---|---|
+| Float printing | `0.1 + 0.2` → `0.30000000000000004` (Python shortest round-trip) | `{}` prints `0.30000000000000004` but `Display` for f64 differs in edge cases | one shared formatting routine, tested against a corpus of 1,000 doubles |
+| String length/index | `len("héllo")` → 5; `s[1]` → `é` (characters) | `String::len()` is bytes; indexing by byte | index and measure by Unicode scalar values |
+| Map order | insertion order (Python dict) | `HashMap` is unordered | an insertion-ordered map (`IndexMap`) |
+| Int overflow | wraps (64-bit signed) | `+` panics in debug, wraps in release | explicit wrapping arithmetic everywhere |
+| Struct printing | `Point(x: 3, y: 4)` | derived `Debug` differs | one shared renderer per type |
+| Bool printing | `oui` / `nein` | `true` / `false` | shared renderer |
+| Division | `Int / Int` truncates toward zero; `%` keeps dividend sign | `i64::div` truncates; `%` matches | verify with negative operands |
+| Iteration during mutation | documented behaviour per `docs/STDLIB` | borrow checker will not allow it | interior mutability at the heap level, not in `Value` |
+
+### 16.4 Rust crate structure
+
+Nine crates, each with one job and no circular dependencies:
+
+| Crate | Responsibility | Depends on |
+|---|---|---|
+| `silica-value` | `Value`, `Object`, `Key`, string interning, printing/formatting (the §16.3 parity routines) | — |
+| `silica-bytecode` | `.sbc` decode, CRC-32, operand schemas, the verifier (port of `verify_chunk`) | `silica-value` |
+| `silica-heap` | arenas for objects and cells, free lists, mark-sweep collector, root registration (§13.10.5) | `silica-value` |
+| `silica-frames` | operand stack, call frames, `max_frames` enforcement | `silica-value` |
+| `silica-exec` | the dispatch loop: one function per opcode, no `unsafe` | `silica-bytecode`, `silica-frames`, `silica-heap` |
+| `silica-fn` | closures, cells, capture vectors, `MAKE_CLOSURE`/`CALL_VALUE` semantics | `silica-heap`, `silica-value` |
+| `silica-native` | native-function ABI, registry, signature metadata, **the capability choke point** (§16.6) | `silica-value`, `silica-caps` |
+| `silica-caps` | capability set, path containment (port of the Python rules), deny-by-default | — |
+| `silica-runtime` | host embedding: CLI driver, `.sbc` loading, PyO3 bridge to the Python natives, C ABI | all of the above |
+
+`silica-exec` must not depend on `silica-native` directly: it calls through a
+trait, so a host can substitute natives (the Python bridge in R1, Rust natives in
+R2) without touching the loop.
+
+### 16.5 Standard library and Python interop
+
+**R1 (first Rust VM): every native stays in Python.** The Rust VM embeds CPython
+via PyO3 and calls the *existing* `natives.py` registry. Nothing is reimplemented,
+so the standard library cannot drift. The cost is that native calls are slower —
+which is acceptable because the win being measured is in the dispatch loop.
+
+**R2: pure natives move to Rust, one module at a time**, in this order:
+`math` → `string` → `collections` → `path` → `time` → `random` → `json`. Each move
+requires its module's tests plus the differential suite to pass.
+
+**Never moves (initially):** `ui`, `tui`, `gui`, `speech`, `voice` — they are
+host-bound by definition. `python` interop stays Python because it *is* Python.
+`fs` moves last, because the capability enforcement path is the one place a
+reimplementation could weaken a security boundary (§16.6).
+
+**Python interop is preserved unchanged** in every stage: the worker process,
+`SIW1` framing and the handle registry are host-side concerns. A Rust VM runs the
+same worker and speaks the same frames; the Silica-visible module does not change.
+
+### 16.6 Capability enforcement cannot be bypassed
+
+The rule: **a capability check is a property of native dispatch, not of the VM
+implementation.** Four mechanisms make that true rather than aspirational:
+
+1. **One choke point.** `silica-native` exposes exactly one way to call a native:
+   `invoke(caps, module, name, args)`. It checks the module's declared capability
+   before dispatch. The registry is private; `silica-exec` has no path to a native
+   function pointer.
+2. **Immutable grants.** `CapabilitySet` is constructed once, before execution, and
+   passed as `&CapabilitySet`. No native receives `&mut` access to it, so a native
+   cannot grant itself or another module anything.
+3. **No `unsafe` in the dispatch path.** `silica-native` and `silica-caps` are
+   `#![forbid(unsafe_code)]`. A check cannot be optimised away because it is
+   ordinary safe code on the call path.
+4. **Path containment ported once, tested by differential.** `is_within` and the
+   component-prefix comparison are reimplemented in `silica-caps` and compared
+   against the Python implementation on a corpus of traversal cases (`..`,
+   absolute paths, NUL bytes, symlinks that must *not* be resolved).
+
+**Acceptance for the capability claim:** a Rust VM constructed without `fs.read`
+returns the documented capability error for `fs.read_text` — not a panic, not a
+silently empty string — and the differential suite includes that case for every
+capability-gated native.
+
+### 16.7 Differential testing
+
+The strategy is one property: **the same program produces the same observable
+result on both VMs.**
+
+| Dimension | What is compared |
+|---|---|
+| Corpus | `tests/silica/*.sc`, `examples/*.sc`, `benchmarks/silica/*.sc`, plus generated programs |
+| Output | stdout, byte-for-byte |
+| Diagnostics | stderr, byte-for-byte, including the `hint:` line |
+| Exit code | exact |
+| Side effects | files created, with hashes; files *not* created when a capability is denied |
+| Bytecode | the Rust VM must consume the **unmodified** `.sbc` produced by the Python compiler — no recompilation step |
+| Errors of interest | capability denials, division by zero, missing map key, arity through `Any`, GC stress runs |
+
+Runner: `tools/differential.py` (design only) executes each case twice and reports
+the first divergence with a minimal reproducer. CI runs three jobs: Python VM only,
+Rust VM only, and both-with-comparison; the third is the gate.
+
+**GC-specific differential:** with `SILICA_GC_STRESS=1` on the Rust VM, every case
+must still match. This is what catches a missing root — the failure mode that
+otherwise appears as a rare, unreproducible corruption.
+
+### 16.8 Gradual migration, and what stays working
+
+| Guarantee | How |
+|---|---|
+| `silica` CLI unchanged | `--vm=python` or `--vm=rust` selects the engine; the default stays `python` until R3 |
+| `.sc` syntax unchanged | the front end is not rewritten in this plan |
+| `.sbc` compatibility | the Rust VM reads format 1.0 as-is; no format change is required or allowed by this section |
+| Package unchanged | the pure-Python wheel remains the default install; a Rust build is an **optional** wheel (`silica-vm-rust`, abi3), never a new required dependency |
+| Tests unchanged | the existing suite runs against both VMs; `test_compat_093.py` is the compatibility guard |
+| Reference VM retained | `--vm=python` stays available permanently (§16.1) |
+
+**Install story.** `pip install silica-lang` keeps working with no compiler. A user
+who wants the fast VM installs `silica-lang[rust]`, which pulls the prebuilt
+extension for their platform. If the extension is missing or fails to load, the CLI
+falls back to the Python VM with a warning — never a hard failure.
+
+### 16.9 Benchmarks, and no promises
+
+- Reuse `benchmarks/bench.py`; add `--vm` so the same corpus runs on both.
+- Report, per workload: median of 3 runs, absolute times, and the ratio
+  `python_vm / rust_vm`. Record the machine.
+- Publish the table in `docs/PERFORMANCE.md` before any claim is made anywhere
+  else.
+- **Decision threshold, deliberately unset:** to become the default, the Rust VM
+  must (a) be differential-green, (b) be no slower on any workload, and (c) beat
+  an improvement factor that will be fixed *after* the first honest measurement —
+  not guessed now. If the measured speedup does not justify the maintenance cost,
+  the recommendation is to stop at R1 and keep the Rust VM as an optional engine.
+
+### 16.10 What moves first, and what stays Python
+
+| Component | R1 | R2 | R3+ | Why |
+|---|---|---|---|---|
+| Dispatch loop, frames, operand stack | **Rust** | Rust | Rust | the actual cost centre |
+| Bytecode decode + verify | **Rust** | Rust | Rust | must read the same `.sbc` |
+| Heap, cells, closures | **Rust** | Rust | Rust | §13.10 |
+| `math`, `string`, `collections`, `path`, `time`, `random`, `json` | Python | **Rust** | Rust | pure, easy to compare |
+| `fs` | Python | Python | **Rust** | capability boundary moves last |
+| `ui`, `tui`, `gui`, `speech`, `voice` | Python | Python | Python | host-bound |
+| `python` interop | Python | Python | Python | it is Python |
+| Lexer, parser, checker, compiler, formatter | Python | Python | Python | not in scope; rewriting the front end is a separate decision |
+| CLI, packaging | Python | Python | Python + optional extension | keeps installs working |
+
+### 16.11 Phases
+
+**R0 — this design.** Gate: approved on its own, separately from §13.
+
+**R1 — read-and-run.** Rust VM executes existing `.sbc`, all natives via PyO3,
+`--vm=rust` behind a flag.
+*Acceptance:* the whole differential corpus matches on stdout, stderr and exit
+code; the Rust VM accepts the Python compiler's `.sbc` with no recompilation; the
+capability-denial corpus matches; `SILICA_GC_STRESS=1` passes; startup time and
+memory measured and recorded.
+
+**R2 — natives in Rust.** Seven pure modules ported, one at a time, each gated by
+its own tests plus the differential suite. `fs` still Python.
+*Acceptance:* identical results for every ported module; the Python fallback still
+passes the full suite; no new required dependency in the default wheel.
+
+**R3 — default.** Rust VM becomes the default when §16.9's threshold is met.
+*Acceptance:* the full suite green on both VMs; the Python VM still ships and is
+still the oracle; the release notes state the measured numbers and the fallback
+behaviour.
+
+**R4 — `fs` and the security path.** `fs` natives move to Rust with the capability
+containment ported and differentially tested.
+*Acceptance:* the traversal corpus (including symlinks and NUL bytes) matches
+Python exactly; a denied capability produces the documented error on both VMs.
+
+**R5 — front end (optional, separately approved).** A Rust lexer/parser/checker.
+Not part of this plan; listed so the boundary is explicit.
+
+### 16.12 Rust-specific risks
+
+| Risk | Why it is real | Mitigation |
+|---|---|---|
+| Silent divergence on formatting | `0.1 + 0.2` and float edge cases | shared formatting corpus of 1,000 doubles, compared |
+| Unicode indexing mismatch | bytes versus scalar values | contract term (§16.3) + tests with multi-byte strings |
+| Map ordering | `HashMap` is unordered | `IndexMap` everywhere a Map is exposed |
+| GC pauses under load | stop-the-world | threshold tuning, stress mode in CI, nursery later (§14.3) |
+| Missing roots | the classic GC bug, rare and late | `SILICA_GC_STRESS=1` in CI; root registration is an explicit API |
+| PyO3 overhead in R1 makes it look slow | native calls dominate early benchmarks | benchmark R1 separately from R2; judge the loop, not the bridge |
+| Two implementations drift over years | the real long-term cost | Python VM stays the oracle; divergence is a bug, not a preference |
+| Build complexity for users | optional native wheel | default install stays pure Python; graceful fallback |
