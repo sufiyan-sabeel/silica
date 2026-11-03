@@ -3,7 +3,7 @@
 **Status:** revised for review — design direction approved, decisions recorded,
 Rust migration designed (not approved)
 **Applies to:** Silica 0.10.0 (`sufiyan-sabeel/silica`)
-**Document version:** 1.3 · 2026-11-03
+**Document version:** 1.4 · 2026-11-03
 **Scope:** how Silica becomes able to build web, desktop, Android, GUI/TUI and
 eventually system software — without breaking anything that works today — and how
 its VM moves to Rust without a rewrite
@@ -16,6 +16,7 @@ its VM moves to Rust without a rewrite
 | 1.1 | Decisions 1–6 recorded (§12); first-class functions and closures designed (§13); trade-offs that remain open (§14) |
 | 1.2 | Rust VM migration strategy (§16); closure memory model without CPython (§13.10); runtime-neutral closure representation (§13.5); parity hazards named as contract terms (§16.3) |
 | 1.3 | Parity hazards measured against the running VM and pinned by executable tests (§16.3, §16.13); one optimizer defect found and recorded (§16.13.5); R1 boundary and acceptance criteria fixed (§16.14) |
+| 1.4 | R1 approved for a feasibility prototype only. Strict-xfail regression test for the optimizer defect; the float correction isolated as its own change with its compatibility impact (§16.13.6); exit codes and hints verified in the runner (§16.14); product-versus-environment reporting rule (§16.14.1); normative parity statement (§16.14.2) |
 
 Nothing in this document is implemented. No closure, async, WASM, platform backend
 or Rust code may be written until this revision is approved.
@@ -1187,6 +1188,59 @@ This is a **recommended fix to the Python VM** before R1 freezes parity, and it 
 the only known divergence between the documented contract and the current
 implementation.
 
+#### 16.13.6 The float correction is a separate change, not part of R1
+
+The defect above is a **Python optimizer bug**, and it must be fixed on its own
+track. Bundling it into the Rust VM work would make the parity baseline move at
+the same time as the thing being measured, and there would be no way to tell
+which change caused a difference.
+
+**The correction.** Intern the constant pool by bit pattern, not by equality:
+
+```python
+key = struct.pack(">d", value)      # 0.0 and -0.0 are different keys
+```
+
+**Exact expected output after the fix.** For the program
+
+```silica
+sfn main() {
+    sprint(-0.0)
+    sprint(0.0 - 0.0)
+}
+```
+
+| | Output |
+|---|---|
+| today | `-0.0` then `-0.0` |
+| after the fix | `-0.0` then `0.0` |
+| with `SILICA_NO_OPT=1` today | `-0.0` then `0.0` — already correct, which is how the defect was isolated |
+
+**Compatibility impact — stated precisely, because it is a behaviour change:**
+
+| Question | Answer |
+|---|---|
+| Do any *values* change? | No. Only the printed sign of a zero. |
+| Which programs are affected? | Only those that print a zero-valued float produced by a folded expression, in a compilation unit that also contains a `-0.0` constant inserted first. |
+| Does `.sbc` change? | No. The format, the opcodes and the byte layout are untouched; only which pool entry an equal-valued constant resolves to. |
+| Does the language change? | No. IEEE-754 already says `-0.0` and `0.0` are distinct values with distinct renderings. |
+| Is it observable today? | Yes — `SILICA_NO_OPT=1` already produces the corrected output, so a user can see the discrepancy without waiting for a fix. |
+| Release note | A bugfix. No migration, no version bump of the bytecode format. |
+| Test impact | `tests/test_optimizer.py` gains three tests (below); the strict xfail in `tests/parity/` must be un-marked in the same change. |
+
+**The tests that ship with the correction**, added now so the fix has a target:
+
+| Test | What it asserts |
+|---|---|
+| `test_the_defect_is_present_and_documented` | today's output (`-0.0`, `-0.0`), so an accidental change is noticed |
+| `test_without_folding_the_vm_is_correct` | with `SILICA_NO_OPT=1`, the VM prints `-0.0` then `0.0` — proving the defect is in the folder, not the VM |
+| `test_ieee_negative_zero_is_preserved` | marked `@unittest.expectedFailure`: the correct output. Under `python -m unittest` an unexpected success **exits 1**, so the fix fails the suite until the marker is removed — strict xfail without pytest |
+
+**Order of work:** the correction lands first, as its own pull request, with the
+suite green (1,318 tests, one expected failure) and the xfail marker removed. Only then is the parity
+baseline frozen for R1. If the correction is deferred, R1 must still not treat the
+buggy output as the contract.
+
 ### 16.14 R1 acceptance criteria
 
 R1 is "read-and-run": the Rust VM executes unmodified `.sbc`, with every native
@@ -1210,6 +1264,8 @@ begin automatically.
 | 12 | Platform constraints stated | OS/architecture actually built and tested, and what was not |
 | 13 | Maintenance cost stated | lines of Rust, crates, CI minutes added, who owns them |
 | 14 | Scope respected | no closures, no async, no WASM, no new modules |
+| 15 | Exit codes and hints compared | the parity runner compares stdout, stderr **including `hint:` lines**, and the exit code; `RunnerSelfTests` proves each of those comparisons actually fires |
+| 16 | Strict xfail honoured | the optimizer defect has a dedicated regression test and an `@unittest.expectedFailure` case; an XPASS exits 1 (§16.13.6) |
 
 **The bridge baseline (criterion 11).** Measured on the reference VM, 200,000
 iterations of a loop containing one `math.sqrt` call:
