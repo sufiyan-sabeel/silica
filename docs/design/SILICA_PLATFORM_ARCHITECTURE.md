@@ -3,7 +3,7 @@
 **Status:** revised for review — design direction approved, decisions recorded,
 Rust migration designed (not approved)
 **Applies to:** Silica 0.10.0 (`sufiyan-sabeel/silica`)
-**Document version:** 1.4 · 2026-11-03
+**Document version:** 1.5 · 2026-11-03
 **Scope:** how Silica becomes able to build web, desktop, Android, GUI/TUI and
 eventually system software — without breaking anything that works today — and how
 its VM moves to Rust without a rewrite
@@ -16,6 +16,7 @@ its VM moves to Rust without a rewrite
 | 1.1 | Decisions 1–6 recorded (§12); first-class functions and closures designed (§13); trade-offs that remain open (§14) |
 | 1.2 | Rust VM migration strategy (§16); closure memory model without CPython (§13.10); runtime-neutral closure representation (§13.5); parity hazards named as contract terms (§16.3) |
 | 1.3 | Parity hazards measured against the running VM and pinned by executable tests (§16.3, §16.13); one optimizer defect found and recorded (§16.13.5); R1 boundary and acceptance criteria fixed (§16.14) |
+| 1.5 | Design phase closed. Baseline command and output recorded verbatim (§16.14.1); the four R1 measurements marked **not measured** with the figures they will be compared against (§16.14.3). No implementation started. |
 | 1.4 | R1 approved for a feasibility prototype only. Strict-xfail regression test for the optimizer defect; the float correction isolated as its own change with its compatibility impact (§16.13.6); exit codes and hints verified in the runner (§16.14); product-versus-environment reporting rule (§16.14.1); normative parity statement (§16.14.2) |
 
 Nothing in this document is implemented. No closure, async, WASM, platform backend
@@ -1481,6 +1482,24 @@ baseline to compare against:
 The three failures above are the only ones observed, and all three are
 environmental. **None of them may appear as a passing test in an R1 report.**
 
+**The recorded baseline.** The command and its output, verbatim, so an R1 report
+can be compared against the same measurement rather than a remembered one:
+
+```
+$ cd <checkout> && python3 -m unittest discover -s tests -t .
+...................................................................
+----------------------------------------------------------------------
+Ran 1318 tests in 155.633s
+
+OK (skipped=7, expected failures=1)
+```
+
+Environment for that run: Python 3.12.13, `pytest` 9.2.0, `build`, `setuptools`
+and `wheel` installed, and a **git working tree** (264 tracked files) — the last
+two conditions matter, per the table above. The single expected failure is the
+strict-xfail case for the float intern defect (§16.13.6); it is not a pass and it
+is not a product failure.
+
 #### 16.14.2 Normative parity statement
 
 > The Rust implementation **must** reproduce the measured behaviour in §16.13
@@ -1498,3 +1517,19 @@ environmental. **None of them may appear as a passing test in an R1 report.**
 > where the *documented* behaviour — IEEE-754 — is correct and the current Python
 > output is wrong. That correction is a separate change (§16.13.6), and the Rust
 > implementation is required to match the corrected behaviour from the start.
+
+#### 16.14.3 The four R1 measurements: **not measured**
+
+No Rust implementation exists, so none of these has been measured. They are
+recorded here as blank fields with the figures they will be compared against, so
+that an R1 report cannot quietly substitute an estimate for a measurement.
+
+| Measurement | Status | Baseline it will be compared against |
+|---|---|---|
+| Performance (four workloads) | **not measured** | reference VM: 46.9×–111.1× slower than CPython (`docs/PERFORMANCE.md`, 2026-10-28) |
+| Build size (wheel, binary, per platform) | **not measured** | reference install is a pure-Python wheel with no compiled component |
+| Bridge overhead (PyO3 call cost) | **not measured** | ≈2.2 µs per native call through the Python path (§16.14, measured) |
+| Maintenance cost (Rust LOC, crates, CI minutes, ownership) | **not measured** | zero Rust in the tree today |
+
+A row stays "not measured" until a run exists to fill it. An estimate, a
+projection, or a figure carried over from another project is not a measurement.
