@@ -6,7 +6,8 @@ import tempfile
 import unittest
 
 from silica.engine import (compile_file, compile_source, default_output_path,
-                           is_bytecode, load_bytecode, run_source)
+                           is_bytecode, load_bytecode, read_source_file,
+                           run_source)
 from silica.errors import SilicaError
 
 
@@ -124,3 +125,15 @@ class FileEntryPointTests(unittest.TestCase):
             compile_file(path)
         self.assertIn(path, ctx.exception.format())
         self.assertEqual(ctx.exception.format().count(path), 1)
+
+    @unittest.skipUnless(hasattr(os, "geteuid") and os.geteuid() != 0,
+                         "needs a non-root POSIX user")
+    def test_read_source_file_reports_a_permission_error(self):
+        path = os.path.join(tempfile.mkdtemp(prefix="silica-perm-"), "locked.sc")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write("sfn main() {\n    sprint(1)\n}\n")
+        os.chmod(path, 0o000)
+        self.addCleanup(os.chmod, path, 0o600)
+        with self.assertRaises(SilicaError) as ctx:
+            read_source_file(path)
+        self.assertIn("permission denied", str(ctx.exception))
