@@ -654,7 +654,7 @@ This is the plan to review **before** any Rust is written. M1 answers one questi
 can a Rust decoder, verifier and dispatch loop reproduce the reference VM on a
 non-trivial program from an unmodified `.sbc`? — and nothing else.
 
-### 15.1 Scope
+### 14.1 Scope
 
 | | |
 |---|---|
@@ -662,7 +662,7 @@ non-trivial program from an unmodified `.sbc`? — and nothing else.
 | Out | `CALL_NATIVE`, PyO3, collections, records, methods, closures, async, WASM, the front end, `fs`, any change to `.sbc` |
 | Consequence | M1 can run arithmetic, control flow, function calls and printing; it cannot run anything that calls `len`, `str`, `range`, `math.*` or any other native |
 
-### 15.2 Files, in build order
+### 14.2 Files, in build order
 
 ```
 silica-rust/
@@ -690,7 +690,7 @@ The two crates that matter for M1 are `silica-vm` (pure, testable with no CPytho
 the process) and `silica-cli` (process concerns only). `silica-native` exists as an
 empty member so the workspace shape is fixed before M2 needs it.
 
-### 15.3 Opcode order inside M1
+### 14.3 Opcode order inside M1
 
 Implemented in corpus-frequency order so the runnable set grows fastest, and each
 step is committed only when its tests pass:
@@ -704,7 +704,7 @@ step is committed only when its tests pass:
 | 5 | `CALL POP HALT_OK HALT_POP` | functions, recursion, exit codes → **the M1 benchmark runs** |
 | 6 | `LOAD_GLOBAL STORE_GLOBAL DIT` | globals, `dit` |
 
-### 15.4 Test plan
+### 14.4 Test plan
 
 | Test | What it asserts |
 |---|---|
@@ -715,7 +715,7 @@ step is committed only when its tests pass:
 | Execution parity | the M1 benchmark and a subset corpus produce identical stdout and exit code |
 | Startup separation | process start, decode, execution timed separately |
 
-### 15.5 The M1 stop gate — what the report must contain
+### 14.5 The M1 stop gate — what the report must contain
 
 Before M2 is discussed, the report states, for each item, a number or a verdict:
 
@@ -727,7 +727,7 @@ Before M2 is discussed, the report states, for each item, a number or a verdict:
 5. Whether the **≥3×** target still appears achievable (i.e. ≤2.39 s), and if not,
    what the measurement suggests instead.
 
-### 15.6 Stop conditions
+### 14.6 Stop conditions
 
 R1 stops, and is reported as a negative result, if **any** of these holds:
 
