@@ -189,11 +189,15 @@ class RegressionTests(unittest.TestCase):
                         "tui_dashboard.sc", "gui_demo.sc", "ui_tasks.sc",
                         "ui_hello.sc", "ui_animate.sc",
                         "calculator_app.sc", "task_manager.sc",
-                        "data_report.sc"):
-                # these need stdin, capabilities or a display. The three
-                # applications are executed, with input and grants, by
-                # tests/test_apps.py — which checks their output, not just the
-                # exit code.
+                        "data_report.sc", "scientific_calculator.sc"):
+                # these need stdin, capabilities or a display. The applications
+                # are executed, with input and grants, by tests/test_apps.py and
+                # tests/test_calculator_app.py — which check their output, not
+                # just the exit code.
+                #
+                # scientific_calculator.sc writes build/calculator.html and so
+                # needs fs.read and fs.write on build/; running it ungranted here
+                # failed the suite on a clean checkout.
                 continue
             with self.subTest(example=name):
                 completed = subprocess.run(
