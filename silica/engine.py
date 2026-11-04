@@ -85,15 +85,48 @@ def run_source(source, filename="<source>", stdin=None, stdout=None, stderr=None
     return vm.run(verify=False)
 
 
+def read_source_file(path):
+    """Read a source file, converting filesystem errors into SilicaError.
+
+    Every path-taking entry point goes through here so that a missing file or a
+    directory produces a diagnostic in the documented `error: ...` format instead
+    of an uncaught OSError traceback from the CLI.
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            return handle.read()
+    except FileNotFoundError:
+        raise SilicaError("no such file", filename=path)
+    except IsADirectoryError:
+        raise SilicaError("is a directory, not a Silica source file", filename=path)
+    except PermissionError:
+        raise SilicaError("cannot read: permission denied", filename=path)
+    except OSError as exc:
+        raise SilicaError("cannot read: %s" % (exc.strerror or exc), filename=path)
+
+
+def read_bytecode_file(path):
+    """The bytecode counterpart of `read_source_file`."""
+    try:
+        with open(path, "rb") as handle:
+            return handle.read()
+    except FileNotFoundError:
+        raise SilicaError("no such file", filename=path)
+    except IsADirectoryError:
+        raise SilicaError("is a directory, not a Silica bytecode file", filename=path)
+    except PermissionError:
+        raise SilicaError("cannot read: permission denied", filename=path)
+    except OSError as exc:
+        raise SilicaError("cannot read: %s" % (exc.strerror or exc), filename=path)
+
+
 def compile_file(path):
-    with open(path, "r", encoding="utf-8") as handle:
-        source = handle.read()
+    source = read_source_file(path)
     return compile_source(source, path)
 
 
 def load_bytecode(path):
-    with open(path, "rb") as handle:
-        data = handle.read()
+    data = read_bytecode_file(path)
     chunk = deserialize(data, path)
     verify_chunk(chunk, path)
     return chunk
@@ -130,7 +163,8 @@ def is_bytecode(path):
 
 __all__ = [
     "CompileResult", "check_source", "compile_ast", "compile_source",
-    "compile_file", "load_bytecode", "run_source", "run_chunk", "run_chunk_vm",
+    "compile_file", "load_bytecode", "read_source_file", "read_bytecode_file",
+    "run_source", "run_chunk", "run_chunk_vm",
     "default_output_path", "is_bytecode", "Chunk", "serialize", "ast",
     "SilicaError", "CapabilitySet",
 ]

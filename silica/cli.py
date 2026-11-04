@@ -24,8 +24,8 @@ from .capabilities import (FS_LIST, FS_READ, FS_WRITE, GUI_RUN,
                            SPEECH_LISTEN, SPEECH_SPEAK, TUI_RUN,
                            CapabilitySet, grant_flag, INTEROP_PYTHON)
 from .engine import (check_source, compile_ast, compile_file, compile_source,
-                     default_output_path, is_bytecode, load_bytecode, run_chunk,
-                     run_chunk_vm)
+                     default_output_path, is_bytecode, load_bytecode,
+                     read_source_file, run_chunk, run_chunk_vm)
 from .errors import CapabilityError, ParseError, SilicaError
 from .natives import format_value, get_native
 
@@ -155,13 +155,14 @@ def _fail(message, code=1):
 
 
 def _read_source(path):
-    try:
-        with open(path, "r", encoding="utf-8") as handle:
-            return handle.read()
-    except FileNotFoundError:
-        raise SilicaError("no such file: %s" % path)
-    except IsADirectoryError:
-        raise SilicaError("%s is a directory, not a Silica source file" % path)
+    """Read a source file for the commands that do not compile it.
+
+    Delegates to the engine so that every command reports a missing file, a
+    directory and a permission problem the same way. This used to be a second
+    implementation that handled only the first two, so `silica check` and
+    `silica fmt` leaked PermissionError as a traceback.
+    """
+    return read_source_file(path)
 
 
 # --- commands ----------------------------------------------------------------
@@ -169,9 +170,14 @@ def cmd_run(args):
     caps, args = _parse_capabilities(args)
     if not args:
         return _fail("usage: silica run <file.sc|file.sbc> [capability flags]", 2)
+    if args[0] in ("-h", "--help"):
+        sys.stdout.write("usage: silica run <file.sc|file.sbc> [capability flags]\n")
+        return 0
     path = args[0]
     if not os.path.exists(path):
         return _fail("error: no such file: %s" % path)
+    if os.path.isdir(path):
+        return _fail("error: %s is a directory, not a file" % path)
     try:
         if is_bytecode(path):
             chunk = load_bytecode(path)
@@ -215,6 +221,9 @@ def cmd_check(args):
 def cmd_compile(args):
     if not args:
         return _fail("usage: silica compile <file.sc> [-o out.sbc]", 2)
+    if args[0] in ("-h", "--help"):
+        sys.stdout.write("usage: silica compile <file.sc> [-o out.sbc]\n")
+        return 0
     path = args[0]
     out = None
     if "-o" in args:

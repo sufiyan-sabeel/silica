@@ -432,3 +432,90 @@ class ReplTests(CliTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BadPathTests(CliTestCase):
+    """A path that is not a readable file must produce a diagnostic, not a traceback.
+
+    Regression: `silica compile <missing>`, `silica compile <dir>` and
+    `silica run <dir>` printed a Python traceback, because the engine opened the
+    path directly and only SilicaError was caught. `silica compile --help` was
+    treated as a filename. Both are fixed at the source: the engine converts
+    OSError at its file boundary, and the two path-taking commands answer --help.
+    """
+
+    def test_compile_reports_a_missing_file(self):
+        code, out, err = cli_run(["compile", "does-not-exist.sc"])
+        self.assertEqual(code, 1)
+        self.assertIn("no such file", err)
+        self.assertNotIn("Traceback", err)
+
+    def test_compile_reports_a_directory(self):
+        code, out, err = cli_run(["compile", self.dir])
+        self.assertEqual(code, 1)
+        self.assertIn("is a directory", err)
+        self.assertNotIn("Traceback", err)
+
+    def test_compile_writes_no_bytecode_when_the_source_is_missing(self):
+        target = os.path.join(self.dir, "out.sbc")
+        code, out, err = cli_run(["compile", "does-not-exist.sc", "-o", target])
+        self.assertEqual(code, 1)
+        self.assertFalse(os.path.exists(target), "no .sbc may be written on failure")
+
+    def test_run_reports_a_directory(self):
+        code, out, err = cli_run(["run", self.dir])
+        self.assertEqual(code, 1)
+        self.assertIn("is a directory", err)
+        self.assertNotIn("Traceback", err)
+
+    def test_run_reports_a_missing_bytecode_file(self):
+        code, out, err = cli_run(["run", os.path.join(self.dir, "nope.sbc")])
+        self.assertEqual(code, 1)
+        self.assertIn("no such file", err)
+        self.assertNotIn("Traceback", err)
+
+    def test_compile_help_prints_usage(self):
+        code, out, err = cli_run(["compile", "--help"])
+        self.assertEqual(code, 0)
+        self.assertIn("usage: silica compile", out)
+        self.assertNotIn("Traceback", err)
+
+    def test_run_help_prints_usage(self):
+        code, out, err = cli_run(["run", "--help"])
+        self.assertEqual(code, 0)
+        self.assertIn("usage: silica run", out)
+        self.assertNotIn("Traceback", err)
+
+    def _locked_file(self, name="locked.sc"):
+        path = os.path.join(self.dir, name)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write("sfn main() {\n    sprint(1)\n}\n")
+        os.chmod(path, 0o000)
+        self.addCleanup(os.chmod, path, 0o600)
+        return path
+
+    @unittest.skipUnless(hasattr(os, "geteuid") and os.geteuid() != 0,
+                         "needs a non-root POSIX user")
+    def test_check_reports_a_permission_error(self):
+        code, out, err = cli_run(["check", self._locked_file()])
+        self.assertEqual(code, 1)
+        self.assertIn("permission denied", err)
+        self.assertNotIn("Traceback", err)
+
+    @unittest.skipUnless(hasattr(os, "geteuid") and os.geteuid() != 0,
+                         "needs a non-root POSIX user")
+    def test_fmt_reports_a_permission_error(self):
+        # `check` and `fmt` used a second file reader that handled only
+        # FileNotFoundError and IsADirectoryError, so this leaked a traceback.
+        code, out, err = cli_run(["fmt", self._locked_file()])
+        self.assertEqual(code, 1)
+        self.assertIn("permission denied", err)
+        self.assertNotIn("Traceback", err)
+
+    @unittest.skipUnless(hasattr(os, "geteuid") and os.geteuid() != 0,
+                         "needs a non-root POSIX user")
+    def test_fmt_check_reports_a_permission_error(self):
+        code, out, err = cli_run(["fmt", self._locked_file(), "--check"])
+        self.assertEqual(code, 1)
+        self.assertIn("permission denied", err)
+        self.assertNotIn("Traceback", err)

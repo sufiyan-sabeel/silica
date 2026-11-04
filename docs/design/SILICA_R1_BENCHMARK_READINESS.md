@@ -173,6 +173,13 @@ Compiled with the **Python** compiler, then inspected as bytecode:
 | Inside the 30-opcode M1 set | **yes** — no opcode falls outside it |
 | Output from `.sbc` | `1499997500000\n`, identical to the source run |
 
+The committed source carries **no comments**, because CI runs
+`silica fmt --check examples/*.sc tests/silica/*.sc benchmarks/silica/*.sc` and the
+formatter refuses files that contain them (it works from the syntax tree and would
+delete them). Comments do not reach the bytecode, but they do shift the line table,
+so an older build of the same program differs in recorded line numbers while its
+constants, its code bytes and its 25 instructions are identical.
+
 So M1 needs 12 of its 30 opcodes to run the gate, and none of the 12 requires
 `CALL_NATIVE` — the gate can be measured with **zero Python involvement** in the Rust
 process, which is what makes the M1/M2 split meaningful.
@@ -209,7 +216,9 @@ python3 -c "import sysconfig; print(sysconfig.get_paths()['include'])"   # M2 / 
 python3 -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR'))" # M2 / PyO3
 ```
 
-**Ready** means: `rustc` and `cargo` both answer with a version ≥ 1.70, `cc` or `gcc`
+**Ready** means: `rustc` and `cargo` both answer with a version ≥ 1.85 (the workspace
+MSRV — M1's own code would build on 1.70, but M2's PyO3 requires 1.85, so there is one
+number to meet, not two), `cc` or `gcc`
 is present, and for M2 the Python include path exists and contains `Python.h`.
 
 ---

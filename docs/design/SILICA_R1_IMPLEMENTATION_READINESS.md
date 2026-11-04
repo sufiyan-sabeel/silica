@@ -41,7 +41,7 @@ only a Python-free dispatch loop. That is a real limitation of the phase and it 
 stated in §8 rather than hidden.
 
 **Effort, assuming one engineer familiar with the codebase:** 12–18 engineer-days to
-the end of M2 (the gate that matters), 25–35 to all 42 opcodes with the bridge. §11
+the end of M2 (the gate that matters), 25–35 to all 43 opcodes with the bridge. §11
 gives the breakdown and the assumptions behind it.
 
 ---
@@ -66,7 +66,7 @@ is the usual Python optimisation and tells a Rust implementer exactly where the 
 state is. Frames are explicit (`frames` list), so recursion depth is bounded by
 `max_frames` (4096) rather than by the host stack.
 
-### 2.2 Opcodes: 43 in the table, 42 implemented
+### 2.2 Opcodes: 43 in the table, 43 implemented
 
 ```
 $ python3 -c "from silica.bytecode import OPS; print(len(OPS))"     # 43
@@ -78,7 +78,7 @@ Cross-checking every `op == 0xNN:  # NAME` handler in `vm.py` against the table:
 |---|---|
 | Opcodes in the table | 43 |
 | Opcodes with a handler in `vm.py` | 42 |
-| Missing | **`NOP` (0x00)** |
+| Missing | none — `NOP` was the gap and is fixed (PR #8, §2.9) |
 
 Every handler's numeric literal agrees with the table's numeric value (checked
 programmatically: zero mismatches). Stack effects live in `bytecode.STACK_EFFECT`
@@ -187,14 +187,20 @@ index 1 `0.0`). There are **no remaining xfail cases** — the corpus is fully e
 $ python3 -m unittest discover -s tests -t .
 ...................................................................
 ----------------------------------------------------------------------
-Ran 1329 tests in 153.636s
+Ran 1352 tests in 195.955s
 
-OK (skipped=7)
+FAILED (failures=1, skipped=7)
 ```
 
 Environment: Python 3.12.13, `pytest` 9.2.0, `build`/`setuptools`/`wheel`, git working
-tree. 1,322 pass, 7 skipped, 0 failures, 0 expected failures. The count rose from 1,318
-because `NOP` now has 11 regression tests (§2.9).
+tree. **1,344 pass, 7 skipped, 1 failure** — and the failure is a defect in the suite,
+not the language: `test_the_examples_still_run` ran `examples/scientific_calculator.sc`
+without the `fs.read`/`fs.write` grants it needs, because commit `16d76ac` added the
+example without adding it to that test's skip list. Fixed on the stabilization branch,
+where the suite is 1,368 tests and fully green.
+
+An earlier figure of 1,329 was measured on a stale extraction that predated `16d76ac`
+and is superseded by the numbers above.
 
 ### 2.9 Where the document and the source disagree
 
@@ -358,7 +364,7 @@ Three gates. Each proves something specific and each is independently reviewable
 |---|---|---|---|---|
 | **M1 — decode and dispatch** | **30**: `NOP CONST UNIT TRUE FALSE LOAD_LOCAL STORE_LOCAL LOAD_GLOBAL STORE_GLOBAL POP ADD SUB MUL DIV MOD NEG EQ NE LT LE GT GE JUMP JUMP_IF_FALSE CALL RET PRINT DIT HALT_OK HALT_POP` | **none** | bytecode decoding, frames, arithmetic, branching, printing — the whole loop, with no FFI | a hand-built subset corpus: arithmetic, loops, recursion, printing, error cases |
 | **M2 — data and the bridge** | + `MAKE_LIST MAKE_MAP INDEX_GET LEN ITER_START ITER_NEXT CALL_NATIVE` | forwarded to Python via PyO3 | collections, iteration, and the native ABI + capability choke point | **the full parity corpus (14 cases)** plus every `examples/*.sc` that needs no capability |
-| **M3 — full surface** | all 42 (or 43, per the `NOP` decision) | all | records, methods, `FREEZE`, the long tail | the full differential suite over `tests/silica/` and `examples/` |
+| **M3 — full surface** | all 43 | all | records, methods, `FREEZE`, the long tail | the full differential suite over `tests/silica/` and `examples/` |
 
 M1 deliberately excludes `CALL_NATIVE`, which is 12.9% of real instructions but 100%
 of the FFI risk. It answers "can Rust run the loop?" without touching PyO3 at all.
@@ -641,7 +647,7 @@ conditions that end the project instead.
 | Regression test | `tests/test_nop.py`, 11 tests, hand-built bytecode including a hand-written `.sbc` file |
 | Landed | PR #8, merge commit `84e6d1ca9acedb669fc0057c4d73a89cd572c574` |
 | Format impact | None — magic `SILICABC`, format 1.0, 17-byte header unchanged |
-| Baseline after | 1,329 tests, 7 skipped, 0 failures |
+| Baseline after | 1,329 tests on the then-current tree; 1,352 on `main` today, whose one failure was a stale skip list (fixed on the stabilization branch) |
 
 ### Decision B — bounded M1+M2 feasibility spike, three crates
 
