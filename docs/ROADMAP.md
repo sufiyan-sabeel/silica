@@ -3,6 +3,14 @@
 Status of each milestone in the original plan. "Done" means implemented,
 tested and documented in this repository — nothing here is aspirational.
 
+**Corrected 2026-11-09 against the 0.10.1 tree.** Several statuses below had
+fallen behind the implementation: `path`, `time` and `random` were still listed
+as missing, packaging and CI were still listed as not started, and the
+limitations list still said there were no generics, structs or methods. Every
+status here was re-checked against the source, and the per-capability
+classification now lives in `docs/LANGUAGE_SPEC.md` §13, which is authoritative
+if the two ever disagree.
+
 ## Milestone A — front end · **done**
 
 * Lexer with source locations (`silica/lexer.py`).
@@ -42,14 +50,14 @@ dispatch point; the `fs` module behind those capabilities; the `json` module
 with a documented value mapping, position-reporting errors and round trips;
 `silica capabilities`; 323 automated tests at 0.1.1.
 
-Not done: `path`, `time`, `random`, `regex`, `log`. Each needs its own capability
-story before it is exposed (`time` and `random` are the easy ones; `path` is
-mostly pure string work and could be added without a capability at all).
+**Since corrected:** `path`, `time` and `random` are implemented and shipped —
+they need no capability (`path` is pure string work, `time` reads the clock and
+`random` is seeded). Still not done: `regex` and `log`.
 
 At 0.1.1 the milestone also delivered `silica capabilities`; the UI work that
 followed in 0.2.0 is recorded under Milestone F.
 
-## Milestone E — packaging, CI, release · **not started**
+## Milestone E — packaging, CI, release · **partly done (packaging, CI and release integrity; no package manager, no Rust port)**
 
 * `silica new / add / remove / install / build` with `silica.toml`, lockfiles,
   reproducible resolution, checksums and provenance.
@@ -57,6 +65,15 @@ followed in 0.2.0 is recorded under Milestone F.
 * CI matrix, release artifacts, checksums, installation docs.
 * Rust port of the engine (the reference implementation is Python; see
   `docs/PERFORMANCE.md` for why this matters and what the baseline is).
+
+**Since corrected:** the CI matrix (Python 3.9, 3.11, 3.12), release artefacts,
+checksums, supply-chain and release-integrity checks, and the installation guide
+all exist (`docs/PACKAGING.md`, `docs/RELEASE_INTEGRITY.md`,
+`docs/SUPPLY_CHAIN.md`, `docs/INSTALL.md`; workflows `ci.yml`, `publish.yml`,
+`release.yml`, `verify-release.yml`). The `silica new / add / remove / install /
+build` commands do **not** exist, no package manager or registry exists, and
+there is no Rust port — those remain open. The Rust VM is designed and gated on a
+toolchain: `docs/design/SILICA_R1_IMPLEMENTATION_READINESS.md`.
 
 ## Milestone F — Silica UI and self-hosting · **UI 0.1 done, self-hosting not started**
 
@@ -91,14 +108,22 @@ compile itself today.
 Not done: labelled jumps, `else` on loops, and `break` out of a `call { ... }`
 builder block (rejected by design).
 
-## Known limitations in v0.9.3
+## Known limitations in v0.10.1
 
-* No generics: `List`/`Map` elements check as `Any`.
-* No first-class functions, closures, methods or user-defined types.
-* No exceptions; errors are runtime aborts plus `ret`-based conventions.
+* `List`/`Map` elements check as `Any`. User-defined generics on functions and
+  structs **do** work (`docs/GENERICS.md`), but the built-in containers are not
+  generic.
+* No first-class functions and no closures: a function can be called, not passed.
+  Structs, classes, methods, `static` methods and `private` members all exist.
+* No exceptions; errors are runtime aborts. `Result`-shaped recoverable errors are
+  a recorded decision, not an implementation.
 * `per` loop variables are immutable.
 * No labelled `break`/`continue`: they always target the innermost loop.
-* No negative indexing, no element assignment (`xs[i] = v`); use `push`.
+* No negative indexing, no slicing, no element assignment (`xs[i] = v`); use `push`.
+* No enums, tuples, pattern matching or optional types.
+* No string interpolation: `"a {x}"` is literal text.
+* No threads, no `async`/`await`; the VM is single-threaded.
+* No user-defined modules and no package manager: `use` resolves built-ins only.
 * The REPL compiles each entry from scratch (fine for interactive use, not a
   fast edit-compile loop).
 * The formatter is AST-based and therefore refuses files with comments.
